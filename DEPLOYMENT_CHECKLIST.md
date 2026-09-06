@@ -14,28 +14,28 @@
 ## B. Secrets
 
 - [ ] `GEMINI_API_KEY`
-- [ ] `LINE_ACCESS_TOKEN`
-- [ ] `LINE_CHANNEL_SECRET`
-- [ ] `LIFF_ID`
-- [ ] `FRONTEND_URL`
+- [x] `LINE_ACCESS_TOKEN`
+- [x] `LINE_CHANNEL_SECRET`
+- [x] `LIFF_ID`
+- [x] `FRONTEND_URL`
 - [ ] เปลี่ยน PIN เริ่มต้น `1234`
 
 ## C. GitHub Pages
 
-- [ ] ยืนยันชื่อและ visibility ของ repository ใหม่
-- [ ] Push branch `main`
-- [ ] Settings → Pages → GitHub Actions
-- [ ] Workflow test/build/deploy ผ่าน
+- [x] ยืนยันชื่อและ visibility ของ repository ใหม่
+- [x] Push branch `main`
+- [x] Settings → Pages → GitHub Actions
+- [x] Workflow test/build/deploy ผ่าน
 - [ ] เปิด Pages URL บน Desktop และ Smartphone
 - [ ] ตรวจ PWA manifest/icons/service worker
 
 ## D. LINE OA
 
-- [ ] ใช้ `webhookUrl` จาก `getDeploymentSetupInfo()`
-- [ ] Verify webhook ผ่าน
-- [ ] เปิด Use webhook
-- [ ] เปิด Allow bot to join group chats
-- [ ] ตั้ง LIFF Endpoint เป็น GitHub Pages
+- [x] ใช้ `webhookUrl` จาก `getDeploymentSetupInfo()`
+- [x] Verify webhook ผ่าน
+- [x] เปิด Use webhook
+- [x] เปิด Allow bot to join group chats
+- [x] ตั้ง LIFF Endpoint เป็น GitHub Pages
 - [ ] Rich Menu ชี้ LIFF URL ไม่ชี้ Apps Script/Drive
 - [ ] ทดสอบ private chat 1 รูป
 - [ ] ทดสอบ group chat 1 รูปและหลายหน้า
@@ -44,6 +44,7 @@
 
 ## E. Export / Recovery
 
+- [x] แยกปุ่ม Export DOCX และ Export Excel บน Desktop/Smartphone
 - [ ] Export Word เดือนทดสอบและตรวจขนาดไฟล์
 - [ ] Export Excel และตรวจยอดรวม
 - [ ] เปิดรูป preview จากบิล

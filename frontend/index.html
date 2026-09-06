@@ -180,9 +180,12 @@
               <button id="search-bills-btn" class="primary-btn">ค้นหา</button>
             </div>
             <div class="monthly-export mt-4 border-t border-slate-100 pt-4">
-              <div class="min-w-0 flex-1"><p class="text-sm font-semibold">ส่งออกเอกสารประจำเดือน</p><p class="mt-1 text-xs text-slate-500">ดาวน์โหลด Word รวมรูปบิลและ Excel สรุปรายการ</p></div>
+              <div class="min-w-0 flex-1"><p class="text-sm font-semibold">ส่งออกเอกสารประจำเดือน</p><p class="mt-1 text-xs text-slate-500">เลือกสร้างเฉพาะไฟล์ที่ต้องการ เพื่อลดเวลารอและขนาดการดาวน์โหลด</p></div>
               <label class="text-xs text-slate-500">เลือกเดือน<input id="export-month" type="month" class="field mt-1"></label>
-              <button id="export-monthly-btn" class="primary-btn">ดาวน์โหลด Word + Excel</button>
+              <div class="monthly-export__actions" role="group" aria-label="เลือกรูปแบบไฟล์ส่งออก">
+                <button id="export-monthly-btn" type="button" class="export-btn export-btn--docx"><span data-export-label>Export DOCX</span><small>รวมรูปบิล</small></button>
+                <button id="export-excel-btn" type="button" class="export-btn export-btn--excel"><span data-export-label>Export Excel</span><small>ตารางสรุป</small></button>
+              </div>
             </div>
           </div>
           <div class="card overflow-hidden">

@@ -641,32 +641,53 @@
     Swal.fire({ icon:'success', title:'กู้คืนแล้ว', text:'บิลกลับไปอยู่ในคิวต้องตรวจสอบ', timer:1800, showConfirmButton:false });
   }
 
-  async function exportMonthlyPackage() {
+  const monthlyExportSpecs = {
+    word: {
+      create:month => gas('exportMonthlyBillWord', month), buttonId:'export-monthly-btn', label:'DOCX',
+      buttonLabel:'Export DOCX', loadingLabel:'กำลังสร้าง DOCX…',
+      busyTitle:'กำลังจัดรูปบิลลง DOCX…', fileDescription:'รูปบิลที่จัดหน้าและบีบอัดแล้ว',
+    },
+    excel: {
+      create:month => gas('exportMonthlyBillExcel', month), buttonId:'export-excel-btn', label:'Excel',
+      buttonLabel:'Export Excel', loadingLabel:'กำลังสร้าง Excel…',
+      busyTitle:'กำลังสร้างตาราง Excel…', fileDescription:'ตารางสรุปรายการบิล',
+    },
+  };
+  const activeMonthlyExports = new Set();
+
+  async function exportMonthlyFile(kind) {
+    const spec = monthlyExportSpecs[kind];
+    if (!spec || activeMonthlyExports.has(kind)) return;
     const month = document.getElementById('export-month').value;
     if (!/^\d{4}-\d{2}$/.test(month)) return Swal.fire('กรุณาเลือกเดือน','','warning');
-    const button = document.getElementById('export-monthly-btn');
+    const button = document.getElementById(spec.buttonId);
+    const label = button.querySelector('[data-export-label]');
+    activeMonthlyExports.add(kind);
     button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    if (label) label.textContent = spec.loadingLabel;
+    showActivityToast(spec.busyTitle, 'กำลังเตรียมเฉพาะไฟล์ที่เลือก คุณยังเปิดดูส่วนอื่นได้');
     try {
-      const word = await runBusy(() => gas('exportMonthlyBillWord', month), 'กำลังจัดรูปบิลลง Word…');
-      const excel = await runBusy(() => gas('exportMonthlyBillExcel', month), 'กำลังสร้างตาราง Excel…');
+      const file = await spec.create(month);
       let downloadInProgress = false;
+      showActivityToast(`${spec.label} พร้อมดาวน์โหลด`, `${Number(file.count || 0).toLocaleString('th-TH')} บิล · ${formatFileSize(file.sizeBytes)}`, 'success');
       await Swal.fire({
         icon:'success',
-        title:'ไฟล์พร้อมดาวน์โหลด',
-        html:`<p class="mb-2 text-sm text-slate-500">พบ ${excel.count.toLocaleString('th-TH')} บิลในเดือนที่เลือก</p><p class="mb-4 text-xs text-slate-400">ดาวน์โหลดผ่านหน้าแอปได้โดยตรง ไม่ต้องเปิด Google Drive และรองรับไฟล์ขนาดใหญ่กว่า 45 MB</p><div class="export-download-grid"><a href="#" role="button" data-export-download="word">ดาวน์โหลด Word<small data-export-progress="word">รูปบิล · ${formatFileSize(word.sizeBytes)}</small></a><a href="#" role="button" data-export-download="excel">ดาวน์โหลด Excel<small data-export-progress="excel">ตารางสรุป · ${formatFileSize(excel.sizeBytes)}</small></a></div>`,
+        title:`${spec.label} พร้อมดาวน์โหลด`,
+        html:`<p class="mb-2 text-sm text-slate-500">พบ ${Number(file.count || 0).toLocaleString('th-TH')} บิลในเดือนที่เลือก</p><p class="mb-4 text-xs text-slate-400">ดาวน์โหลดผ่านหน้าแอปได้โดยตรง ไม่ต้องเปิด Google Drive และรองรับไฟล์ขนาดใหญ่กว่า 45 MB</p><div class="export-download-grid export-download-grid--single"><a href="#" role="button" data-export-download="${kind}">ดาวน์โหลด ${spec.label}<small data-export-progress="${kind}">${spec.fileDescription} · ${formatFileSize(file.sizeBytes)}</small></a></div>`,
         confirmButtonText:'ปิด',
         confirmButtonColor:'#8f5f42',
-        width:620,
+        width:520,
         didOpen:popup => {
-          const files = { word, excel };
-          popup.querySelectorAll('[data-export-download]').forEach(link => link.addEventListener('click', async event => {
+          const link = popup.querySelector('[data-export-download]');
+          if (!link) return;
+          link.addEventListener('click', async event => {
             event.preventDefault();
-            const kind = link.dataset.exportDownload;
             if (downloadInProgress) return Swal.showValidationMessage('กรุณารอให้ดาวน์โหลดไฟล์ปัจจุบันเสร็จก่อน');
             downloadInProgress = true;
             Swal.resetValidationMessage();
             try {
-              await downloadExportFile(files[kind], percent => {
+              await downloadExportFile(file, percent => {
                 const progress = popup.querySelector(`[data-export-progress="${kind}"]`);
                 if (progress) progress.textContent = `กำลังเตรียมไฟล์ ${percent}%`;
               });
@@ -675,13 +696,20 @@
             } catch (error) {
               Swal.showValidationMessage(error.message);
               const progress = popup.querySelector(`[data-export-progress="${kind}"]`);
-              if (progress) progress.textContent = `ลองใหม่ · ${formatFileSize(files[kind].sizeBytes)}`;
+              if (progress) progress.textContent = `ลองใหม่ · ${formatFileSize(file.sizeBytes)}`;
             } finally { downloadInProgress = false; }
-          }));
+          });
         },
       });
-    } catch (error) { Swal.fire('Export ไม่สำเร็จ',error.message,'error'); }
-    finally { button.disabled = false; }
+    } catch (error) {
+      hideActivityToast();
+      Swal.fire(`Export ${spec.label} ไม่สำเร็จ`,error.message,'error');
+    } finally {
+      activeMonthlyExports.delete(kind);
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      if (label) label.textContent = spec.buttonLabel;
+    }
   }
 
   async function openDatabaseWithPassword() {
@@ -932,7 +960,8 @@
   document.getElementById('search-bills-btn').addEventListener('click', () => loadAllBills(1));
   document.getElementById('bill-search').addEventListener('keydown', event => { if (event.key === 'Enter') loadAllBills(1); });
   ['bill-status','bill-project-filter','bill-company-filter','bill-category-filter','bill-date-from','bill-date-to','bill-sort'].forEach(id => document.getElementById(id).addEventListener('change', () => loadAllBills(1)));
-  document.getElementById('export-monthly-btn').addEventListener('click', exportMonthlyPackage);
+  document.getElementById('export-monthly-btn').addEventListener('click', () => exportMonthlyFile('word'));
+  document.getElementById('export-excel-btn').addEventListener('click', () => exportMonthlyFile('excel'));
   document.getElementById('open-database-btn').addEventListener('click', () => openDatabaseWithPassword().catch(showFatal));
   document.getElementById('open-review-queue').addEventListener('click', () => startPendingReviewWorkflow('').catch(showFatal));
   document.getElementById('dashboard-prev-month').addEventListener('click', () => refreshDashboard({ period:shiftDashboardPeriod(state.dashboardFilters.period, -1), owners:null }));

@@ -9,6 +9,7 @@ V2 แยกจาก V1 ทั้ง Google Sheet, Apps Script, Drive folder �
 - บีบอัด JPG/PNG/WEBP ในเบราว์เซอร์ก่อนบันทึก: ด้านยาวไม่เกิน 1,800 px เป้าหมายประมาณ 1.2 MB/หน้า
 - LINE upload จะพยายามแทนไฟล์ต้นฉบับขนาดใหญ่ด้วย Drive thumbnail หลัง Gemini อ่านเสร็จ
 - DOCX export ใช้รูปที่เหมาะกับการส่งออก เป้าหมายไม่เกินประมาณ 900 KB/หน้าเมื่อ Drive สร้าง thumbnail ได้
+- แยกปุ่ม `Export DOCX` และ `Export Excel` เพื่อสร้างเฉพาะไฟล์ที่ต้องการและลดเวลารอ
 - ป้องกัน submit ซ้ำด้วย request ID, MutationLog และ lock
 - PIN แบบ salted hash, session อายุ 6 ชั่วโมง, rate limit และบังคับเปลี่ยน PIN เริ่มต้น `1234`
 - Desktop/Mobile responsive, touch target อย่างน้อย 40 px, PWA icon 192/512 และ offline shell
@@ -18,6 +19,9 @@ V2 แยกจาก V1 ทั้ง Google Sheet, Apps Script, Drive folder �
 
 - [Google Sheet V2](https://docs.google.com/spreadsheets/d/1gub-fuTQ7II8nkIepuC15RcGO-BxzIF85oiOwP5rWa4/edit)
 - [Apps Script V2](https://script.google.com/u/1/home/projects/1RasixoQVWR1qktdxsJsJiRmJujI9fIjL1b8L8TmV2h9WNp2Cppaj-dHo/edit)
+- [GitHub repository](https://github.com/alphaphius/line-expense-app-v2)
+- [GitHub Pages V2](https://alphaphius.github.io/line-expense-app-v2/)
+- [LIFF V2](https://liff.line.me/2011471855-gvI0ZFD3)
 - Web App deployment รุ่นแรก: `AKfycbwoLrlaVEI_wF0raV46IBTPQ-s6K9B0WtMTsoZaFpzoX-DZG03iN5Ureh5Rx9uslT_RAw`
 
 V1 ไม่ถูกแก้ไข และไม่มี Script ID, Sheet ID, deployment URL หรือ secret ของ V1 อยู่ใน source V2

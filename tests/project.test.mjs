@@ -19,6 +19,7 @@ const expectedV1Ids = [
   'dashboard-next-month', 'dashboard-owner-clear', 'dashboard-owner-filter',
   'dashboard-owner-options', 'dashboard-owner-select-all', 'dashboard-prev-month',
   'drop-zone', 'expected-pages', 'export-month', 'export-monthly-btn', 'file-list',
+  'export-excel-btn',
   'loading-screen', 'metric-current-month', 'metric-current-month-label',
   'metric-current-year', 'metric-current-year-label', 'metric-previous-month',
   'metric-review', 'monthly-chart-canvas-wrap', 'monthly-chart-empty',

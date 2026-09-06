@@ -1,5 +1,9 @@
 {
   "version": "2.0.0",
   "deploymentId": "AKfycbwoLrlaVEI_wF0raV46IBTPQ-s6K9B0WtMTsoZaFpzoX-DZG03iN5Ureh5Rx9uslT_RAw",
-  "webAppUrl": "https://script.google.com/macros/s/AKfycbwoLrlaVEI_wF0raV46IBTPQ-s6K9B0WtMTsoZaFpzoX-DZG03iN5Ureh5Rx9uslT_RAw/exec"
+  "webAppUrl": "https://script.google.com/macros/s/AKfycbwoLrlaVEI_wF0raV46IBTPQ-s6K9B0WtMTsoZaFpzoX-DZG03iN5Ureh5Rx9uslT_RAw/exec",
+  "repositoryUrl": "https://github.com/alphaphius/line-expense-app-v2",
+  "pagesUrl": "https://alphaphius.github.io/line-expense-app-v2/",
+  "liffId": "2011471855-gvI0ZFD3",
+  "liffUrl": "https://liff.line.me/2011471855-gvI0ZFD3"
 }
