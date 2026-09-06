@@ -1,0 +1,113 @@
+const APP_CONFIG = Object.freeze({
+  APP_NAME: 'Line Expense App V2',
+  VERSION: '2.0.0',
+  API_VERSION: '2.0',
+  SCHEMA_VERSION: 2,
+  TIME_ZONE: 'Asia/Bangkok',
+  ROOT_FOLDER_NAME: 'Line-Expense-App-V2',
+  EXPORT_FOLDER_NAME: 'exports',
+  EXPORT_CHUNK_BYTES: 1024 * 1024,
+  EXPORT_TICKET_SECONDS: 6 * 60 * 60,
+  DEFAULT_LIFF_ID: '',
+  GEMINI_MODEL: 'gemini-3.5-flash-lite',
+  GEMINI_PROMPT_VERSION: 'bill-th-v2',
+  MAX_PAGES_PER_BILL: 8,
+  MAX_FILE_MB: 8,
+  MAX_UPLOAD_TOTAL_MB: 14,
+  IMAGE_MAX_LONG_EDGE: 1800,
+  IMAGE_TARGET_BYTES: 1200 * 1024,
+  IMAGE_JPEG_QUALITY: 0.8,
+  EXPORT_IMAGE_TARGET_BYTES: 900 * 1024,
+  SESSION_HOURS: 24,
+  API_SESSION_SECONDS: 6 * 60 * 60,
+  API_PRIVILEGED_SECONDS: 10 * 60,
+  API_RATE_LIMIT_WINDOW_SECONDS: 15 * 60,
+  API_RATE_LIMIT_ATTEMPTS: 8,
+  LOCK_WAIT_MS: 30000,
+});
+
+const PROP_KEYS = Object.freeze({
+  GEMINI_API_KEY: 'GEMINI_API_KEY',
+  LINE_ACCESS_TOKEN: 'LINE_ACCESS_TOKEN',
+  LINE_CHANNEL_SECRET: 'LINE_CHANNEL_SECRET',
+  LIFF_ID: 'LIFF_ID',
+  FRONTEND_URL: 'FRONTEND_URL',
+  SPREADSHEET_ID: 'SPREADSHEET_ID',
+  API_PIN_SALT: 'API_PIN_SALT',
+  API_PIN_HASH: 'API_PIN_HASH',
+  API_PIN_MUST_CHANGE: 'API_PIN_MUST_CHANGE',
+  API_SESSION_VERSION: 'API_SESSION_VERSION',
+  LINE_WEBHOOK_KEY: 'LINE_WEBHOOK_KEY',
+  ROOT_FOLDER_ID: 'ROOT_FOLDER_ID',
+  TAX_ID_TEXT_MIGRATION: 'TAX_ID_TEXT_MIGRATION_V1',
+  QUICK_PAGE_COUNT: 'QUICK_PAGE_COUNT',
+  QUICK_PROJECT_ID: 'QUICK_PROJECT_ID',
+  QUICK_COMPANY_ID: 'QUICK_COMPANY_ID',
+  QUICK2_PAGE_COUNT: 'QUICK2_PAGE_COUNT',
+  QUICK2_PROJECT_ID: 'QUICK2_PROJECT_ID',
+  QUICK2_COMPANY_ID: 'QUICK2_COMPANY_ID',
+});
+
+const SHEETS = Object.freeze({
+  PROJECTS: 'Projects',
+  COMPANIES: 'Companies',
+  CATEGORIES: 'Categories',
+  VENDORS: 'Vendors',
+  BILLS: 'Bills',
+  ITEMS: 'BillItems',
+  DOCUMENTS: 'BillDocuments',
+  SESSIONS: 'UploadSessions',
+  AI_USAGE: 'AiUsage',
+  AUDIT: 'AuditLogs',
+  MUTATIONS: 'MutationLog',
+  SECURITY: 'SecurityLog',
+  MIGRATIONS: 'SchemaMigrations',
+});
+
+const SHEET_DEFINITIONS = Object.freeze({
+  Projects: ['project_id', 'project_code', 'project_name', 'description', 'active', 'created_at', 'updated_at'],
+  Companies: ['company_id', 'company_name', 'branch_name', 'tax_id', 'address', 'active', 'created_at', 'updated_at'],
+  Categories: ['category_id', 'category_name', 'aliases', 'active', 'created_at', 'updated_at'],
+  Vendors: ['vendor_id', 'vendor_name', 'normalized_name', 'tax_id', 'branch_name', 'address', 'use_count', 'last_used_at', 'created_at', 'updated_at'],
+  Bills: [
+    'bill_id', 'session_id', 'project_id', 'company_id', 'category_id', 'doc_type', 'document_no',
+    'document_date', 'due_date', 'vendor_id', 'vendor_name', 'vendor_tax_id', 'vendor_branch', 'vendor_address',
+    'buyer_name', 'buyer_tax_id', 'buyer_address', 'currency', 'subtotal', 'discount', 'vat_rate', 'vat_amount',
+    'withholding_tax', 'grand_total', 'payment_method', 'description', 'notes', 'page_count', 'image_quality',
+    'quality_score', 'needs_review', 'review_reasons', 'company_match', 'tax_id_match', 'duplicate_key',
+    'status', 'source', 'source_user_id', 'folder_path', 'created_at', 'updated_at', 'confirmed_at', 'address_match', 'source_context_id'
+  ],
+  BillItems: ['item_id', 'bill_id', 'line_no', 'description', 'quantity', 'unit', 'unit_price', 'discount', 'vat_amount', 'amount', 'sku'],
+  BillDocuments: ['doc_id', 'bill_id', 'session_id', 'page_no', 'file_id', 'file_name', 'mime_type', 'file_url', 'sha256', 'size_bytes', 'created_at', 'original_size_bytes', 'compression', 'width', 'height'],
+  UploadSessions: ['session_id', 'project_id', 'company_id', 'expected_pages', 'received_pages', 'status', 'source', 'source_user_id', 'created_at', 'expires_at', 'updated_at', 'source_context_id'],
+  AiUsage: ['usage_id', 'bill_id', 'model', 'prompt_version', 'input_tokens', 'output_tokens', 'thought_tokens', 'total_tokens', 'latency_ms', 'success', 'error', 'created_at'],
+  AuditLogs: ['log_id', 'entity_type', 'entity_id', 'action', 'actor', 'before_json', 'after_json', 'created_at'],
+  MutationLog: ['mutation_id', 'action', 'actor', 'status', 'result_json', 'created_at', 'completed_at'],
+  SecurityLog: ['event_id', 'event_type', 'device_id', 'success', 'detail', 'created_at'],
+  SchemaMigrations: ['version', 'name', 'applied_at'],
+});
+
+const DEFAULT_COMPANIES = Object.freeze([
+  {
+    company_name: 'บริษัท วิศวกรรมธรณีและฐานราก จำกัด',
+    branch_name: 'สำนักงานใหญ่',
+    tax_id: '0105536084347',
+    address: '151 ถนนนวลจันทร์ แขวงนวลจันทร์ เขตบึงกุ่ม กทม. 10230',
+  },
+  {
+    company_name: 'บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (มหาชน)',
+    branch_name: 'สำนักงานใหญ่',
+    tax_id: '0107561000030',
+    address: '151 ถนนนวลจันทร์ แขวงนวลจันทร์ เขตบึงกุ่ม กรุงเทพฯ 10230',
+  },
+]);
+
+const DEFAULT_CATEGORIES = Object.freeze([
+  { category_name: 'ค่าผ่านทาง/ทางด่วน', aliases: 'ค่าทางด่วน,ค่าผ่านทาง,toll,m-pass,easypass' },
+  { category_name: 'เอกสารใบส่งของ', aliases: 'ใบส่งของ,delivery note' },
+  { category_name: 'การบริการ', aliases: 'ค่าบริการ,service' },
+  { category_name: 'วัสดุอุปกรณ์', aliases: 'วัสดุ,อุปกรณ์,เครื่องมือ' },
+  { category_name: 'ที่พัก', aliases: 'โรงแรม,ที่พัก,hotel' },
+  { category_name: 'อาหาร/เดินทาง', aliases: 'อาหาร,น้ำมัน,แท็กซี่,เดินทาง' },
+  { category_name: 'อื่นๆ', aliases: 'อื่นๆ,other' },
+]);

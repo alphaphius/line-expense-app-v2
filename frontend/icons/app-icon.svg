@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Line Expense App V2">
+  <rect width="512" height="512" rx="112" fill="#2d211c"/>
+  <rect x="80" y="80" width="352" height="352" rx="88" fill="#c69a5b"/>
+  <path d="M164 150v212h142v-48h-86V150h-56Zm166 0v212h48V150h-48Z" fill="#251a16"/>
+</svg>

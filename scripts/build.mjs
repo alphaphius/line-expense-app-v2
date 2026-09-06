@@ -1,0 +1,54 @@
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import process from 'node:process';
+import { build } from 'esbuild';
+
+const root = path.resolve(import.meta.dirname, '..');
+const frontend = path.join(root, 'frontend');
+const dist = path.join(root, 'dist');
+const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+
+await rm(dist, { recursive: true, force: true });
+await mkdir(dist, { recursive: true });
+await mkdir(path.join(dist, 'vendor'), { recursive: true });
+
+for (const file of ['index.html', 'manifest.webmanifest']) {
+  await cp(path.join(frontend, file), path.join(dist, file));
+}
+
+for (const file of ['api.js', 'image-optimizer.js', 'app.js', 'pwa.js']) {
+  await build({
+    entryPoints: [path.join(frontend, file)],
+    outfile: path.join(dist, file),
+    bundle: false,
+    minify: true,
+    target: ['safari15', 'chrome100', 'edge100', 'firefox100'],
+    legalComments: 'none',
+  });
+}
+
+const configuredEndpoint = String(process.env.V2_API_ENDPOINT || '').trim();
+const configSource = await readFile(path.join(frontend, 'config.js'), 'utf8');
+const builtConfig = configuredEndpoint
+  ? configSource.replace("apiEndpoint: '',", `apiEndpoint: ${JSON.stringify(configuredEndpoint)},`)
+  : configSource;
+await writeFile(path.join(dist, 'config.js'), builtConfig);
+
+let serviceWorker = await readFile(path.join(frontend, 'service-worker.js'), 'utf8');
+serviceWorker = serviceWorker.replace('line-expense-v2-shell-1', 'line-expense-v2-shell-' + packageJson.version + '-' + Date.now().toString(36));
+await writeFile(path.join(dist, 'service-worker.js'), serviceWorker);
+
+const bin = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tailwindcss.cmd' : 'tailwindcss');
+await new Promise((resolve, reject) => {
+  const child = spawn(bin, ['-c', path.join(root, 'tailwind.config.cjs'), '-i', path.join(frontend, 'styles.css'), '-o', path.join(dist, 'styles.css'), '--minify'], { cwd: root, stdio: 'inherit' });
+  child.on('error', reject);
+  child.on('exit', code => code === 0 ? resolve() : reject(new Error('Tailwind build failed with exit code ' + code)));
+});
+
+try { await cp(path.join(frontend, 'icons'), path.join(dist, 'icons'), { recursive: true }); } catch (_) {}
+await Promise.all([
+  cp(path.join(root, 'node_modules', 'sweetalert2', 'dist', 'sweetalert2.all.min.js'), path.join(dist, 'vendor', 'sweetalert2.all.min.js')),
+  cp(path.join(root, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), path.join(dist, 'vendor', 'chart.umd.js')),
+]);
+console.log(`Built ${packageJson.name} ${packageJson.version} → ${dist}`);

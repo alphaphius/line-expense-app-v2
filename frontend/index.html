@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2d211c">
+  <meta name="description" content="ระบบจัดการบิลด้วย Gemini และ LINE">
+  <title>Line Expense App V2</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/app-icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script defer src="./vendor/sweetalert2.all.min.js"></script>
+  <script defer src="./vendor/chart.umd.js"></script>
+  <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script defer src="./config.js"></script>
+  <script defer src="./api.js"></script>
+  <script defer src="./image-optimizer.js"></script>
+  <script defer src="./app.js"></script>
+  <script defer src="./pwa.js"></script>
+</head>
+<body class="app-shell bg-slate-50 text-slate-900">
+  <div id="loading-screen" class="fixed inset-0 z-50 grid place-items-center bg-slate-950 text-white">
+    <div class="text-center"><div class="loader mx-auto mb-4"></div><p>กำลังเตรียมระบบบิล…</p></div>
+  </div>
+
+  <div class="min-h-screen lg:flex">
+    <aside class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-64">
+      <div class="flex items-center gap-3 px-5 py-5">
+        <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">LE</div>
+        <div><h1 class="font-semibold leading-tight">Line Expense App V2</h1><p class="text-xs text-slate-400">Expense intelligence</p></div>
+      </div>
+      <nav class="flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2">
+        <button class="nav-btn active" data-view="dashboard">ภาพรวม</button>
+        <button class="nav-btn" data-view="bills">บิลทั้งหมด</button>
+        <button class="nav-btn" data-view="upload">เพิ่มบิล</button>
+        <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
+        <button class="nav-btn" data-view="system">สถานะระบบ</button>
+      </nav>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v2.0.0 · Gemini Flash-Lite</div>
+    </aside>
+
+    <main class="w-full lg:ml-64">
+      <header class="app-header border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur lg:px-8">
+        <div class="mx-auto flex max-w-7xl items-center justify-between">
+          <div class="app-header-copy"><p class="text-sm text-slate-500">ศูนย์จัดการค่าใช้จ่าย</p><h2 id="view-title" class="text-xl font-semibold">ภาพรวม</h2></div>
+          <div class="app-header-actions">
+            <button id="open-database-btn" class="database-access-btn" type="button" aria-label="เปิดฐานข้อมูล Google Sheet">ฐานข้อมูล</button>
+            <button id="refresh-btn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">รีเฟรช</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="mx-auto max-w-7xl p-5 lg:p-8">
+        <section id="view-dashboard" class="app-view space-y-6">
+          <div id="review-inbox" class="review-inbox hidden" role="status">
+            <div class="review-inbox__icon" aria-hidden="true">!</div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold text-amber-950">มีบิลรอตรวจสอบ</p>
+              <p class="mt-1 text-sm text-amber-800"><span id="review-inbox-count">0</span> รายการ · ระบบจะเปิดรายการล่าสุดให้อัตโนมัติ</p>
+            </div>
+            <button id="open-review-queue" class="review-inbox__button">เปิดรายการค้าง</button>
+          </div>
+          <article class="card dashboard-filter-card" aria-label="ตัวกรองภาพรวม">
+            <div class="dashboard-filter-toolbar">
+              <div class="dashboard-filter-group">
+                <label for="dashboard-month" class="dashboard-filter-label">เดือนที่แสดง</label>
+                <div class="dashboard-month-stepper">
+                  <button id="dashboard-prev-month" type="button" aria-label="ดูเดือนก่อนหน้า">‹</button>
+                  <input id="dashboard-month" type="month" class="field" aria-describedby="dashboard-filter-feedback">
+                  <button id="dashboard-next-month" type="button" aria-label="ดูเดือนถัดไป">›</button>
+                </div>
+              </div>
+              <div class="dashboard-filter-group">
+                <span class="dashboard-filter-label">มุมมองข้อมูล</span>
+                <div class="dashboard-mode-toggle" role="group" aria-label="เลือกรูปแบบการแสดงข้อมูล">
+                  <button type="button" data-dashboard-mode="overall" aria-pressed="true">ภาพรวมทั้งหมด</button>
+                  <button type="button" data-dashboard-mode="person" aria-pressed="false">แยกตามบุคคล</button>
+                </div>
+              </div>
+            </div>
+            <fieldset id="dashboard-owner-filter" class="dashboard-owner-filter hidden">
+              <legend class="sr-only">เลือกเจ้าของบิลที่ต้องการแสดง</legend>
+              <div class="dashboard-owner-filter__head">
+                <span>เลือกเจ้าของบิลที่ต้องการแสดง</span>
+                <div>
+                  <button id="dashboard-owner-select-all" type="button">เลือกทั้งหมด</button>
+                  <button id="dashboard-owner-clear" type="button">ล้างการเลือก</button>
+                </div>
+              </div>
+              <div id="dashboard-owner-options" class="dashboard-owner-options" aria-live="polite"></div>
+            </fieldset>
+            <p id="dashboard-filter-feedback" class="dashboard-filter-feedback" role="status" aria-live="polite"></p>
+          </article>
+          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="ตัวเลขสรุปค่าใช้จ่าย">
+            <article class="metric-card summary-card summary-card--quiet">
+              <span>ยอดรวมเดือนที่เลือก</span>
+              <strong id="metric-current-month">฿0.00</strong>
+              <small id="metric-current-month-label" class="summary-period">เดือนปัจจุบัน</small>
+            </article>
+            <article class="metric-card summary-card">
+              <span>ยอดรวมของปีที่เลือก</span>
+              <strong id="metric-current-year">฿0.00</strong>
+              <small id="metric-current-year-label" class="summary-period">ปีปัจจุบัน</small>
+            </article>
+            <article class="metric-card summary-card warning">
+              <span>รอตรวจสอบ</span>
+              <strong id="metric-review">0</strong>
+              <small class="summary-period">รายการที่ต้องตรวจสอบหรือยืนยัน</small>
+            </article>
+          </div>
+          <article class="card previous-month-card">
+            <div class="previous-month-card__summary">
+              <div>
+                <p class="eyebrow">เดือนก่อน</p>
+                <h3 id="previous-month-label" class="mt-1 text-lg font-semibold">เดือนก่อนหน้า</h3>
+              </div>
+              <strong id="metric-previous-month" class="previous-month-card__total">฿0.00</strong>
+            </div>
+            <div class="previous-month-card__breakdown">
+              <p class="text-xs font-medium text-slate-500">แยกตามโครงการที่มีรายการจริง</p>
+              <div id="previous-month-projects" class="previous-project-list" aria-live="polite"></div>
+            </div>
+          </article>
+          <article class="card monthly-history-card">
+            <div class="monthly-history-card__head">
+              <div>
+                <p class="eyebrow">แนวโน้มค่าใช้จ่าย</p>
+                <h3 class="mt-1 text-lg font-semibold">ยอดรวมย้อนหลังรายเดือน</h3>
+                <p class="mt-1 text-xs text-slate-500">แสดงทุกเดือนที่มีข้อมูล เลื่อนไปด้านข้างเพื่อดูย้อนหลังบนมือถือ</p>
+              </div>
+            </div>
+            <div id="monthly-chart-scroll" class="monthly-chart-scroll">
+              <div id="monthly-chart-canvas-wrap" class="monthly-chart-canvas-wrap">
+                <canvas id="monthly-history-chart" aria-label="กราฟยอดรวมย้อนหลังรายเดือน" role="img"></canvas>
+              </div>
+            </div>
+            <div id="monthly-chart-empty" class="monthly-chart-empty hidden" role="status">ยังไม่มีข้อมูลเพียงพอสำหรับแสดงกราฟรายเดือน</div>
+          </article>
+          <article id="uploader-summary-card" class="card uploader-summary-card">
+            <div class="uploader-summary-card__head">
+              <div>
+                <p id="uploader-summary-period" class="eyebrow">เดือนที่เลือก</p>
+                <h3 class="mt-1 text-base font-semibold">ยอดบิลตามเจ้าของ</h3>
+              </div>
+              <p class="text-xs text-slate-500">ความยาวแท่งแสดงยอดรวม</p>
+            </div>
+            <div id="uploader-summary-bars" class="uploader-summary-bars" aria-label="กราฟแท่งจำนวนบิลและยอดรวมแยกตามผู้ส่ง" aria-live="polite"></div>
+          </article>
+          <article id="person-breakdown-card" class="card person-breakdown-card hidden">
+            <div class="person-breakdown-card__head">
+              <div>
+                <p id="person-breakdown-period" class="eyebrow">เดือนที่เลือก</p>
+                <h3 class="mt-1 text-base font-semibold">ค่าใช้จ่ายแยกตามบุคคลและหมวดหมู่</h3>
+              </div>
+              <p class="text-xs text-slate-500">แสดงยอดรวมและจำนวนบิลของแต่ละคน</p>
+            </div>
+            <div id="person-breakdown-list" class="person-breakdown-list" aria-live="polite"></div>
+          </article>
+          <div class="card overflow-hidden">
+            <div class="p-5"><h3 id="dashboard-bill-list-title" class="section-title">รายการบิลเดือนที่เลือก</h3><p id="dashboard-bill-list-helper" class="text-xs text-slate-500">เรียงตามวันที่ในบิล โดยรายการใหม่อยู่ด้านบน</p></div>
+            <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>วันที่ในบิล</th><th>ร้านค้า</th><th>โครงการ</th><th>หมวด</th><th>ผู้อัปโหลด</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody id="bill-table"></tbody></table></div>
+          </div>
+        </section>
+
+        <section id="view-bills" class="app-view hidden space-y-5">
+          <div class="card p-4">
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <input id="bill-search" class="field xl:col-span-2" placeholder="ค้นหาร้านค้า เลขที่บิล Tax ID ผู้ส่ง…">
+              <select id="bill-status" class="field"><option value="">รายการที่ใช้งาน</option><option value="CONFIRMED">ยืนยันแล้ว</option><option value="NEEDS_REVIEW">ต้องตรวจสอบ</option><option value="PENDING_CONFIRMATION">รอยืนยัน</option><option value="REJECTED">ลบ/ยกเลิกแล้ว</option><option value="ERROR">ผิดพลาด</option></select>
+              <select id="bill-project-filter" class="field"><option value="">ทุกโครงการ</option></select>
+              <select id="bill-company-filter" class="field"><option value="">ทุกบริษัท</option></select>
+              <select id="bill-category-filter" class="field"><option value="">ทุกหมวด</option></select>
+              <label class="text-xs text-slate-500">ตั้งแต่วันที่<input id="bill-date-from" type="date" class="field mt-1 w-full"></label>
+              <label class="text-xs text-slate-500">ถึงวันที่<input id="bill-date-to" type="date" class="field mt-1 w-full"></label>
+              <select id="bill-sort" class="field"><option value="document_date:desc">วันที่ในบิลใหม่สุด</option><option value="document_date:asc">วันที่ในบิลเก่าสุด</option><option value="created_at:desc">วันที่อัปโหลดใหม่สุด</option><option value="grand_total:desc">ยอดมากไปน้อย</option><option value="grand_total:asc">ยอดน้อยไปมาก</option><option value="vendor_name:asc">ชื่อร้านค้า ก-ฮ</option></select>
+              <button id="search-bills-btn" class="primary-btn">ค้นหา</button>
+            </div>
+            <div class="monthly-export mt-4 border-t border-slate-100 pt-4">
+              <div class="min-w-0 flex-1"><p class="text-sm font-semibold">ส่งออกเอกสารประจำเดือน</p><p class="mt-1 text-xs text-slate-500">ดาวน์โหลด Word รวมรูปบิลและ Excel สรุปรายการ</p></div>
+              <label class="text-xs text-slate-500">เลือกเดือน<input id="export-month" type="month" class="field mt-1"></label>
+              <button id="export-monthly-btn" class="primary-btn">ดาวน์โหลด Word + Excel</button>
+            </div>
+          </div>
+          <div class="card overflow-hidden">
+            <div class="flex items-center justify-between p-5"><h3 class="section-title !mb-0">รายการบิลทั้งหมด</h3><span id="bill-list-count" class="text-sm text-slate-500">0 รายการ</span></div>
+            <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>วันที่</th><th>ร้านค้า/เลขที่</th><th>โครงการ</th><th>บริษัท</th><th>หมวด</th><th>ผู้ส่ง</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody id="all-bills-table"></tbody></table></div>
+            <div class="flex items-center justify-between border-t border-slate-200 p-4"><button id="bill-prev" class="rounded-lg border px-3 py-2 text-sm">ก่อนหน้า</button><span id="bill-page-info" class="text-sm text-slate-500">หน้า 1/1</span><button id="bill-next" class="rounded-lg border px-3 py-2 text-sm">ถัดไป</button></div>
+          </div>
+        </section>
+
+        <section id="view-upload" class="app-view hidden">
+          <div class="mx-auto max-w-3xl card p-5 md:p-8">
+            <div class="mb-6"><p class="eyebrow">AI BILL CAPTURE</p><h3 class="text-2xl font-semibold">อัปโหลดบิล</h3><p class="mt-2 text-sm text-slate-500">รูปหลายใบจะถูกรวมเป็นเอกสารชุดเดียวกัน กรุณาเรียงหน้าก่อนเลือกไฟล์</p></div>
+            <div id="upload-quick-preset" class="upload-quick-preset hidden" role="status">
+              <div class="upload-quick-preset__icon" aria-hidden="true">⚡</div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold">เลือกค่าลัดสำหรับบิลนี้</p>
+                <p class="mt-1 text-xs">แตะชุดที่ต้องการเพื่อใส่จำนวนหน้า โครงการ และบริษัททันที</p>
+                <div id="upload-quick-options" class="upload-quick-options"></div>
+              </div>
+            </div>
+            <form id="upload-form" class="space-y-5">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="label">โครงการ<select id="upload-project" class="field mt-2" required></select></label>
+                <label class="label">บริษัทผู้ซื้อ<select id="upload-company" class="field mt-2" required></select></label>
+              </div>
+              <label class="label block">บิลชุดนี้มีกี่หน้า
+                <input id="expected-pages" class="field mt-2" type="number" min="1" max="8" value="1" required>
+              </label>
+              <label id="drop-zone" class="block cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center transition hover:border-emerald-500 hover:bg-emerald-50">
+                <input id="bill-files" class="hidden" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required>
+                <div class="text-3xl">📄</div><p class="mt-2 font-medium">กดเพื่อเลือกรูปหรือ PDF</p><p class="mt-1 text-xs text-slate-500">สูงสุด 8 หน้า · ไฟล์ละไม่เกิน 8 MB</p>
+              </label>
+              <div id="file-list" class="grid gap-3 sm:grid-cols-2"></div>
+              <button class="primary-btn w-full py-3" type="submit">วิเคราะห์บิลด้วย Gemini</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="view-masters" class="app-view hidden space-y-6">
+          <article class="card quick-settings-card">
+            <div class="quick-settings-card__intro">
+              <div class="quick-settings-card__icon" aria-hidden="true">⚡</div>
+              <div>
+                <p class="eyebrow">LINE FAST PATH</p>
+                <h3 class="mt-1 text-xl font-semibold">ตั้งค่าลัด 2 ชุด</h3>
+                <p class="mt-2 text-sm text-slate-500">แต่ละชุดกำหนดจำนวนหน้า โครงการ และบริษัทต่างกันได้ ผู้ส่งยังเลือกกำหนดเองใน LINE ได้ทุกครั้ง</p>
+              </div>
+            </div>
+            <div class="quick-settings-grid">
+              <form class="quick-setting-panel" data-quick-settings-form data-quick-slot="1">
+                <div class="quick-setting-panel__head"><span>01</span><div><h4>ค่าลัด 1</h4><p>ค่าลัดเดิมของคุณอยู่ในชุดนี้</p></div></div>
+                <div class="quick-settings-form">
+                  <label class="label">จำนวนหน้าปกติ
+                    <select id="quick-page-count-1" class="field mt-2" required>
+                      <option value="1">1 หน้า</option><option value="2">2 หน้า</option><option value="3">3 หน้า</option><option value="4">4 หน้า</option>
+                      <option value="5">5 หน้า</option><option value="6">6 หน้า</option><option value="7">7 หน้า</option><option value="8">8 หน้า</option>
+                    </select>
+                  </label>
+                  <label class="label">โครงการ<select id="quick-project-1" class="field mt-2" required></select></label>
+                  <label class="label">บริษัท<select id="quick-company-1" class="field mt-2" required></select></label>
+                </div>
+                <div class="quick-settings-actions">
+                  <button class="primary-btn" type="submit">บันทึกค่าลัด 1</button>
+                  <button class="secondary-btn" type="button" data-clear-quick-slot="1">ล้างชุดนี้</button>
+                </div>
+                <div id="quick-settings-status-1" class="quick-settings-status" role="status" aria-live="polite"></div>
+              </form>
+              <form class="quick-setting-panel" data-quick-settings-form data-quick-slot="2">
+                <div class="quick-setting-panel__head"><span>02</span><div><h4>ค่าลัด 2</h4><p>สำหรับอีกโครงการหรือบริษัทที่ใช้บ่อย</p></div></div>
+                <div class="quick-settings-form">
+                  <label class="label">จำนวนหน้าปกติ
+                    <select id="quick-page-count-2" class="field mt-2" required>
+                      <option value="1">1 หน้า</option><option value="2">2 หน้า</option><option value="3">3 หน้า</option><option value="4">4 หน้า</option>
+                      <option value="5">5 หน้า</option><option value="6">6 หน้า</option><option value="7">7 หน้า</option><option value="8">8 หน้า</option>
+                    </select>
+                  </label>
+                  <label class="label">โครงการ<select id="quick-project-2" class="field mt-2" required></select></label>
+                  <label class="label">บริษัท<select id="quick-company-2" class="field mt-2" required></select></label>
+                </div>
+                <div class="quick-settings-actions">
+                  <button class="primary-btn" type="submit">บันทึกค่าลัด 2</button>
+                  <button class="secondary-btn" type="button" data-clear-quick-slot="2">ล้างชุดนี้</button>
+                </div>
+                <div id="quick-settings-status-2" class="quick-settings-status" role="status" aria-live="polite"></div>
+              </form>
+            </div>
+          </article>
+          <div class="grid gap-5 xl:grid-cols-3">
+            <div class="master-card"><div class="master-head"><h3>โครงการ</h3><button data-add="project">+ เพิ่ม</button></div><div id="project-list" class="master-list"></div></div>
+            <div class="master-card"><div class="master-head"><h3>บริษัทของเรา</h3><button data-add="company">+ เพิ่ม</button></div><div id="company-list" class="master-list"></div></div>
+            <div class="master-card"><div class="master-head"><h3>หมวดหมู่บิล</h3><button data-add="category">+ เพิ่ม</button></div><div id="category-list" class="master-list"></div></div>
+          </div>
+          <div class="card p-5"><h3 class="section-title">ชื่อหัวบิลที่ระบบจดจำ</h3><p class="mb-4 text-sm text-slate-500">ระบบเพิ่มรายชื่อจากบิลที่วิเคราะห์อัตโนมัติ เพื่อนำไป Suggest ตอนแก้ไข</p><div id="vendor-tags" class="flex flex-wrap gap-2"></div></div>
+        </section>
+
+        <section id="view-system" class="app-view hidden">
+          <div class="mx-auto max-w-2xl card p-6"><h3 class="text-xl font-semibold">สถานะระบบ</h3><div id="system-status" class="mt-5 space-y-3"></div></div>
+        </section>
+      </div>
+      <footer class="app-footer" aria-label="ผู้สร้างแอป">
+        Created by CodingPhius Creativities
+        <span aria-hidden="true">·</span>
+        <a href="mailto:alphaphius.tkh@gmail.com">alphaphius.tkh@gmail.com</a>
+      </footer>
+    </main>
+  </div>
+  <div id="activity-toast" class="activity-toast hidden" role="status" aria-live="polite" aria-atomic="true">
+    <span id="activity-toast-icon" class="activity-toast__spinner" aria-hidden="true"></span>
+    <span class="min-w-0"><strong id="activity-toast-title" class="block text-sm">กำลังทำงาน…</strong><small id="activity-toast-detail" class="mt-0.5 block text-xs">คุณสามารถใช้งานส่วนอื่นต่อได้</small></span>
+  </div>
+  <datalist id="vendor-suggestions"></datalist>
+</body>
+</html>

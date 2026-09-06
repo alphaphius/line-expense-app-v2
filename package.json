@@ -1,0 +1,27 @@
+{
+  "name": "line-expense-app-v2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "GitHub Pages frontend with Google Apps Script, Sheets, Drive, Gemini and LINE backend",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "verify": "node scripts/verify.mjs",
+    "setup": "node scripts/setup.mjs",
+    "deploy:web": "node scripts/deploy-web.mjs",
+    "deploy:api": "node scripts/deploy-api.mjs",
+    "deploy": "npm run verify && npm run deploy:api && npm run deploy:web",
+    "status": "node scripts/status.mjs",
+    "smoke:api": "node scripts/smoke-api.mjs"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.6-alpha",
+    "esbuild": "^0.25.9",
+    "tailwindcss": "^3.4.17"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.0",
+    "sweetalert2": "^11.22.4"
+  }
+}
