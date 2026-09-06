@@ -55,7 +55,7 @@ PORT=4175 npm run dev
 ```javascript
 setSecrets(
   'GEMINI_API_KEY',
-  'LINE_CHANNEL_ACCESS_TOKEN',
+  'LINE_ACCESS_TOKEN',
   'LINE_CHANNEL_SECRET',
   'LIFF_ID',
   'https://YOUR_GITHUB_USER.github.io/YOUR_REPOSITORY/'
