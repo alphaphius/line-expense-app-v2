@@ -5,21 +5,57 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 const root = path.resolve(import.meta.dirname, '..');
-const sourceRoot = path.resolve(root, '..', 'line-expense-app');
 const read = relative => readFile(path.join(root, relative), 'utf8');
 
+// Frozen V1 compatibility contract. Keep this repository self-contained so the
+// same checks run locally, in GitHub Actions, and after a fresh clone.
+const expectedV1Ids = [
+  'activity-toast', 'activity-toast-detail', 'activity-toast-icon', 'activity-toast-title',
+  'all-bills-table', 'bill-category-filter', 'bill-company-filter', 'bill-date-from',
+  'bill-date-to', 'bill-files', 'bill-list-count', 'bill-next', 'bill-page-info',
+  'bill-prev', 'bill-project-filter', 'bill-search', 'bill-sort', 'bill-status',
+  'bill-table', 'category-list', 'company-list', 'dashboard-bill-list-helper',
+  'dashboard-bill-list-title', 'dashboard-filter-feedback', 'dashboard-month',
+  'dashboard-next-month', 'dashboard-owner-clear', 'dashboard-owner-filter',
+  'dashboard-owner-options', 'dashboard-owner-select-all', 'dashboard-prev-month',
+  'drop-zone', 'expected-pages', 'export-month', 'export-monthly-btn', 'file-list',
+  'loading-screen', 'metric-current-month', 'metric-current-month-label',
+  'metric-current-year', 'metric-current-year-label', 'metric-previous-month',
+  'metric-review', 'monthly-chart-canvas-wrap', 'monthly-chart-empty',
+  'monthly-chart-scroll', 'monthly-history-chart', 'open-database-btn',
+  'open-review-queue', 'person-breakdown-card', 'person-breakdown-list',
+  'person-breakdown-period', 'previous-month-label', 'previous-month-projects',
+  'project-list', 'quick-company-1', 'quick-company-2', 'quick-page-count-1',
+  'quick-page-count-2', 'quick-project-1', 'quick-project-2',
+  'quick-settings-status-1', 'quick-settings-status-2', 'refresh-btn',
+  'review-inbox', 'review-inbox-count', 'search-bills-btn', 'system-status',
+  'upload-company', 'upload-form', 'upload-project', 'upload-quick-options',
+  'upload-quick-preset', 'uploader-summary-bars', 'uploader-summary-card',
+  'uploader-summary-period', 'vendor-suggestions', 'vendor-tags', 'view-bills',
+  'view-dashboard', 'view-masters', 'view-system', 'view-title', 'view-upload',
+];
+
+const expectedV1Calls = [
+  'backfillLineUsernames', 'clearQuickSettings', 'confirmBill', 'deleteBill',
+  'deleteMasterData', 'exportMonthlyBillExcel', 'exportMonthlyBillWord',
+  'getBillDetail', 'getBillDetail', 'getBillDocumentPreview', 'getBootstrapData',
+  'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills',
+  'listPendingReviewBills', 'restoreBill', 'saveMasterData', 'saveQuickSettings',
+  'submitBillPages', 'updateBill', 'verifyDatabaseAccess',
+];
+
 test('GitHub Pages HTML preserves every V1 screen element id', async () => {
-  const [v1, v2] = await Promise.all([readFile(path.join(sourceRoot, 'Index.html'), 'utf8'), read('frontend/index.html')]);
+  const v2 = await read('frontend/index.html');
   const ids = source => new Set(Array.from(source.matchAll(/\bid="([^"]+)"/g), match => match[1]));
-  assert.deepEqual(ids(v2), ids(v1));
+  assert.deepEqual(ids(v2), new Set(expectedV1Ids));
   assert.doesNotMatch(v2, /<\?(?:=|!=)/);
   assert.doesNotMatch(v2, /cdn\.tailwindcss\.com/);
 });
 
 test('frontend calls the same business functions as V1 through the API adapter', async () => {
-  const [v1, v2] = await Promise.all([readFile(path.join(sourceRoot, 'Scripts.html'), 'utf8'), read('frontend/app.js')]);
+  const v2 = await read('frontend/app.js');
   const calls = source => Array.from(source.matchAll(/(?:gas|callWithRequestId)\('([A-Za-z0-9_]+)'/g), match => match[1]).sort();
-  assert.deepEqual(calls(v2), calls(v1));
+  assert.deepEqual(calls(v2), expectedV1Calls);
   assert.match(v2, /window\.V2Api\.call/);
   assert.doesNotMatch(v2, /google\.script\.run/);
 });
