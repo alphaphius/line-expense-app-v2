@@ -109,3 +109,10 @@ test('service worker caches only same-origin static GET assets', async () => {
   assert.match(worker, /url\.origin !== self\.location\.origin/);
   assert.doesNotMatch(worker, /script\.google\.com/);
 });
+
+test('local preview is isolated from the production API', async () => {
+  const server = await read('scripts/dev-server.mjs');
+  assert.match(server, /apiEndpoint:location\.origin\+'\/__mock_api__'/);
+  assert.match(server, /pathname === '\/__mock_api__'/);
+  assert.doesNotMatch(server, /script\.google\.com\/macros\/s\//);
+});

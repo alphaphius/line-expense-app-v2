@@ -18,7 +18,7 @@
 - [x] `LINE_CHANNEL_SECRET`
 - [x] `LIFF_ID`
 - [x] `FRONTEND_URL`
-- [ ] เปลี่ยน PIN เริ่มต้น `1234`
+- [x] เปลี่ยน PIN เริ่มต้น `1234` และหมุนเป็น PIN Production 8 หลัก
 
 ## C. GitHub Pages
 
