@@ -13,7 +13,7 @@
 
 ## B. Secrets
 
-- [ ] `GEMINI_API_KEY`
+- [x] `GEMINI_API_KEY` (ตรวจ Production แล้ว: key ถูกต้องและเข้าถึง `gemini-3.5-flash-lite` ได้)
 - [x] `LINE_ACCESS_TOKEN`
 - [x] `LINE_CHANNEL_SECRET`
 - [x] `LIFF_ID`
