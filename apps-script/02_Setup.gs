@@ -18,7 +18,8 @@ function setupApp() {
       rootFolderUrl: root.getUrl(),
       schemaVersion: APP_CONFIG.SCHEMA_VERSION,
       apiVersion: APP_CONFIG.API_VERSION,
-      pinMustChange: getScriptProperty_(PROP_KEYS.API_PIN_MUST_CHANGE, false) === 'true',
+      accessMode: 'OPEN',
+      loginRequired: false,
       message: 'สร้างโครงสร้างฐานข้อมูลเรียบร้อยแล้ว',
     };
   });

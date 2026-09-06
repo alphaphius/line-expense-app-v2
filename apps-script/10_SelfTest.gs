@@ -109,9 +109,8 @@ function runSelfTest() {
   check('สถานะลบบิล', deletedBillPatch_({ notes: '' }, 'WEB', 'now').status === 'REJECTED');
   check('กู้คืนบิลเข้าคิวตรวจสอบ', restoredBillPatch_({ review_reasons: '' }, 'now').status === 'NEEDS_REVIEW');
   initializeApiSecurity_();
-  check('เก็บรหัสเปิดฐานข้อมูลเป็น salted hash', /^[0-9a-f]{64}$/.test(getScriptProperty_(PROP_KEYS.API_PIN_HASH, true)) &&
-    sha256Hex_('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' &&
-    !isDatabaseAccessPassword_('wrong-password'));
+  const openSession = openApiSession('self-test-open-device-20260907');
+  check('โหมดเปิดออก session อัตโนมัติ', openSession.accessMode === 'OPEN' && !!requireApiSession_(openSession.token));
 
   const savedFlex = buildBillSavedFlex({ bill_id: 'bill-self-test', document_no: 'T-1', document_date: '2026-07-17', grand_total: 107, vendor_name: 'ร้านทดสอบ' }, 'https://example.com/app/');
   check('Flex ยืนยันบันทึกบิล', savedFlex.type === 'flex' && savedFlex.contents.footer.contents[0].action.uri.indexOf('bill_id=bill-self-test') >= 0);

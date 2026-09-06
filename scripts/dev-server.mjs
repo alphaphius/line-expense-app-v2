@@ -5,7 +5,7 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..', 'dist');
 const types = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.json':'application/json; charset=utf-8', '.webmanifest':'application/manifest+json', '.svg':'image/svg+xml', '.png':'image/png' };
 const port = Number(process.env.PORT || 4173);
-const mockSession = { token:'local-preview-session-token-000000000000', expiresAt:Date.now() + 6 * 60 * 60 * 1000, pinMustChange:false };
+const mockSession = { token:'local-preview-session-token-000000000000', expiresAt:Date.now() + 6 * 60 * 60 * 1000, accessMode:'OPEN' };
 const mockData = {
   appName: 'Line Expense App V2', liffId: '', frontendUrl:'http://127.0.0.1:' + port,
   masters: {
@@ -26,14 +26,14 @@ const mockData = {
 };
 
 function mockAction(action) {
-  if (action === 'health') return { appName:mockData.appName, appVersion:'2.0.0', apiVersion:'2.0', schemaVersion:2, pinMustChange:false, liffId:'', frontendUrl:mockData.frontendUrl };
-  if (action === 'verifyPin' || action === 'changePin') return mockSession;
+  if (action === 'health') return { appName:mockData.appName, appVersion:'2.0.1', apiVersion:'2.0', schemaVersion:2, accessMode:'OPEN', loginRequired:false, sessionRequired:false, pinMustChange:false, liffId:'', frontendUrl:mockData.frontendUrl };
+  if (action === 'openSession') return mockSession;
   if (action === 'getBootstrapData') return mockData;
   if (action === 'getDashboard') return mockData.dashboard;
   if (action === 'listBills') return { rows:[], total:0, page:1, pages:1, pageSize:25 };
   if (action === 'listPendingReviewBills') return [];
   if (action === 'getQuickSettings' || action === 'saveQuickSettings' || action === 'clearQuickSettings') return mockData.quickSettings;
-  if (action === 'getSystemStatus') return { spreadsheet:'Local mock', folder:'Local mock', geminiConfigured:false, lineConfigured:false, model:'gemini-3.5-flash-lite', version:'2.0.0', lineDiagnostics:{ warnings:['Local preview'] }, geminiDiagnostics:{ message:'Local preview', valid:false } };
+  if (action === 'getSystemStatus') return { spreadsheet:'Local mock', folder:'Local mock', geminiConfigured:false, lineConfigured:false, model:'gemini-3.5-flash-lite', version:'2.0.1', lineDiagnostics:{ warnings:['Local preview'] }, geminiDiagnostics:{ message:'Local preview', valid:false } };
   return {};
 }
 

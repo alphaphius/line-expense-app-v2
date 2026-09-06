@@ -11,7 +11,7 @@ V2 แยกจาก V1 ทั้ง Google Sheet, Apps Script, Drive folder �
 - DOCX export ใช้รูปที่เหมาะกับการส่งออก เป้าหมายไม่เกินประมาณ 900 KB/หน้าเมื่อ Drive สร้าง thumbnail ได้
 - แยกปุ่ม `Export DOCX` และ `Export Excel` เพื่อสร้างเฉพาะไฟล์ที่ต้องการและลดเวลารอ
 - ป้องกัน submit ซ้ำด้วย request ID, MutationLog และ lock
-- PIN แบบ salted hash, session อายุ 6 ชั่วโมง, rate limit และบังคับเปลี่ยน PIN เริ่มต้น `1234`
+- เปิดใช้งานได้ทันทีโดยไม่ต้องล็อกอินหรือกรอก PIN; ระบบออก technical session อายุ 6 ชั่วโมงให้อัตโนมัติเพื่อควบคุมคำขอซ้ำและ audit
 - Desktop/Mobile responsive, touch target อย่างน้อย 40 px, PWA icon 192/512 และ offline shell
 - SweetAlert2/Chart.js self-hosted เพื่อลด dependency จาก CDN; LIFF SDK ใช้ CDN ทางการของ LINE
 
@@ -46,7 +46,7 @@ PORT=4175 npm run dev
 4. รัน `runSelfTest` และตรวจว่าคืนค่า `passed: true`
 5. ที่ Deploy → Manage deployments ตรวจว่า deployment เป็น Web app, Execute as `Me`, Who has access = `Anyone`
 6. เปิด Web App URL แล้วตรวจว่าคืน JSON ที่มี `"ok":true`
-7. เปิดเว็บ GitHub Pages ครั้งแรก ใช้ PIN `1234` แล้วตั้ง PIN ใหม่ทันที
+7. เปิดเว็บ GitHub Pages แล้วตรวจว่า Dashboard แสดงทันทีโดยไม่มีหน้าล็อกอิน
 
 ## ตั้งค่า Gemini, LINE และ GitHub Pages
 
@@ -98,13 +98,14 @@ npm run build     # สร้าง dist
 npm run verify    # test + build
 npm run deploy:api
 npm run status
-V2_API_PIN=1234 npm run smoke:api
+npm run smoke:api
 ```
 
 ดูรายละเอียดโครงสร้างที่ [ARCHITECTURE.md](./ARCHITECTURE.md) และเช็กลิสต์ก่อนใช้งานจริงที่ [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)
 
 ## ข้อจำกัดที่ควรรู้
 
+- แอปอยู่ในโหมด `OPEN`: ผู้ที่มีลิงก์ GitHub Pages/API สามารถเข้าถึงฟังก์ชันของระบบได้โดยไม่ต้องกรอก PIN ควรแชร์ลิงก์เฉพาะกลุ่มที่ไว้ใจได้
 - Apps Script ไม่เปิด HTTP request headers ให้ `doPost` จึงตรวจ `X-Line-Signature` โดยตรงไม่ได้ รุ่นนี้ใช้ webhook key ยาวใน query stringเป็นด่านป้องกันเพิ่มเติม หากต้องการระดับ production ที่เคร่งครัด ให้เพิ่ม Cloudflare Worker สำหรับตรวจลายเซ็นก่อนส่งต่อ Apps Script
 - PDF ไม่ถูก recompress ในเบราว์เซอร์เพื่อป้องกันเอกสารเสียหาย จำกัดไฟล์ละ 8 MB
 - Drive thumbnail เป็น best effort หาก Google ไม่สร้าง thumbnail ระบบจะเก็บรูปเดิม แต่ DOCX จะพยายามใช้ thumbnail อีกครั้งตอน export

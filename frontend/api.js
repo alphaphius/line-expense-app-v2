@@ -111,44 +111,10 @@
     localStorage.setItem(keys.endpoint, endpoint);
   }
 
-  async function promptPin(health) {
-    const result = await Swal.fire({
-      title: health && health.pinMustChange ? 'เข้าสู่ระบบครั้งแรก' : 'เข้าสู่ระบบ',
-      html: '<label class="block text-left text-sm">รหัส PIN<input id="api-pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" class="swal2-input !mx-0 !mt-2 !w-full" autocomplete="current-password"></label>' + (health && health.pinMustChange ? '<p class="mt-3 text-left text-xs text-amber-700">ครั้งแรกใช้ 1234 แล้วระบบจะให้ตั้งรหัสใหม่ทันที</p>' : ''),
-      confirmButtonText: 'เข้าสู่ระบบ',
-      confirmButtonColor: '#8f5f42',
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      preConfirm: async () => {
-        const pin = document.getElementById('api-pin-input').value;
-        if (!/^\d{4,8}$/.test(pin)) return Swal.showValidationMessage('กรุณากรอกตัวเลข 4–8 หลัก');
-        try { return { pin, auth: await request('verifyPin', [pin, getDeviceId()]) }; }
-        catch (error) { Swal.showValidationMessage(error.message); return false; }
-      },
-    });
-    saveSession({ token: result.value.auth.token, expiresAt: result.value.auth.expiresAt });
-    if (result.value.auth.pinMustChange) await forcePinChange(result.value.pin);
-  }
-
-  async function forcePinChange(currentPin) {
-    const result = await Swal.fire({
-      title: 'ตั้งรหัส PIN ใหม่',
-      html: '<label class="block text-left text-sm">รหัสใหม่ 4–8 หลัก<input id="api-new-pin" type="password" inputmode="numeric" maxlength="8" class="swal2-input !mx-0 !mt-2 !w-full" autocomplete="new-password"></label><label class="mt-3 block text-left text-sm">ยืนยันรหัสใหม่<input id="api-new-pin-confirm" type="password" inputmode="numeric" maxlength="8" class="swal2-input !mx-0 !mt-2 !w-full" autocomplete="new-password"></label>',
-      confirmButtonText: 'บันทึกรหัสใหม่',
-      confirmButtonColor: '#8f5f42',
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      preConfirm: async () => {
-        const nextPin = document.getElementById('api-new-pin').value;
-        const confirmation = document.getElementById('api-new-pin-confirm').value;
-        if (!/^\d{4,8}$/.test(nextPin)) return Swal.showValidationMessage('รหัสใหม่ต้องเป็นตัวเลข 4–8 หลัก');
-        if (nextPin === '1234') return Swal.showValidationMessage('กรุณาเปลี่ยนจากรหัสเริ่มต้น 1234');
-        if (nextPin !== confirmation) return Swal.showValidationMessage('รหัสยืนยันไม่ตรงกัน');
-        try { return await request('changePin', [currentPin, nextPin, getDeviceId()]); }
-        catch (error) { Swal.showValidationMessage(error.message); return false; }
-      },
-    });
-    saveSession({ token: result.value.token, expiresAt: result.value.expiresAt });
+  async function startOpenSession() {
+    const openSession = await request('openSession', [getDeviceId()]);
+    saveSession({ token: openSession.token, expiresAt: openSession.expiresAt });
+    return openSession;
   }
 
   async function connect() {
@@ -162,7 +128,7 @@
       await Swal.fire({ icon: 'error', title: 'เชื่อมต่อไม่สำเร็จ', text: error.message, confirmButtonText: 'ตั้งค่าใหม่', confirmButtonColor: '#8f5f42' });
       return connect();
     }
-    if (!session || Number(session.expiresAt) <= Date.now()) await promptPin(health);
+    if (!session || Number(session.expiresAt) <= Date.now()) await startOpenSession();
     window.INITIAL_BILL_ID = new URLSearchParams(location.search).get('bill_id') || '';
     window.AUTO_REVIEW_BILL_ID = '';
     window.OPEN_EXTERNAL_BROWSER = new URLSearchParams(location.search).get('openExternalBrowser') === '1';
@@ -176,8 +142,7 @@
     } catch (error) {
       if (['AUTH_REQUIRED', 'AUTH_EXPIRED'].indexOf(error.code) >= 0) {
         saveSession(null);
-        const health = await request('health', []);
-        await promptPin(health);
+        await startOpenSession();
         return request(action, args, { requestId: requestId });
       }
       throw error;

@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
   U[Desktop / Smartphone] -->|HTTPS static files| GH[GitHub Pages]
-  GH -->|JSON API + PIN session| GAS[Apps Script Web App V2]
+  GH -->|JSON API + automatic session| GAS[Apps Script Web App V2]
   L[LINE Group / OA] -->|Webhook + hook key| GAS
   GAS --> S[(Google Sheet V2)]
   GAS --> D[Google Drive V2 folder]
@@ -23,7 +23,7 @@ flowchart LR
 
 1. หน้าเว็บโหลดจาก GitHub CDN
 2. `api.js` เรียก Apps Script ด้วย POST `text/plain` เพื่อคง simple CORS request
-3. ผู้ใช้ยืนยัน PIN และรับ opaque session token ซึ่งเก็บใน `sessionStorage`
+3. หน้าเว็บขอ opaque technical session ให้อัตโนมัติและเก็บใน `sessionStorage`; ผู้ใช้ไม่ต้องล็อกอินหรือกรอก PIN
 4. action ทุกตัวผ่าน allowlist ใน `17_Api.gs`
 5. mutation ใช้ request ID คงเดิม, `MutationLog` และ Script Lock เพื่อป้องกันคำสั่งซ้ำ
 6. response ทุกตัวใช้ envelope `{ok,data,error,requestId,serverTime,apiVersion}`
@@ -59,8 +59,7 @@ LINE content ต้องถูกเก็บระหว่างรอรู�
 
 - GitHub Pages ถือว่า public client: ไม่มี API key หรือ LINE token
 - Secret ทั้งหมดอยู่ใน Apps Script Properties
-- PIN hash ใช้ salt + SHA-256 iteration และเปลี่ยน salt เมื่อเปลี่ยน PIN
-- API session อยู่ใน Apps Script Cache และ browser `sessionStorage`
-- login rate limit 8 ครั้ง/15 นาที/อุปกรณ์
-- Sheet/Drive URL เปิดได้หลังยืนยัน PIN ซ้ำ
+- ระบบอยู่ในโหมด `OPEN`; ผู้ที่มีลิงก์สามารถเรียกใช้งานได้ จึงไม่ใช่ขอบเขตยืนยันตัวบุคคล
+- Technical session อยู่ใน Apps Script Cache และ browser `sessionStorage` เพื่อควบคุมอายุคำขอ, mutation idempotency และ audit เท่านั้น
+- Sheet/Drive URL เปิดได้จากหน้าแอปโดยไม่ต้องยืนยัน PIN; สิทธิ์เปิดไฟล์จริงยังเป็นไปตาม Google Drive ของผู้ใช้
 - API action ใช้ allowlist ไม่รับชื่อฟังก์ชัน arbitrary จาก client

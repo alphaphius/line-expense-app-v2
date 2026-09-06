@@ -30,10 +30,9 @@ function handleApiRequest_(request, requestId) {
   const action = cleanString_(request.action, 80);
   const args = Array.isArray(request.args) ? request.args : [];
   if (action === 'health') return apiEnvelope_(true, apiHealth_(), null, requestId);
-  if (action === 'verifyPin') return apiEnvelope_(true, verifyApiPin(args[0], args[1]), null, requestId);
-  if (action === 'changePin') return apiEnvelope_(true, changeApiPin(request.sessionToken, args[0], args[1], args[2]), null, requestId);
+  if (action === 'openSession') return apiEnvelope_(true, openApiSession(args[0]), null, requestId);
 
-  const session = requireApiSession_(request.sessionToken, false);
+  const session = requireApiSession_(request.sessionToken);
   const handler = apiActionHandler_(action);
   if (!handler) throw apiError_('ACTION_NOT_ALLOWED', 'คำสั่งนี้ไม่ได้รับอนุญาต');
 
@@ -74,7 +73,7 @@ function apiActionHandler_(action) {
     saveQuickSettings: function (args) { return saveQuickSettings(args[0]); },
     clearQuickSettings: function (args) { return clearQuickSettings(args[0]); },
     getSystemStatus: function () { return getSystemStatus(); },
-    verifyDatabaseAccess: function (args) { return verifyDatabaseAccess(args[0]); },
+    verifyDatabaseAccess: function () { return verifyDatabaseAccess(); },
     backfillLineUsernames: function () { return backfillLineUsernames(); },
     exportMonthlyBillWord: function (args) { return exportMonthlyBillWord(args[0]); },
     exportMonthlyBillExcel: function (args) { return exportMonthlyBillExcel(args[0]); },
@@ -171,8 +170,10 @@ function apiHealth_() {
     apiVersion: APP_CONFIG.API_VERSION,
     schemaVersion: APP_CONFIG.SCHEMA_VERSION,
     serverTime: nowIso_(),
-    sessionRequired: true,
-    pinMustChange: properties.getProperty(PROP_KEYS.API_PIN_MUST_CHANGE) === 'true',
+    accessMode: 'OPEN',
+    loginRequired: false,
+    sessionRequired: false,
+    pinMustChange: false,
     liffId: properties.getProperty(PROP_KEYS.LIFF_ID) || '',
     frontendUrl: properties.getProperty(PROP_KEYS.FRONTEND_URL) || '',
   };

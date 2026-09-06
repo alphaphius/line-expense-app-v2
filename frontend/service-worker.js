@@ -1,4 +1,4 @@
-const CACHE_NAME = 'line-expense-v2-shell-1';
+const CACHE_NAME = 'line-expense-v2-shell-2';
 const SHELL = ['./', './index.html', './styles.css', './config.js', './api.js', './image-optimizer.js', './app.js', './pwa.js', './manifest.webmanifest', './icons/app-icon-192.png', './vendor/sweetalert2.all.min.js', './vendor/chart.umd.js'];
 
 self.addEventListener('install', event => {

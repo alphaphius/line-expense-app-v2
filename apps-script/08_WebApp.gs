@@ -41,19 +41,10 @@ function getSystemStatus() {
   } catch (error) { return fail_(error); }
 }
 
-function verifyDatabaseAccess(password) {
+function verifyDatabaseAccess() {
   try {
-    if (!isDatabaseAccessPassword_(password)) throw new Error('รหัสผ่านไม่ถูกต้อง');
     return ok_({ url: getSpreadsheet_().getUrl() });
   } catch (error) { return fail_(error); }
-}
-
-function isDatabaseAccessPassword_(password) {
-  initializeApiSecurity_();
-  const properties = PropertiesService.getScriptProperties();
-  const salt = properties.getProperty(PROP_KEYS.API_PIN_SALT) || '';
-  const actual = hashApiPin_(cleanString_(password, 32), salt);
-  return constantTimeEquals_(actual, properties.getProperty(PROP_KEYS.API_PIN_HASH) || '');
 }
 
 function sha256Hex_(value) {

@@ -712,37 +712,23 @@
     }
   }
 
-  async function openDatabaseWithPassword() {
-    const verification = await Swal.fire({
-      title:'เปิดฐานข้อมูล',
-      text:'กรอกรหัสผ่านก่อนเปิด Google Sheet',
-      input:'password',
-      inputAttributes:{ autocomplete:'current-password', autocapitalize:'off', spellcheck:'false' },
-      showCancelButton:true,
-      confirmButtonText:'ตรวจสอบรหัส',
-      cancelButtonText:'ยกเลิก',
-      confirmButtonColor:'#8f5f42',
-      showLoaderOnConfirm:true,
-      allowOutsideClick:() => !Swal.isLoading(),
-      preConfirm:async password => {
-        if (!String(password || '').trim()) return Swal.showValidationMessage('กรุณากรอกรหัสผ่าน');
-        try {
-          return await gas('verifyDatabaseAccess', password);
-        } catch (error) {
-          Swal.showValidationMessage(error.message);
-          return false;
-        }
-      },
-    });
-    if (!verification.isConfirmed || !verification.value || !verification.value.url) return;
-    const url = escapeHtml(verification.value.url);
-    await Swal.fire({
-      icon:'success',
-      title:'ยืนยันรหัสแล้ว',
-      html:`<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิดฐานข้อมูลในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด Google Sheet</a>`,
-      showConfirmButton:false,
-      showCloseButton:true,
-    });
+  async function openDatabase() {
+    showActivityToast('กำลังเปิดฐานข้อมูล…', 'กำลังเตรียมลิงก์ Google Sheet');
+    try {
+      const access = await gas('verifyDatabaseAccess');
+      const url = escapeHtml(access.url);
+      hideActivityToast();
+      await Swal.fire({
+        icon:'success',
+        title:'ฐานข้อมูลพร้อมเปิด',
+        html:`<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิดฐานข้อมูลในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด Google Sheet</a>`,
+        showConfirmButton:false,
+        showCloseButton:true,
+      });
+    } catch (error) {
+      hideActivityToast();
+      throw error;
+    }
   }
 
   function createExportFileUrl(result) {
@@ -962,7 +948,7 @@
   ['bill-status','bill-project-filter','bill-company-filter','bill-category-filter','bill-date-from','bill-date-to','bill-sort'].forEach(id => document.getElementById(id).addEventListener('change', () => loadAllBills(1)));
   document.getElementById('export-monthly-btn').addEventListener('click', () => exportMonthlyFile('word'));
   document.getElementById('export-excel-btn').addEventListener('click', () => exportMonthlyFile('excel'));
-  document.getElementById('open-database-btn').addEventListener('click', () => openDatabaseWithPassword().catch(showFatal));
+  document.getElementById('open-database-btn').addEventListener('click', () => openDatabase().catch(showFatal));
   document.getElementById('open-review-queue').addEventListener('click', () => startPendingReviewWorkflow('').catch(showFatal));
   document.getElementById('dashboard-prev-month').addEventListener('click', () => refreshDashboard({ period:shiftDashboardPeriod(state.dashboardFilters.period, -1), owners:null }));
   document.getElementById('dashboard-next-month').addEventListener('click', () => refreshDashboard({ period:shiftDashboardPeriod(state.dashboardFilters.period, 1), owners:null }));

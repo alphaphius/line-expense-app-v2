@@ -1,6 +1,6 @@
 {
   "name": "line-expense-app-v2",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "GitHub Pages frontend with Google Apps Script, Sheets, Drive, Gemini and LINE backend",
   "scripts": {

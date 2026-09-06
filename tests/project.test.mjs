@@ -72,6 +72,19 @@ test('browser scripts parse and image compression is bounded', async () => {
   assert.match(optimizer, /Math\.min\(2, list\.length\)/);
 });
 
+test('open access starts and renews a technical session without a PIN screen', async () => {
+  const api = await read('frontend/api.js');
+  assert.match(api, /request\('openSession', \[getDeviceId\(\)\]\)/);
+  assert.doesNotMatch(api, /promptPin|forcePinChange|verifyPin|changePin|api-pin-input/);
+
+  const backend = (await Promise.all((await readdir(path.join(root, 'apps-script')))
+    .filter(file => file.endsWith('.gs')).sort().map(file => read(`apps-script/${file}`)))).join('\n');
+  assert.match(backend, /accessMode:\s*'OPEN'/);
+  assert.match(backend, /loginRequired:\s*false/);
+  assert.match(backend, /function openApiSession/);
+  assert.doesNotMatch(backend, /function verifyApiPin|function changeApiPin|API_PIN_HASH/);
+});
+
 test('Apps Script source parses and exposes only allowlisted frontend actions', async () => {
   const files = (await readdir(path.join(root, 'apps-script'))).filter(file => file.endsWith('.gs')).sort();
   const source = (await Promise.all(files.map(file => read(`apps-script/${file}`)))).join('\n');
