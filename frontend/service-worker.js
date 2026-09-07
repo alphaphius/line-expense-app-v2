@@ -26,5 +26,9 @@ self.addEventListener('fetch', event => {
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
     }
     return response;
-  }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html'))));
+  }).catch(() => caches.match(event.request).then(cached => {
+    if (cached) return cached;
+    if (event.request.mode === 'navigate' || event.request.destination === 'document') return caches.match('./index.html');
+    return Response.error();
+  })));
 });

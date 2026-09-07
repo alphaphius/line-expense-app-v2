@@ -181,6 +181,8 @@ test('service worker caches only same-origin static GET assets', async () => {
   assert.match(worker, /\.\/receipts\.js/);
   assert.match(worker, /\.\/offline-ocr\.js/);
   assert.match(worker, /vendor\/tesseract/);
+  assert.match(worker, /event\.request\.mode === 'navigate'/);
+  assert.match(worker, /Response\.error\(\)/);
 });
 
 test('local preview is isolated from the production API', async () => {
