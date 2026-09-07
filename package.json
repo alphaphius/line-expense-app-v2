@@ -1,8 +1,8 @@
 {
   "name": "line-expense-app-v2",
-  "version": "2.0.1",
+  "version": "3.1.0",
   "private": true,
-  "description": "GitHub Pages frontend with Google Apps Script, Sheets, Drive, Gemini and LINE backend",
+  "description": "Phius WorkHub frontend with Google Apps Script, Sheets, Drive, Gemini and LINE backend",
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev-server.mjs",
@@ -21,7 +21,9 @@
     "tailwindcss": "^3.4.17"
   },
   "dependencies": {
+    "@tesseract.js-data/tha": "^1.0.0",
     "chart.js": "^4.5.0",
-    "sweetalert2": "^11.22.4"
+    "sweetalert2": "^11.22.4",
+    "tesseract.js": "^7.0.0"
   }
 }

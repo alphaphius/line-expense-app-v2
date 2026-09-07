@@ -48,7 +48,9 @@ const expectedV1Calls = [
 test('GitHub Pages HTML preserves every V1 screen element id', async () => {
   const v2 = await read('frontend/index.html');
   const ids = source => new Set(Array.from(source.matchAll(/\bid="([^"]+)"/g), match => match[1]));
-  assert.deepEqual(ids(v2), new Set(expectedV1Ids));
+  const actualIds = ids(v2);
+  expectedV1Ids.forEach(id => assert.ok(actualIds.has(id), `missing V1 element #${id}`));
+  ['view-receipts','view-payroll','view-tasks','receipt-template-form','receipt-card-files','receipt-quick-edit-list','receipt-registry-list','receipt-export-docx-btn','receipt-export-excel-btn'].forEach(id => assert.ok(actualIds.has(id), `missing WorkHub element #${id}`));
   assert.doesNotMatch(v2, /<\?(?:=|!=)/);
   assert.doesNotMatch(v2, /cdn\.tailwindcss\.com/);
 });
@@ -62,7 +64,7 @@ test('frontend calls the same business functions as V1 through the API adapter',
 });
 
 test('browser scripts parse and image compression is bounded', async () => {
-  for (const file of ['frontend/config.js', 'frontend/api.js', 'frontend/image-optimizer.js', 'frontend/app.js', 'frontend/pwa.js', 'frontend/service-worker.js']) {
+  for (const file of ['frontend/config.js', 'frontend/api.js', 'frontend/image-optimizer.js', 'frontend/offline-ocr.js', 'frontend/protected-access.js', 'frontend/receipts.js', 'frontend/app.js', 'frontend/pwa.js', 'frontend/service-worker.js']) {
     const source = await read(file);
     assert.doesNotThrow(() => new vm.Script(source, { filename: file }));
   }
@@ -70,6 +72,47 @@ test('browser scripts parse and image compression is bounded', async () => {
   assert.match(optimizer, /maxLongEdge:\s*1800/);
   assert.match(optimizer, /targetBytes:\s*1200\s*\*\s*1024/);
   assert.match(optimizer, /Math\.min\(2, list\.length\)/);
+});
+
+test('payment receipt module uses bounded local OCR, quick edit, duplicate review, and split exports', async () => {
+  const frontend = await read('frontend/receipts.js');
+  assert.match(frontend, /OfflineThaiIdOcr\.recognize/);
+  assert.match(frontend, /saveReceiptCardDraft/);
+  assert.match(frontend, /saveReceiptRegistrations/);
+  assert.match(frontend, /previewReceiptExport/);
+  assert.match(frontend, /exportReceiptDocuments/);
+  assert.match(frontend, /exportReceiptRosterExcel/);
+
+  const backend = await read('apps-script/18_ReceiptDocuments.gs');
+  assert.match(backend, /RECEIPT_MODULE_DISABLED/);
+  assert.match(backend, /isValidThaiNationalId_/);
+  assert.match(backend, /findReceiptDuplicate_/);
+  assert.match(backend, /replaceDocxPlaceholders_/);
+  assert.match(backend, /Utilities\.unzip/);
+  assert.doesNotMatch(backend, /analyzeThaiIdCard_|generativelanguage\.googleapis\.com|logAiUsage_/);
+});
+
+test('offline Thai ID parser validates checksum and extracts editable fields without AI', async () => {
+  const source = await read('frontend/offline-ocr.js');
+  const context = vm.createContext({
+    window: {}, document: { baseURI:'https://example.com/' }, navigator: { hardwareConcurrency:2 },
+    URL, Set, Promise, Object, String, Array, Math, Number, RegExp,
+  });
+  new vm.Script(source, { filename:'offline-ocr.js' }).runInContext(context);
+  const parsed = context.window.OfflineThaiIdOcr.parseThaiIdText('เลขประจำตัวประชาชน 1 1017 00207 03 0\nชื่อและนามสกุล นาย สมชาย ใจดี\nที่อยู่ 99 ถนนสุขุมวิท\nแขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร\nวันเกิด 1 มกราคม 2530', 88);
+  assert.equal(parsed.full_name, 'สมชาย ใจดี');
+  assert.equal(parsed.national_id, '1101700207030');
+  assert.match(parsed.address, /สุขุมวิท/);
+  assert.equal(context.window.OfflineThaiIdOcr.validateNationalId(parsed.national_id), true);
+});
+
+test('DOCX placeholder replacement preserves split Word runs and surrounding spaces', async () => {
+  const source = await read('apps-script/18_ReceiptDocuments.gs');
+  const context = vm.createContext({ Object, String, Array, Math, Number, JSON, RegExp });
+  new vm.Script(source, { filename:'18_ReceiptDocuments.gs' }).runInContext(context);
+  const xml = '<w:p><w:r><w:t xml:space="preserve">ก่อน </w:t></w:r><w:r><w:t>{ชื่อ</w:t></w:r><w:r><w:t>สกุล}</w:t></w:r><w:r><w:t xml:space="preserve"> หลัง</w:t></w:r></w:p>';
+  const result = context.replaceDocxPlaceholders_(xml, { '{ชื่อสกุล}':'สมชาย ใจดี' });
+  assert.equal(context.docxPlainText_(result), 'ก่อน สมชาย ใจดี หลัง');
 });
 
 test('open access starts and renews a technical session without a PIN screen', async () => {
@@ -83,6 +126,19 @@ test('open access starts and renews a technical session without a PIN screen', a
   assert.match(backend, /loginRequired:\s*false/);
   assert.match(backend, /function openApiSession/);
   assert.doesNotMatch(backend, /function verifyApiPin|function changeApiPin|API_PIN_HASH/);
+});
+
+test('protected work areas require a server-issued session while expenses stay open', async () => {
+  const api = await read('frontend/api.js');
+  const app = await read('frontend/app.js');
+  const backend = await read('apps-script/19_ProtectedAccess.gs');
+  assert.match(api, /protectedToken/);
+  assert.match(api, /openProtectedSession/);
+  assert.match(app, /protectedViews = \['receipts','payroll','tasks'\]/);
+  assert.match(backend, /function requireProtectedSession_/);
+  assert.match(backend, /PROTECTED_MAX_ATTEMPTS/);
+  assert.match(backend, /'verifyDatabaseAccess'/);
+  assert.doesNotMatch(api + app + backend, /gfe123456_/);
 });
 
 test('Apps Script source parses and exposes only allowlisted frontend actions', async () => {
@@ -114,6 +170,7 @@ test('repository contains no live V1 identifiers or embedded credentials', async
   assert.doesNotMatch(source, /10iEWHITGi7vKg09TXEGzp7GgBRMLzzE6ANwgEehlDKU/);
   assert.doesNotMatch(source, /AKfycbymQD7snXoRZQbORrsljbKZvfeDi3kw0A9v8NEXYjYAyMhWAHjCXQyAcWM3GCxHx3Ij/);
   assert.doesNotMatch(source, /2009457348-SwkPdMG3/);
+  assert.doesNotMatch(source, /gfe123456_/);
 });
 
 test('service worker caches only same-origin static GET assets', async () => {
@@ -121,6 +178,9 @@ test('service worker caches only same-origin static GET assets', async () => {
   assert.match(worker, /event\.request\.method !== 'GET'/);
   assert.match(worker, /url\.origin !== self\.location\.origin/);
   assert.doesNotMatch(worker, /script\.google\.com/);
+  assert.match(worker, /\.\/receipts\.js/);
+  assert.match(worker, /\.\/offline-ocr\.js/);
+  assert.match(worker, /vendor\/tesseract/);
 });
 
 test('local preview is isolated from the production API', async () => {

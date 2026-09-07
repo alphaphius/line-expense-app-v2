@@ -1,8 +1,8 @@
 const APP_CONFIG = Object.freeze({
-  APP_NAME: 'Line Expense App V2',
-  VERSION: '2.0.1',
+  APP_NAME: 'Phius WorkHub',
+  VERSION: '3.1.0',
   API_VERSION: '2.0',
-  SCHEMA_VERSION: 2,
+  SCHEMA_VERSION: 3,
   TIME_ZONE: 'Asia/Bangkok',
   ROOT_FOLDER_NAME: 'Line-Expense-App-V2',
   EXPORT_FOLDER_NAME: 'exports',
@@ -17,9 +17,18 @@ const APP_CONFIG = Object.freeze({
   IMAGE_MAX_LONG_EDGE: 1800,
   IMAGE_TARGET_BYTES: 1200 * 1024,
   IMAGE_JPEG_QUALITY: 0.8,
+  RECEIPT_MAX_BATCH_CARDS: 40,
+  RECEIPT_MAX_TEMPLATE_MB: 8,
+  RECEIPT_MAX_EXPORT_PEOPLE: 200,
   EXPORT_IMAGE_TARGET_BYTES: 900 * 1024,
   SESSION_HOURS: 24,
   API_SESSION_SECONDS: 6 * 60 * 60,
+  PROTECTED_SESSION_SECONDS: 6 * 60 * 60,
+  PROTECTED_MAX_ATTEMPTS: 5,
+  PROTECTED_GLOBAL_MAX_ATTEMPTS: 30,
+  PROTECTED_ATTEMPT_WINDOW_SECONDS: 15 * 60,
+  PROTECTED_LOCKOUT_SECONDS: 15 * 60,
+  PROTECTED_HASH_ROUNDS: 512,
   LOCK_WAIT_MS: 30000,
 });
 
@@ -40,6 +49,11 @@ const PROP_KEYS = Object.freeze({
   QUICK2_PAGE_COUNT: 'QUICK2_PAGE_COUNT',
   QUICK2_PROJECT_ID: 'QUICK2_PROJECT_ID',
   QUICK2_COMPANY_ID: 'QUICK2_COMPANY_ID',
+  RECEIPT_MODULE_ENABLED: 'RECEIPT_MODULE_ENABLED',
+  PROTECTED_PASSWORD_SALT: 'PROTECTED_PASSWORD_SALT',
+  PROTECTED_PASSWORD_HASH: 'PROTECTED_PASSWORD_HASH',
+  PROTECTED_PASSWORD_HASH_ROUNDS: 'PROTECTED_PASSWORD_HASH_ROUNDS',
+  PROTECTED_SESSION_VERSION: 'PROTECTED_SESSION_VERSION',
 });
 
 const SHEETS = Object.freeze({
@@ -56,6 +70,13 @@ const SHEETS = Object.freeze({
   MUTATIONS: 'MutationLog',
   SECURITY: 'SecurityLog',
   MIGRATIONS: 'SchemaMigrations',
+  RECEIPT_TEMPLATES: 'ReceiptTemplates',
+  LABOR_GROUPS: 'LaborGroups',
+  WORKERS: 'Workers',
+  WORKER_GROUP_MEMBERS: 'WorkerGroupMembers',
+  RECEIPT_BATCHES: 'ReceiptBatches',
+  RECEIPT_REGISTRATIONS: 'ReceiptRegistrations',
+  GENERATED_DOCUMENTS: 'GeneratedDocuments',
 });
 
 const SHEET_DEFINITIONS = Object.freeze({
@@ -79,6 +100,13 @@ const SHEET_DEFINITIONS = Object.freeze({
   MutationLog: ['mutation_id', 'action', 'actor', 'status', 'result_json', 'created_at', 'completed_at'],
   SecurityLog: ['event_id', 'event_type', 'device_id', 'success', 'detail', 'created_at'],
   SchemaMigrations: ['version', 'name', 'applied_at'],
+  ReceiptTemplates: ['template_id', 'template_name', 'source_file_id', 'normalized_file_id', 'source_format', 'page_count', 'placeholders', 'active', 'created_at', 'updated_at'],
+  LaborGroups: ['group_id', 'group_name', 'group_type', 'project_id', 'active', 'created_at', 'updated_at'],
+  Workers: ['worker_id', 'full_name', 'first_name', 'last_name', 'national_id', 'address', 'status', 'created_at', 'updated_at'],
+  WorkerGroupMembers: ['membership_id', 'worker_id', 'group_id', 'active', 'created_at', 'updated_at'],
+  ReceiptBatches: ['batch_id', 'template_id', 'group_id', 'status', 'total_count', 'processed_count', 'error_count', 'created_by', 'created_at', 'updated_at'],
+  ReceiptRegistrations: ['registration_id', 'batch_id', 'worker_id', 'template_id', 'group_id', 'full_name', 'first_name', 'last_name', 'national_id', 'address', 'card_file_id', 'card_file_name', 'card_sha256', 'card_size_bytes', 'ocr_confidence', 'ocr_warnings', 'duplicate_type', 'duplicate_of', 'status', 'created_at', 'updated_at'],
+  GeneratedDocuments: ['generated_id', 'format', 'template_id', 'group_ids', 'registration_ids', 'person_count', 'file_id', 'file_name', 'created_by', 'created_at'],
 });
 
 const DEFAULT_COMPANIES = Object.freeze([

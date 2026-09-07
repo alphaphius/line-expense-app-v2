@@ -5,11 +5,13 @@
   const keys = {
     endpoint: 'line-expense-v2-api-endpoint',
     session: 'line-expense-v2-session',
+    protectedSession: 'phius-workhub-protected-session',
     device: 'line-expense-v2-device',
   };
   let endpoint = normalizeEndpoint(config.apiEndpoint || localStorage.getItem(keys.endpoint) || '');
   let session = readSession();
-  const longActions = ['submitBillPages', 'exportMonthlyBillWord', 'exportMonthlyBillExcel', 'backfillLineUsernames'];
+  let protectedSession = readProtectedSession();
+  const longActions = ['submitBillPages', 'exportMonthlyBillWord', 'exportMonthlyBillExcel', 'backfillLineUsernames', 'saveReceiptTemplate', 'saveReceiptCardDraft', 'exportReceiptDocuments', 'exportReceiptRosterExcel'];
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -52,6 +54,21 @@
     else sessionStorage.removeItem(keys.session);
   }
 
+  function readProtectedSession() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(keys.protectedSession) || 'null');
+      return value && Number(value.expiresAt) > Date.now() ? value : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveProtectedSession(value) {
+    protectedSession = value;
+    if (value) sessionStorage.setItem(keys.protectedSession, JSON.stringify(value));
+    else sessionStorage.removeItem(keys.protectedSession);
+  }
+
   async function request(action, args, options) {
     options = options || {};
     if (!endpoint) throw new Error('ยังไม่ได้ตั้งค่า Apps Script Web App URL');
@@ -72,6 +89,7 @@
           args: args || [],
           requestId: requestId,
           sessionToken: session && session.token || '',
+          protectedToken: protectedSession && protectedSession.token || '',
         }),
         signal: controller.signal,
       });
@@ -145,6 +163,7 @@
         await startOpenSession();
         return request(action, args, { requestId: requestId });
       }
+      if (['PROTECTED_AUTH_REQUIRED', 'PROTECTED_AUTH_EXPIRED'].indexOf(error.code) >= 0) saveProtectedSession(null);
       throw error;
     }
   }
@@ -154,5 +173,16 @@
     return callWithRequestId.apply(null, [action, uuid().replace(/-/g, '')].concat(args));
   }
 
-  window.V2Api = Object.freeze({ call, callWithRequestId, connect, newRequestId: () => uuid().replace(/-/g, ''), getEndpoint: () => endpoint });
+  async function unlockProtected(password) {
+    const value = await call('openProtectedSession', password);
+    saveProtectedSession({ token: value.token, expiresAt: value.expiresAt });
+    return value;
+  }
+
+  window.V2Api = Object.freeze({
+    call, callWithRequestId, connect, unlockProtected,
+    hasProtectedSession: () => !!protectedSession && Number(protectedSession.expiresAt) > Date.now(),
+    clearProtectedSession: () => saveProtectedSession(null),
+    newRequestId: () => uuid().replace(/-/g, ''), getEndpoint: () => endpoint,
+  });
 })();

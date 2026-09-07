@@ -7,7 +7,7 @@ function setupApp() {
     seedMasterData_();
     ensureTaxIdTextStorage_();
     initializeApiSecurity_();
-    recordSchemaMigration_(APP_CONFIG.SCHEMA_VERSION, 'V2_BASELINE');
+    recordSchemaMigration_(APP_CONFIG.SCHEMA_VERSION, 'PHIUS_WORKHUB_RECEIPTS');
     const root = getRootFolder_();
     CacheService.getScriptCache().put('SETUP_OK_' + APP_CONFIG.SCHEMA_VERSION, '1', 21600);
     return {
@@ -118,7 +118,7 @@ function ensureSheet_(spreadsheet, sheetName, headers) {
 
   headers.forEach(function (header, index) {
     const column = index + 1;
-    if (['tax_id', 'vendor_tax_id', 'buyer_tax_id'].indexOf(header) >= 0 || /_date$/.test(header) || ['created_at', 'updated_at', 'confirmed_at', 'expires_at', 'last_used_at'].indexOf(header) >= 0) {
+    if (['tax_id', 'vendor_tax_id', 'buyer_tax_id', 'national_id'].indexOf(header) >= 0 || /_date$/.test(header) || ['created_at', 'updated_at', 'confirmed_at', 'expires_at', 'last_used_at'].indexOf(header) >= 0) {
       sheet.getRange(2, column, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
     } else if (['subtotal', 'discount', 'vat_rate', 'vat_amount', 'withholding_tax', 'grand_total', 'quantity', 'unit_price', 'amount'].indexOf(header) >= 0) {
       sheet.getRange(2, column, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('#,##0.00');

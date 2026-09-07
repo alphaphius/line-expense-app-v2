@@ -1,7 +1,7 @@
 {
-  "name": "Line Expense App V2",
-  "short_name": "Expense V2",
-  "description": "ระบบจัดการบิลด้วย Gemini และ LINE",
+  "name": "Phius WorkHub",
+  "short_name": "WorkHub",
+  "description": "ระบบรวมค่าใช้จ่าย เอกสาร ค่าแรง และงาน",
   "lang": "th",
   "start_url": "./",
   "scope": "./",

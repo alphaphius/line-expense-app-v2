@@ -378,6 +378,7 @@ function getExportFolder_(periodKey) {
 function buildDriveExportResult_(file, fileName, mimeType, count) {
   const downloadToken = createExportDownloadTicket_(file, fileName, mimeType);
   return {
+    fileId: file.getId ? file.getId() : '',
     fileName: fileName,
     mimeType: mimeType,
     count: Number(count) || 0,

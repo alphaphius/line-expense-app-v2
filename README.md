@@ -1,6 +1,6 @@
-# Line Expense App V2
+# Phius WorkHub
 
-V2 แยกจาก V1 ทั้ง Google Sheet, Apps Script, Drive folder และหน้าเว็บ โดยคงหน้าตาและฟังก์ชันของ V1 ไว้ และย้าย UI ไป GitHub Pages
+ระบบรวมงานค่าใช้จ่าย เอกสารใบรับเงิน สรุปค่าแรง และ Task manager บน GitHub Pages โดยคงฟังก์ชันเดิมของระบบบิลและ LINE OA ไว้ครบถ้วน
 
 ## สิ่งที่พร้อมแล้ว
 
@@ -11,9 +11,12 @@ V2 แยกจาก V1 ทั้ง Google Sheet, Apps Script, Drive folder �
 - DOCX export ใช้รูปที่เหมาะกับการส่งออก เป้าหมายไม่เกินประมาณ 900 KB/หน้าเมื่อ Drive สร้าง thumbnail ได้
 - แยกปุ่ม `Export DOCX` และ `Export Excel` เพื่อสร้างเฉพาะไฟล์ที่ต้องการและลดเวลารอ
 - ป้องกัน submit ซ้ำด้วย request ID, MutationLog และ lock
-- เปิดใช้งานได้ทันทีโดยไม่ต้องล็อกอินหรือกรอก PIN; ระบบออก technical session อายุ 6 ชั่วโมงให้อัตโนมัติเพื่อควบคุมคำขอซ้ำและ audit
+- ส่วนค่าใช้จ่าย/บิลเปิดใช้งานได้ทันทีโดยไม่ต้องล็อกอินหรือกรอก PIN; ส่วนงานภายในและฐานข้อมูลใช้รหัสร่วมกับ protected session อายุ 6 ชั่วโมง
 - Desktop/Mobile responsive, touch target อย่างน้อย 40 px, PWA icon 192/512 และ offline shell
 - SweetAlert2/Chart.js self-hosted เพื่อลด dependency จาก CDN; LIFF SDK ใช้ CDN ทางการของ LINE
+- โมดูลเอกสารใบรับเงินรองรับ DOC/DOCX Template, `{ชื่อสกุล}` / `{เลขบัตร}` / `{ที่อยู่}`, OCR บัตรไทยบนอุปกรณ์โดยไม่เรียก Gemini, Quick Edit, กลุ่มแรงงาน, ตรวจข้อมูลซ้ำ และ Export DOCX/Excel
+- Gemini ใช้เฉพาะการอ่านบิล ส่วนเอกสารใบรับเงิน/ค่าแรง/Task Manager และลิงก์ฐานข้อมูลต้องผ่านรหัสส่วนงานภายในที่ตรวจฝั่ง Apps Script
+- ทุกคนมี `worker_id` ถาวรสำหรับเชื่อมระบบเช็กชื่อและสรุปค่าแรงในขั้นถัดไป
 
 ## ทรัพยากร V2 ที่สร้างแล้ว
 
@@ -46,7 +49,7 @@ PORT=4175 npm run dev
 4. รัน `runSelfTest` และตรวจว่าคืนค่า `passed: true`
 5. ที่ Deploy → Manage deployments ตรวจว่า deployment เป็น Web app, Execute as `Me`, Who has access = `Anyone`
 6. เปิด Web App URL แล้วตรวจว่าคืน JSON ที่มี `"ok":true`
-7. เปิดเว็บ GitHub Pages แล้วตรวจว่า Dashboard แสดงทันทีโดยไม่มีหน้าล็อกอิน
+7. เปิดเว็บ GitHub Pages แล้วตรวจว่า Dashboard ค่าใช้จ่ายแสดงทันที และเมนูส่วนงานภายในถามรหัสก่อนเปิด
 
 ## ตั้งค่า Gemini, LINE และ GitHub Pages
 
@@ -80,7 +83,7 @@ setSecrets(
 ```bash
 git init
 git add .
-git commit -m "Initial Line Expense App V2"
+git commit -m "Initial Phius WorkHub"
 git branch -M main
 git remote add origin https://github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY.git
 git push -u origin main
@@ -105,7 +108,8 @@ npm run smoke:api
 
 ## ข้อจำกัดที่ควรรู้
 
-- แอปอยู่ในโหมด `OPEN`: ผู้ที่มีลิงก์ GitHub Pages/API สามารถเข้าถึงฟังก์ชันของระบบได้โดยไม่ต้องกรอก PIN ควรแชร์ลิงก์เฉพาะกลุ่มที่ไว้ใจได้
+- ส่วนค่าใช้จ่ายอยู่ในโหมด `OPEN`; ผู้ที่มีลิงก์สามารถดูและใช้งานส่วนบิลได้ จึงควรแชร์ลิงก์เฉพาะกลุ่มที่ไว้ใจได้
+- เอกสารใบรับเงิน/ค่าแรง/Task Manager และลิงก์ฐานข้อมูลตรวจรหัสฝั่ง Apps Script พร้อม rate limit และ protected session แต่ยังเป็น “รหัสร่วม” ไม่ใช่บัญชีรายบุคคล จึงยังแยกสิทธิ์หรือระบุผู้ใช้แต่ละคนไม่ได้
 - Apps Script ไม่เปิด HTTP request headers ให้ `doPost` จึงตรวจ `X-Line-Signature` โดยตรงไม่ได้ รุ่นนี้ใช้ webhook key ยาวใน query stringเป็นด่านป้องกันเพิ่มเติม หากต้องการระดับ production ที่เคร่งครัด ให้เพิ่ม Cloudflare Worker สำหรับตรวจลายเซ็นก่อนส่งต่อ Apps Script
 - PDF ไม่ถูก recompress ในเบราว์เซอร์เพื่อป้องกันเอกสารเสียหาย จำกัดไฟล์ละ 8 MB
 - Drive thumbnail เป็น best effort หาก Google ไม่สร้าง thumbnail ระบบจะเก็บรูปเดิม แต่ DOCX จะพยายามใช้ thumbnail อีกครั้งตอน export

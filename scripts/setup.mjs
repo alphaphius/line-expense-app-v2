@@ -8,7 +8,7 @@ const claspFile = path.join(root, '.clasp.json');
 const stateFile = path.join(root, '.setup-state.json');
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-console.log('Line Expense App V2 setup');
+console.log('Phius WorkHub setup');
 let hasClasp = true;
 try { await access(claspFile); } catch (_) { hasClasp = false; }
 if (!hasClasp) {

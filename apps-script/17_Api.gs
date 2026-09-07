@@ -33,8 +33,10 @@ function handleApiRequest_(request, requestId) {
   if (action === 'openSession') return apiEnvelope_(true, openApiSession(args[0]), null, requestId);
 
   const session = requireApiSession_(request.sessionToken);
+  if (action === 'openProtectedSession') return apiEnvelope_(true, openProtectedSession(args[0], session.deviceId), null, requestId);
   const handler = apiActionHandler_(action);
   if (!handler) throw apiError_('ACTION_NOT_ALLOWED', 'คำสั่งนี้ไม่ได้รับอนุญาต');
+  if (isProtectedAction_(action)) requireProtectedSession_(request.protectedToken, session.deviceId);
 
   const mutation = isMutationAction_(action);
   if (mutation) {
@@ -78,6 +80,16 @@ function apiActionHandler_(action) {
     exportMonthlyBillWord: function (args) { return exportMonthlyBillWord(args[0]); },
     exportMonthlyBillExcel: function (args) { return exportMonthlyBillExcel(args[0]); },
     getExportFileChunk: function (args) { return getExportFileChunk(args[0], args[1]); },
+    getReceiptWorkspace: function (args) { return getReceiptWorkspace(args[0]); },
+    saveReceiptTemplate: function (args) { return saveReceiptTemplate(args[0]); },
+    saveLaborGroup: function (args) { return saveLaborGroup(args[0]); },
+    createReceiptBatch: function (args) { return createReceiptBatch(args[0]); },
+    saveReceiptCardDraft: function (args) { return saveReceiptCardDraft(args[0]); },
+    saveReceiptRegistrations: function (args) { return saveReceiptRegistrations(args[0]); },
+    listReceiptRegistrations: function (args) { return listReceiptRegistrations(args[0]); },
+    previewReceiptExport: function (args) { return previewReceiptExport(args[0]); },
+    exportReceiptDocuments: function (args) { return exportReceiptDocuments(args[0]); },
+    exportReceiptRosterExcel: function (args) { return exportReceiptRosterExcel(args[0]); },
   };
   return handlers[action] || null;
 }
@@ -86,6 +98,8 @@ function isMutationAction_(action) {
   return [
     'submitBillPages', 'updateBill', 'confirmBill', 'deleteBill', 'restoreBill',
     'saveMasterData', 'deleteMasterData', 'saveQuickSettings', 'clearQuickSettings', 'backfillLineUsernames',
+    'saveReceiptTemplate', 'saveLaborGroup', 'createReceiptBatch', 'saveReceiptCardDraft', 'saveReceiptRegistrations',
+    'exportReceiptDocuments', 'exportReceiptRosterExcel',
   ].indexOf(action) >= 0;
 }
 
@@ -176,6 +190,16 @@ function apiHealth_() {
     pinMustChange: false,
     liffId: properties.getProperty(PROP_KEYS.LIFF_ID) || '',
     frontendUrl: properties.getProperty(PROP_KEYS.FRONTEND_URL) || '',
+    protectedAccess: {
+      configured: isProtectedAccessConfigured_(),
+      sessionSeconds: APP_CONFIG.PROTECTED_SESSION_SECONDS,
+    },
+    modules: {
+      expenses: true,
+      receipts: properties.getProperty(PROP_KEYS.RECEIPT_MODULE_ENABLED) === 'true' && isProtectedAccessConfigured_(),
+      payroll: false,
+      tasks: false,
+    },
   };
 }
 

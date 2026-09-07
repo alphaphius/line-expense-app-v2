@@ -4,35 +4,40 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2d211c">
-  <meta name="description" content="ระบบจัดการบิลด้วย Gemini และ LINE">
-  <title>Line Expense App V2</title>
+  <meta name="description" content="Phius WorkHub ระบบรวมค่าใช้จ่าย เอกสาร ค่าแรง และงาน">
+  <title>Phius WorkHub</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icons/app-icon-192.png">
   <link rel="stylesheet" href="./styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script defer src="./vendor/sweetalert2.all.min.js"></script>
   <script defer src="./vendor/chart.umd.js"></script>
   <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script defer src="./config.js"></script>
   <script defer src="./api.js"></script>
   <script defer src="./image-optimizer.js"></script>
+  <script defer src="./vendor/tesseract/tesseract.min.js"></script>
+  <script defer src="./offline-ocr.js"></script>
+  <script defer src="./protected-access.js"></script>
+  <script defer src="./receipts.js"></script>
   <script defer src="./app.js"></script>
   <script defer src="./pwa.js"></script>
 </head>
 <body class="app-shell bg-slate-50 text-slate-900">
   <div id="loading-screen" class="fixed inset-0 z-50 grid place-items-center bg-slate-950 text-white">
-    <div class="text-center"><div class="loader mx-auto mb-4"></div><p>กำลังเตรียมระบบบิล…</p></div>
+    <div class="text-center"><div class="loader mx-auto mb-4"></div><p>กำลังเตรียม Phius WorkHub…</p></div>
   </div>
 
   <div class="min-h-screen lg:flex">
     <aside class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-64">
       <div class="flex items-center gap-3 px-5 py-5">
-        <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">LE</div>
-        <div><h1 class="font-semibold leading-tight">Line Expense App V2</h1><p class="text-xs text-slate-400">Expense intelligence</p></div>
+        <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">PW</div>
+        <div><h1 class="font-semibold leading-tight">Phius WorkHub</h1><p class="text-xs text-slate-400">Operations workspace</p></div>
       </div>
+      <p class="sidebar-section-label">เมนูค่าใช้จ่าย</p>
       <nav class="flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2">
         <button class="nav-btn active" data-view="dashboard">ภาพรวม</button>
         <button class="nav-btn" data-view="bills">บิลทั้งหมด</button>
@@ -40,17 +45,25 @@
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v2.0.1 · Gemini Flash-Lite</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v3.1.0 · Bills AI · ID OCR Offline</div>
     </aside>
 
-    <main class="w-full lg:ml-64">
+    <main class="app-main w-full lg:ml-64">
       <header class="app-header border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur lg:px-8">
-        <div class="mx-auto flex max-w-7xl items-center justify-between">
-          <div class="app-header-copy"><p class="text-sm text-slate-500">ศูนย์จัดการค่าใช้จ่าย</p><h2 id="view-title" class="text-xl font-semibold">ภาพรวม</h2></div>
-          <div class="app-header-actions">
-            <button id="open-database-btn" class="database-access-btn" type="button" aria-label="เปิดฐานข้อมูล Google Sheet">ฐานข้อมูล</button>
-            <button id="refresh-btn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">รีเฟรช</button>
+        <div class="mx-auto max-w-7xl">
+          <div class="flex items-center justify-between gap-3">
+            <div class="app-header-copy"><p class="text-sm text-slate-500">Phius WorkHub</p><h2 id="view-title" class="text-xl font-semibold">ภาพรวมค่าใช้จ่าย</h2></div>
+            <div class="app-header-actions">
+              <button id="open-database-btn" class="database-access-btn" type="button" aria-label="เปิดฐานข้อมูล Google Sheet">ฐานข้อมูล</button>
+              <button id="refresh-btn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">รีเฟรช</button>
+            </div>
           </div>
+          <nav class="product-nav" aria-label="ส่วนงานหลัก">
+            <button class="product-nav__button active" data-view="dashboard" data-product="expenses"><span>ค่าใช้จ่าย</span><small>Expense</small></button>
+            <button class="product-nav__button" data-view="receipts" data-product="receipts"><span>เอกสารใบรับเงิน</span><small>Payment receipts</small></button>
+            <button class="product-nav__button" data-view="payroll" data-product="payroll"><span>สรุปค่าแรง</span><small>Payroll</small></button>
+            <button class="product-nav__button" data-view="tasks" data-product="tasks"><span>Task manager</span><small>Tasks</small></button>
+          </nav>
         </div>
       </header>
 
@@ -279,6 +292,70 @@
             <div class="master-card"><div class="master-head"><h3>หมวดหมู่บิล</h3><button data-add="category">+ เพิ่ม</button></div><div id="category-list" class="master-list"></div></div>
           </div>
           <div class="card p-5"><h3 class="section-title">ชื่อหัวบิลที่ระบบจดจำ</h3><p class="mb-4 text-sm text-slate-500">ระบบเพิ่มรายชื่อจากบิลที่วิเคราะห์อัตโนมัติ เพื่อนำไป Suggest ตอนแก้ไข</p><div id="vendor-tags" class="flex flex-wrap gap-2"></div></div>
+        </section>
+
+        <section id="view-receipts" class="app-view hidden space-y-5">
+          <div id="receipt-security-gate" class="receipt-security-gate hidden" role="alert">
+            <span aria-hidden="true">!</span>
+            <div><strong>ส่วนเอกสารใบรับเงินยังไม่พร้อมใช้งาน</strong><p id="receipt-security-message">กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจสอบการตั้งค่า</p></div>
+          </div>
+
+          <article class="receipt-hero">
+            <div><p class="eyebrow">PAYMENT RECEIPTS</p><h3>สร้างใบรับเงินจากบัตรประชาชน</h3><p>อัปโหลดหลายรูป ระบบจะบีบอัดและอ่านภาษาไทยบนอุปกรณ์โดยไม่ใช้ Gemini ก่อนแสดง Quick Edit ทีละคน</p></div>
+            <div class="receipt-hero__stats"><strong id="receipt-total-count">0</strong><span>รายชื่อในระบบ</span></div>
+          </article>
+
+          <div id="receipt-workspace" class="space-y-5">
+            <article class="card receipt-setup-card">
+              <div class="receipt-section-head"><div><span class="step-kicker">01 · เตรียมชุดเอกสาร</span><h3>Template และกลุ่มแรงงาน</h3></div><button id="receipt-new-group-btn" class="secondary-btn" type="button">+ สร้างกลุ่ม</button></div>
+              <div class="receipt-setup-grid">
+                <label class="label">Template ที่ใช้<select id="receipt-template-select" class="field mt-2"><option value="">เลือก Template</option></select></label>
+                <label class="label">กลุ่มแรงงาน / ไซต์งาน<select id="receipt-group-select" class="field mt-2"><option value="">เลือกกลุ่มแรงงาน</option></select></label>
+              </div>
+              <details class="template-uploader">
+                <summary>อัปโหลด Template ใหม่ (DOC/DOCX)</summary>
+                <form id="receipt-template-form" class="template-uploader__form">
+                  <label class="label">ชื่อ Template<input id="receipt-template-name" class="field mt-2" maxlength="150" placeholder="เช่น ใบรับเงินค่าแรงรายวัน"></label>
+                  <label class="template-file-field"><input id="receipt-template-file" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><span>เลือกไฟล์ DOC หรือ DOCX</span><small>{ชื่อสกุล} · {เลขบัตร} · {ที่อยู่}</small></label>
+                  <button class="primary-btn" type="submit">บันทึก Template</button>
+                </form>
+              </details>
+            </article>
+
+            <article class="card receipt-upload-card">
+              <div class="receipt-section-head"><div><span class="step-kicker">02 · อ่านข้อมูล</span><h3>อัปโหลดรูปบัตรประชาชน</h3><p>สูงสุด 40 รูปต่อชุด · OCR ภาษาไทยทำงานบนอุปกรณ์ · ครั้งแรกจะโหลดชุดภาษาแล้วเก็บไว้ใช้ครั้งถัดไป</p></div></div>
+              <label id="receipt-card-dropzone" class="receipt-dropzone">
+                <input id="receipt-card-files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+                <span class="receipt-dropzone__icon" aria-hidden="true">＋</span><strong>เลือกรูปบัตรประชาชน</strong><small>JPG, PNG, WEBP · บีบอัดก่อนบันทึก · ไม่ส่งรูปไปยัง Gemini</small>
+              </label>
+              <div id="receipt-upload-summary" class="receipt-upload-summary hidden" aria-live="polite"></div>
+              <button id="receipt-process-btn" class="primary-btn receipt-process-btn" type="button" disabled>เริ่มอ่านข้อมูล <span id="receipt-selected-count">0</span> รูป</button>
+            </article>
+
+            <article id="receipt-quick-edit-card" class="card receipt-quick-edit-card hidden">
+              <div class="receipt-section-head"><div><span class="step-kicker">03 · ตรวจสอบ</span><h3>Quick Edit</h3><p id="receipt-batch-progress">รอประมวลผล</p></div><button id="receipt-save-all-btn" class="primary-btn" type="button" disabled>บันทึกทั้งหมด</button></div>
+              <div id="receipt-quick-edit-list" class="receipt-quick-edit-list"></div>
+            </article>
+
+            <article class="card receipt-registry-card">
+              <div class="receipt-section-head"><div><span class="step-kicker">04 · ค้นหาและส่งออก</span><h3>ทะเบียนเอกสารรับเงิน</h3></div><div class="receipt-export-actions"><button id="receipt-export-docx-btn" class="export-btn export-btn--docx" type="button" disabled><span>Export DOCX</span><small>เอกสาร + รูปบัตร</small></button><button id="receipt-export-excel-btn" class="export-btn export-btn--excel" type="button" disabled><span>Export Excel</span><small>รายชื่อที่เลือก</small></button></div></div>
+              <div class="receipt-filter-bar">
+                <input id="receipt-search" class="field" type="search" placeholder="ค้นหาชื่อ เลขบัตร หรือที่อยู่…">
+                <select id="receipt-filter-group" class="field"><option value="">ทุกกลุ่มแรงงาน</option></select>
+                <button id="receipt-search-btn" class="secondary-btn" type="button">ค้นหา</button>
+              </div>
+              <div class="receipt-select-toolbar"><label><input id="receipt-select-all" type="checkbox"> เลือกทั้งหมดที่แสดง</label><span id="receipt-selection-count">เลือก 0 คน</span></div>
+              <div id="receipt-registry-list" class="receipt-registry-list" aria-live="polite"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-payroll" class="app-view hidden">
+          <article class="coming-soon-card"><span>03</span><div><p class="eyebrow">PAYROLL</p><h3>สรุปค่าแรง</h3><p>ส่วนนี้จะเชื่อมการเช็กชื่อและเวลาทำงานกับ <code>worker_id</code> จากทะเบียนแรงงาน</p></div></article>
+        </section>
+
+        <section id="view-tasks" class="app-view hidden">
+          <article class="coming-soon-card"><span>04</span><div><p class="eyebrow">TASK MANAGER</p><h3>Task manager</h3><p>พื้นที่จัดการงาน ผู้รับผิดชอบ กำหนดส่ง และสถานะของแต่ละไซต์งาน</p></div></article>
         </section>
 
         <section id="view-system" class="app-view hidden">

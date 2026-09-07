@@ -1,5 +1,7 @@
   const state = { masters: { projects: [], companies: [], categories: [], vendors: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
-  const viewTitles = { dashboard: 'ภาพรวม', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', system: 'สถานะระบบ' };
+  const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', system: 'สถานะระบบ' };
+  const expenseViews = ['dashboard','bills','upload','masters','system'];
+  const protectedViews = ['receipts','payroll','tasks'];
 
   function gas(method, ...args) {
     return window.V2Api.call(method, ...args);
@@ -37,11 +39,16 @@
 
   function switchView(view) {
     document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
-    document.getElementById('view-' + view).classList.remove('hidden');
+    const target = document.getElementById('view-' + view);
+    if (!target) return;
+    target.classList.remove('hidden');
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+    const product = expenseViews.indexOf(view) >= 0 ? 'expenses' : view;
+    document.querySelectorAll('.product-nav__button').forEach(el => el.classList.toggle('active', el.dataset.product === product));
     document.getElementById('view-title').textContent = viewTitles[view];
     if (view === 'system') loadSystemStatus();
     if (view === 'bills') loadAllBills(1);
+    if (view === 'receipts' && window.ReceiptModule) window.ReceiptModule.activate();
   }
 
   function renderFilters() {
@@ -713,6 +720,7 @@
   }
 
   async function openDatabase() {
+    if (!await window.ProtectedAccess.ensure()) return;
     showActivityToast('กำลังเปิดฐานข้อมูล…', 'กำลังเตรียมลิงก์ Google Sheet');
     try {
       const access = await gas('verifyDatabaseAccess');
@@ -924,7 +932,12 @@
   }
 
   document.addEventListener('click', async event => {
-    const nav = event.target.closest('[data-view]'); if (nav) switchView(nav.dataset.view);
+    const nav = event.target.closest('[data-view]');
+    if (nav) {
+      const view = nav.dataset.view;
+      if (protectedViews.includes(view) && !await window.ProtectedAccess.ensure()) return;
+      switchView(view);
+    }
     const add = event.target.closest('[data-add]'); if (add) await openMasterForm(add.dataset.add);
     const edit = event.target.closest('[data-edit]'); if (edit) { const map={project:['projects','project_id'],company:['companies','company_id'],category:['categories','category_id']}; const [list,key]=map[edit.dataset.edit]; await openMasterForm(edit.dataset.edit,state.masters[list].find(x=>String(x[key])===String(edit.dataset.id))||{}); }
     const del = event.target.closest('[data-delete]'); if (del) await deleteMaster(del.dataset.delete,del.dataset.id);
@@ -972,6 +985,7 @@
     try {
       await bootstrap();
       if (!document.getElementById('view-bills').classList.contains('hidden')) await loadAllBills(state.billList.page || 1);
+      if (!document.getElementById('view-receipts').classList.contains('hidden') && window.ReceiptModule) await window.ReceiptModule.activate(true);
     } catch (error) { showFatal(error); }
   });
   function showFatal(error) { document.getElementById('loading-screen').classList.add('hidden'); Swal.fire({ icon:'error', title:'ระบบไม่พร้อม', text:error.message }); }
@@ -989,7 +1003,7 @@
     try {
       const health = await window.V2Api.connect();
       window.LIFF_ID = health.liffId || '';
-      document.title = health.appName || 'Line Expense App V2';
+      document.title = health.appName || 'Phius WorkHub';
       await initializeLiff();
       await bootstrap();
       const linkedBillId = window.INITIAL_BILL_ID || '';
