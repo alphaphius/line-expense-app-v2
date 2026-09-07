@@ -1,0 +1,40 @@
+services:
+  database:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: workhub
+      MARIADB_USER: workhub
+      MARIADB_PASSWORD: workhub-local-password
+      MARIADB_ROOT_PASSWORD: workhub-local-root-password
+      TZ: Asia/Bangkok
+    ports:
+      - "127.0.0.1:33306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - workhub-db:/var/lib/mysql
+  app:
+    build: .
+    environment:
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_NAME: workhub
+      DB_USER: workhub
+      DB_PASSWORD: workhub-local-password
+      WORKHUB_PASSWORD_HASH: scrypt$$16384$$8$$1$$_h55Z6MxUxxKGSLPMyP0tg$$St1ER5A3JwJDwtNhuiVFPFyq9j6OmnDIRedba6PBQaI
+      GEMINI_API_KEY: ""
+      DATABASE_ADMIN_URL: ""
+      LOG_LEVEL: warn
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - workhub-files:/data
+volumes:
+  workhub-db:
+  workhub-files:

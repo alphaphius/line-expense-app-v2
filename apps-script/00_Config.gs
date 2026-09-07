@@ -1,5 +1,5 @@
 const APP_CONFIG = Object.freeze({
-  APP_NAME: 'Phius WorkHub',
+  APP_NAME: 'WorkHub',
   VERSION: '3.1.0',
   API_VERSION: '2.0',
   SCHEMA_VERSION: 3,

@@ -1,6 +1,6 @@
-# Phius WorkHub
+# WorkHub
 
-Phius WorkHub is the product name for the expanded operations app. The existing
+WorkHub is the product name for the expanded operations app. The existing
 expense and LINE OA workflow remains intact, while non-LINE modules share the
 same projects and future workforce records.
 

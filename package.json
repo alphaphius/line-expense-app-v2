@@ -1,8 +1,8 @@
 {
-  "name": "line-expense-app-v2",
-  "version": "3.1.0",
+  "name": "workhub",
+  "version": "4.0.0",
   "private": true,
-  "description": "Phius WorkHub frontend with Google Apps Script, Sheets, Drive, Gemini and LINE backend",
+  "description": "WorkHub web app for Synology NAS, MariaDB and bill OCR with Gemini",
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev-server.mjs",
@@ -13,7 +13,12 @@
     "deploy:api": "node scripts/deploy-api.mjs",
     "deploy": "npm run verify && npm run deploy:api && npm run deploy:web",
     "status": "node scripts/status.mjs",
-    "smoke:api": "node scripts/smoke-api.mjs"
+    "smoke:api": "node scripts/smoke-api.mjs",
+    "smoke:nas": "node scripts/smoke-nas.mjs",
+    "migration:export-google": "node scripts/export-google-migration.mjs",
+    "migration:import-nas": "node server/scripts/import-google-migration.mjs",
+    "start:nas": "node server/server.mjs",
+    "hash:password": "node server/scripts/hash-password.mjs"
   },
   "devDependencies": {
     "@google/clasp": "^3.0.6-alpha",
@@ -21,8 +26,15 @@
     "tailwindcss": "^3.4.17"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.3",
     "@tesseract.js-data/tha": "^1.0.0",
     "chart.js": "^4.5.0",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.12.3",
+    "jszip": "^3.10.1",
+    "mime-types": "^3.0.2",
+    "mysql2": "^3.24.3",
+    "sharp": "^0.35.4",
     "sweetalert2": "^11.22.4",
     "tesseract.js": "^7.0.0"
   }

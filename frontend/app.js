@@ -448,7 +448,7 @@
     try {
       state.quickSettings = await gas('saveQuickSettings', payload);
       renderQuickSettings();
-      showActivityToast(`บันทึกค่าลัด ${slot} แล้ว`, 'พร้อมใช้ใน LINE และหน้าเพิ่มบิล', 'success');
+      showActivityToast(`บันทึกค่าลัด ${slot} แล้ว`, 'พร้อมใช้ในหน้าเพิ่มบิล', 'success');
     } catch (error) {
       hideActivityToast();
       Swal.fire({ icon:'error', title:'บันทึกค่าลัดไม่สำเร็จ', text:error.message });
@@ -681,7 +681,7 @@
       await Swal.fire({
         icon:'success',
         title:`${spec.label} พร้อมดาวน์โหลด`,
-        html:`<p class="mb-2 text-sm text-slate-500">พบ ${Number(file.count || 0).toLocaleString('th-TH')} บิลในเดือนที่เลือก</p><p class="mb-4 text-xs text-slate-400">ดาวน์โหลดผ่านหน้าแอปได้โดยตรง ไม่ต้องเปิด Google Drive และรองรับไฟล์ขนาดใหญ่กว่า 45 MB</p><div class="export-download-grid export-download-grid--single"><a href="#" role="button" data-export-download="${kind}">ดาวน์โหลด ${spec.label}<small data-export-progress="${kind}">${spec.fileDescription} · ${formatFileSize(file.sizeBytes)}</small></a></div>`,
+        html:`<p class="mb-2 text-sm text-slate-500">พบ ${Number(file.count || 0).toLocaleString('th-TH')} บิลในเดือนที่เลือก</p><p class="mb-4 text-xs text-slate-400">ดาวน์โหลดจาก NAS ผ่านหน้าแอปได้โดยตรง และรองรับไฟล์ขนาดใหญ่กว่า 45 MB</p><div class="export-download-grid export-download-grid--single"><a href="#" role="button" data-export-download="${kind}">ดาวน์โหลด ${spec.label}<small data-export-progress="${kind}">${spec.fileDescription} · ${formatFileSize(file.sizeBytes)}</small></a></div>`,
         confirmButtonText:'ปิด',
         confirmButtonColor:'#8f5f42',
         width:520,
@@ -721,15 +721,15 @@
 
   async function openDatabase() {
     if (!await window.ProtectedAccess.ensure()) return;
-    showActivityToast('กำลังเปิดฐานข้อมูล…', 'กำลังเตรียมลิงก์ Google Sheet');
+    showActivityToast('กำลังตรวจฐานข้อมูล…', 'กำลังตรวจสอบ MariaDB บน NAS');
     try {
       const access = await gas('verifyDatabaseAccess');
       const url = escapeHtml(access.url);
       hideActivityToast();
       await Swal.fire({
-        icon:'success',
-        title:'ฐานข้อมูลพร้อมเปิด',
-        html:`<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิดฐานข้อมูลในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด Google Sheet</a>`,
+        icon: access.url && access.url !== '#' ? 'success' : 'info',
+        title: access.url && access.url !== '#' ? 'ฐานข้อมูลพร้อมเปิด' : 'MariaDB ทำงานอยู่',
+        html: access.url && access.url !== '#' ? `<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิด phpMyAdmin ในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด phpMyAdmin</a>` : `<p class="text-sm text-slate-500">${escapeHtml(access.message || 'ปิดการเปิดฐานข้อมูลจากหน้าแอปเพื่อความปลอดภัย')}</p>`,
         showConfirmButton:false,
         showCloseButton:true,
       });
@@ -921,14 +921,14 @@
 
   async function loadSystemStatus() {
     try { const s = await gas('getSystemStatus'); const diagnostics = s.lineDiagnostics || {}; const gemini = s.geminiDiagnostics || {}; document.getElementById('system-status').innerHTML = [
-      ['Google Sheet',s.spreadsheet,true],['Google Drive',s.folder,true],['Gemini API Key',gemini.message || (s.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!gemini.valid],['LINE Token',s.lineConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า',s.lineConfigured],['AI Model',s.model,true]
+      ['ฐานข้อมูล',s.spreadsheet,true],['พื้นที่จัดเก็บ NAS',s.folder,true],['Gemini API Key',gemini.message || (s.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!gemini.valid],['LINE (เฟสถัดไป)',s.lineConfigured?'ตั้งค่าแล้ว':'พักไว้ก่อน',true],['AI Model',s.model,true]
     ].map(item=>`<div class="flex items-center justify-between rounded-xl bg-slate-50 p-4"><div><p class="text-xs text-slate-400">${item[0]}</p><p class="text-sm font-medium">${escapeHtml(item[1])}</p></div><span class="h-3 w-3 rounded-full ${item[2]?'bg-emerald-500':'bg-amber-400'}"></span></div>`).join('') +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Webhook URL</p><p class="mt-1 break-all text-xs">${escapeHtml((diagnostics.webhook||{}).endpoint || '-')}</p></div>` +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">LIFF URL</p><p class="mt-1 break-all text-xs">${escapeHtml(diagnostics.liff_url || '-')}</p></div>` +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">ลิงก์สำรอง Android/Samsung (เปิด Chrome)</p><p class="mt-1 break-all text-xs">${escapeHtml(diagnostics.android_external_url || '-')}</p></div>` +
     ((diagnostics.rich_menus||[]).map(menu=>`<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Rich Menu: ${escapeHtml(menu.name)}</p>${(menu.uri_actions||[]).map(uri=>`<p class="mt-1 break-all text-xs">${escapeHtml(uri)}</p>`).join('')||'<p class="mt-1 text-xs text-amber-600">ไม่พบ URI action</p>'}</div>`).join('')) +
     ((diagnostics.warnings||[]).length ? `<div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><p class="font-semibold">สิ่งที่ต้องแก้</p><ul class="mt-2 list-disc pl-5">${diagnostics.warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul></div>` : '<div class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">ไม่พบข้อผิดพลาดในการตั้งค่า LINE/LIFF</div>') +
-    '<button id="backfill-users" class="primary-btn w-full">แปลง User ID เดิมเป็นชื่อ LINE</button>'; } catch(error) { document.getElementById('system-status').textContent = error.message; }
+    '<button id="backfill-users" class="primary-btn w-full" disabled>LINE จะเปิดใช้งานในเฟสถัดไป</button>'; } catch(error) { document.getElementById('system-status').textContent = error.message; }
   }
 
   document.addEventListener('click', async event => {
@@ -1003,7 +1003,7 @@
     try {
       const health = await window.V2Api.connect();
       window.LIFF_ID = health.liffId || '';
-      document.title = health.appName || 'Phius WorkHub';
+      document.title = health.appName || 'WorkHub';
       await initializeLiff();
       await bootstrap();
       const linkedBillId = window.INITIAL_BILL_ID || '';

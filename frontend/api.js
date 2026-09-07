@@ -8,7 +8,7 @@
     protectedSession: 'phius-workhub-protected-session',
     device: 'line-expense-v2-device',
   };
-  let endpoint = normalizeEndpoint(config.apiEndpoint || localStorage.getItem(keys.endpoint) || '');
+  let endpoint = normalizeEndpoint(config.apiEndpoint || localStorage.getItem(keys.endpoint) || '/api');
   let session = readSession();
   let protectedSession = readProtectedSession();
   const longActions = ['submitBillPages', 'exportMonthlyBillWord', 'exportMonthlyBillExcel', 'backfillLineUsernames', 'saveReceiptTemplate', 'saveReceiptCardDraft', 'exportReceiptDocuments', 'exportReceiptRosterExcel'];
@@ -22,6 +22,11 @@
   function normalizeEndpoint(value) {
     const url = String(value || '').trim().replace(/\/+$/, '');
     if (!url) return '';
+    if (url === '/api') return url;
+    if (/^https?:\/\//i.test(url)) {
+      const parsed = new URL(url);
+      if (parsed.origin === location.origin && parsed.pathname === '/api') return parsed.origin + '/api';
+    }
     const localPreview = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && url === location.origin + '/__mock_api__';
     if (localPreview) return url;
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/i.test(url)) {
@@ -71,7 +76,7 @@
 
   async function request(action, args, options) {
     options = options || {};
-    if (!endpoint) throw new Error('ยังไม่ได้ตั้งค่า Apps Script Web App URL');
+    if (!endpoint) throw new Error('ยังไม่ได้ตั้งค่า Backend URL');
     const requestId = options.requestId || uuid().replace(/-/g, '');
     const controller = new AbortController();
     const timeoutMs = longActions.indexOf(action) >= 0
@@ -104,7 +109,7 @@
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('การเชื่อมต่อใช้เวลานานเกินไป กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่');
       if (/Failed to fetch|NetworkError|Load failed/i.test(error.message)) {
-        throw new Error('เชื่อมต่อ Apps Script ไม่สำเร็จ กรุณาตรวจ URL, Deployment และอินเทอร์เน็ต');
+        throw new Error('เชื่อมต่อ WorkHub Backend ไม่สำเร็จ กรุณาตรวจ NAS, URL และเครือข่าย');
       }
       throw error;
     } finally {
@@ -114,8 +119,8 @@
 
   async function promptEndpoint() {
     const result = await Swal.fire({
-      title: 'เชื่อมต่อ Backend V2',
-      html: '<label class="block text-left text-sm">Apps Script Web App URL<input id="api-endpoint-input" type="url" class="swal2-input !mx-0 !mt-2 !w-full" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="url"></label><p class="mt-3 text-left text-xs text-slate-500">URL จะเก็บเฉพาะในอุปกรณ์นี้ และต้องเป็น Deployment V2 เท่านั้น</p>',
+      title: 'เชื่อมต่อ WorkHub Backend',
+      html: '<label class="block text-left text-sm">Backend URL<input id="api-endpoint-input" type="text" class="swal2-input !mx-0 !mt-2 !w-full" placeholder="/api" autocomplete="url"></label><p class="mt-3 text-left text-xs text-slate-500">เมื่อติดตั้งบน NAS ให้ใช้ /api ซึ่งทำงานผ่านโดเมนเดียวกับหน้าเว็บ</p>',
       confirmButtonText: 'ทดสอบการเชื่อมต่อ',
       confirmButtonColor: '#8f5f42',
       allowOutsideClick: false,

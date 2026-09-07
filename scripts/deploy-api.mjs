@@ -17,7 +17,7 @@ async function run(args, label) {
 await run(['push'], 'clasp push');
 const deployment = JSON.parse(await readFile(path.join(root, 'deployment.json'), 'utf8'));
 if (deployment.deploymentId) {
-  await run(['redeploy', deployment.deploymentId, '--description', `Phius WorkHub ${deployment.version || ''}`.trim()], 'clasp redeploy');
+  await run(['redeploy', deployment.deploymentId, '--description', `WorkHub ${deployment.version || ''}`.trim()], 'clasp redeploy');
   console.log('Apps Script source pushed and Web App redeployed: ' + deployment.webAppUrl);
 } else {
   console.log('Apps Script source pushed. Create the first Web App deployment and record it in deployment.json.');

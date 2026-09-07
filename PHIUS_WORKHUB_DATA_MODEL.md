@@ -1,4 +1,4 @@
-# Phius WorkHub data model
+# WorkHub data model
 
 | Sheet | Purpose | Stable key |
 | --- | --- | --- |

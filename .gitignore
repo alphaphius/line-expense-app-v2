@@ -6,3 +6,8 @@ dist/
 .deployment-state.json
 .DS_Store
 *.log
+.env
+.env.nas
+.workhub-data/
+migration-data/
+*.migration.json

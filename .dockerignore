@@ -1,0 +1,10 @@
+.git
+.github
+.workhub-data
+dist
+node_modules
+*.log
+.env*
+.clasp.json
+.clasprc.json
+

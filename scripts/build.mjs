@@ -31,12 +31,12 @@ for (const file of ['api.js', 'image-optimizer.js', 'offline-ocr.js', 'protected
 const configuredEndpoint = String(process.env.V2_API_ENDPOINT || '').trim();
 const configSource = await readFile(path.join(frontend, 'config.js'), 'utf8');
 const builtConfig = configuredEndpoint
-  ? configSource.replace("apiEndpoint: '',", `apiEndpoint: ${JSON.stringify(configuredEndpoint)},`)
+  ? configSource.replace(/apiEndpoint:\s*['"][^'"]*['"],/, `apiEndpoint: ${JSON.stringify(configuredEndpoint)},`)
   : configSource;
 await writeFile(path.join(dist, 'config.js'), builtConfig);
 
 let serviceWorker = await readFile(path.join(frontend, 'service-worker.js'), 'utf8');
-serviceWorker = serviceWorker.replace(/phius-workhub-shell-[^']+/, 'phius-workhub-shell-' + packageJson.version + '-' + Date.now().toString(36));
+serviceWorker = serviceWorker.replace(/workhub-shell-[^']+/, 'workhub-shell-' + packageJson.version + '-' + Date.now().toString(36));
 await writeFile(path.join(dist, 'service-worker.js'), serviceWorker);
 
 const bin = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tailwindcss.cmd' : 'tailwindcss');

@@ -7,7 +7,7 @@ const types = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=ut
 const port = Number(process.env.PORT || 4173);
 const mockSession = { token:'local-preview-session-token-000000000000', expiresAt:Date.now() + 6 * 60 * 60 * 1000, accessMode:'OPEN' };
 const mockData = {
-  appName: 'Phius WorkHub', liffId: '', frontendUrl:'http://127.0.0.1:' + port,
+  appName: 'WorkHub', liffId: '', frontendUrl:'http://127.0.0.1:' + port,
   modules: { expenses:true, receipts:true, payroll:false, tasks:false },
   masters: {
     projects: [{ project_id: 'P1', project_name: 'โครงการทั่วไป' }],

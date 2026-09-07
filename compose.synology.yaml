@@ -1,0 +1,24 @@
+services:
+  workhub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: workhub:4.0.0
+    container_name: workhub
+    restart: unless-stopped
+    env_file:
+      - .env.nas
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /volume1/docker/workhub/data:/data
+      - /volume1/docker/workhub/migration:/migration:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 1536m
+    cpus: 2.0
