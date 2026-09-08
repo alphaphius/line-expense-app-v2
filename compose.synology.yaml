@@ -8,6 +8,7 @@ services:
     restart: unless-stopped
     env_file:
       - .env.nas
+      - workhub-line.env
     network_mode: host
     volumes:
       - workhub-data:/data

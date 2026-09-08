@@ -8,6 +8,7 @@ dist/
 *.log
 .env
 .env.nas
+workhub-line.env
 .workhub-data/
 migration-data/
 *.migration.json

@@ -34,7 +34,8 @@ FLUSH PRIVILEGES;
 2. สร้างโฟลเดอร์ `/volume1/docker/workhub/app` และ `/volume1/docker/workhub/migration` (Container Manager จะสร้าง volume `workhub-data` ให้อัตโนมัติ)
 3. วาง source ทั้งหมดใน `/volume1/docker/workhub/app`
 4. คัดลอก `.env.nas.example` เป็น `.env.nas`
-5. ใส่ `DB_PASSWORD`, `GEMINI_API_KEY`, `WORKHUB_PASSWORD_HASH`, `PUBLIC_BASE_URL`, `LINE_CHANNEL_SECRET` และ `LINE_CHANNEL_ACCESS_TOKEN`
+5. ใส่ `DB_PASSWORD` และ `WORKHUB_PASSWORD_HASH` ใน `.env.nas`
+6. เก็บ `GEMINI_API_KEY`, `PUBLIC_BASE_URL`, `LINE_CHANNEL_SECRET` และ `LINE_CHANNEL_ACCESS_TOKEN` ใน `workhub-line.env` แยกจากค่าฐานข้อมูล เพื่อหมุน Token ได้โดยไม่แตะรหัส MariaDB
 
 สร้าง password hash โดยรันในโฟลเดอร์โปรเจกต์:
 
