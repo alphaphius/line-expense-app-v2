@@ -6,6 +6,8 @@ import JSZip from 'jszip';
 import sharp from 'sharp';
 import { createReceiptDocx, createXlsx, inspectTemplate } from '../server/exports.mjs';
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
+import crypto from 'node:crypto';
+import { verifyLineSignature } from '../server/line.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -18,11 +20,14 @@ async function templateDocx() {
 }
 
 test('NAS deployment artifacts keep secrets out of source and use persistent storage', async () => {
-  const [compose, env, dockerfile, schema] = await Promise.all([
+  const [compose, env, dockerfile, schema, lineSchema, server, line] = await Promise.all([
     fs.readFile(path.join(root, 'compose.synology.yaml'), 'utf8'),
     fs.readFile(path.join(root, '.env.nas.example'), 'utf8'),
     fs.readFile(path.join(root, 'Dockerfile'), 'utf8'),
     fs.readFile(path.join(root, 'server/migrations/001_init.sql'), 'utf8'),
+    fs.readFile(path.join(root, 'server/migrations/002_line_messaging.sql'), 'utf8'),
+    fs.readFile(path.join(root, 'server/server.mjs'), 'utf8'),
+    fs.readFile(path.join(root, 'server/line.mjs'), 'utf8'),
   ]);
   assert.match(compose, /workhub-data:\/data/);
   assert.match(compose, /workhub-data:\s*\n\s+name: workhub-data/);
@@ -33,6 +38,22 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(schema, /CREATE TABLE IF NOT EXISTS bills/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS receipt_registrations/);
   assert.match(schema, /INDEX idx_bills_duplicate/);
+  assert.match(env, /PUBLIC_BASE_URL=https:\/\/workhub\.nasgfe1\.synology\.me/);
+  assert.match(env, /LINE_CHANNEL_SECRET=REPLACE_/);
+  assert.match(lineSchema, /CREATE TABLE IF NOT EXISTS line_webhook_events/);
+  assert.match(lineSchema, /CREATE TABLE IF NOT EXISTS line_upload_pages/);
+  assert.match(server, /request\.rawJsonBody/);
+  assert.match(server, /\/webhook\/line/);
+  assert.match(line, /timingSafeEqual/);
+  assert.match(line, /INSERT IGNORE INTO line_webhook_events/);
+});
+
+test('LINE webhook signature validates the exact raw request body', () => {
+  const secret='unit-test-channel-secret',raw='{"events":[]}';
+  const signature=crypto.createHmac('sha256',secret).update(raw).digest('base64');
+  assert.equal(verifyLineSignature(raw,signature,secret),true);
+  assert.equal(verifyLineSignature(raw+' ',signature,secret),false);
+  assert.equal(verifyLineSignature(raw,'invalid',secret),false);
 });
 
 test('scrypt password hashes verify without storing plaintext', async () => {

@@ -7,7 +7,7 @@
 - ค่าใช้จ่ายและบิล: พร้อมใช้งานบนเว็บ ไม่ถามรหัส และใช้ Gemini เฉพาะ OCR บิล
 - เอกสารใบรับเงิน: พร้อมใช้งาน รองรับ DOC/DOCX Template, OCR บัตรไทยบนอุปกรณ์, Quick Edit, กลุ่มแรงงาน, ป้องกันข้อมูลซ้ำ และแยกปุ่ม Export DOCX/Excel
 - สรุปค่าแรงและ Task Manager: มีพื้นที่โมดูลและโครงข้อมูลสำหรับพัฒนาต่อ โดยต้องผ่านรหัสส่วนงานภายใน
-- LINE OA/LIFF: พักไว้สำหรับเฟสถัดไปตามขอบเขตการย้ายครั้งนี้
+- LINE OA: Backend บน NAS รองรับแชตส่วนตัว/กลุ่ม รูปหลายหน้า ค่าลัด การเลือกโครงการ/บริษัท ยืนยัน/ยกเลิก และป้องกัน Webhook ซ้ำ; LIFF ยังไม่จำเป็นต่อ Flow รับบิล
 - Google Apps Script, Sheet และ Drive เดิม: เก็บไว้เป็นระบบสำรอง ไม่ถูกลบหรือเขียนทับ
 
 ## สถาปัตยกรรม NAS
@@ -42,6 +42,7 @@ npm run smoke:nas
 - `compose.synology.yaml` — Project สำหรับ Synology Container Manager
 - `.env.nas.example` — ตัวอย่าง Environment โดยไม่มี secret จริง
 - `server/migrations/001_init.sql` — Schema MariaDB
+- `server/migrations/002_line_messaging.sql` — Event deduplication และรูปชั่วคราวจาก LINE
 - `scripts/export-google-migration.mjs` — Export Google แบบอ่านอย่างเดียว
 - `server/scripts/import-google-migration.mjs` — Import เข้า NAS แบบรันซ้ำได้
 

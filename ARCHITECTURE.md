@@ -2,64 +2,43 @@
 
 ```mermaid
 flowchart LR
-  U[Desktop / Smartphone] -->|HTTPS static files| GH[GitHub Pages]
-  GH -->|JSON API + automatic session| GAS[Apps Script Web App V2]
-  L[LINE Group / OA] -->|Webhook + hook key| GAS
-  GAS --> S[(Google Sheet V2)]
-  GAS --> D[Google Drive V2 folder]
-  GAS --> G[Gemini API]
-  GAS --> LA[LINE Messaging API]
+  U[Desktop / Smartphone] -->|HTTPS| RP[Synology Reverse Proxy]
+  L[LINE Group / OA] -->|Signed HTTPS Webhook| RP
+  RP --> W[WorkHub Fastify Container]
+  W --> M[(MariaDB 10)]
+  W --> F[(NAS persistent volume)]
+  W --> G[Gemini API]
+  W --> LA[LINE Messaging API]
 ```
 
 ## ขอบเขตระบบ
 
-- `frontend/`: source ของหน้าเว็บเดิมที่แปลงจาก Apps Script HTML Service เป็น static files
-- `dist/`: build artifact สำหรับ GitHub Pages; ไม่ commit โดยค่าเริ่มต้น
-- `apps-script/`: API, Sheet repository, Drive, Gemini, LINE webhook และ export
-- `tests/`: ตรวจ DOM contract กับ V1, action contract, syntax, secret leak และ service worker policy
-- `scripts/`: build, local preview, setup, deploy และ status
+- `frontend/` และ `dist/`: PWA ที่ให้บริการจาก Container เดียวกับ API
+- `server/`: Fastify API, LINE webhook, MariaDB actions, file storage และ export
+- `apps-script/`: ระบบ Google รุ่นเดิม เก็บไว้เป็น rollback ไม่ใช่ production ของ NAS
+- `tests/`: ตรวจ contract, security boundary, export, image compression และ LINE signature
 
 ## Request flow จากเว็บ
 
-1. หน้าเว็บโหลดจาก GitHub CDN
-2. `api.js` เรียก Apps Script ด้วย POST `text/plain` เพื่อคง simple CORS request
-3. หน้าเว็บขอ opaque technical session ให้อัตโนมัติและเก็บใน `sessionStorage`; ผู้ใช้ไม่ต้องล็อกอินหรือกรอก PIN
-4. action ทุกตัวผ่าน allowlist ใน `17_Api.gs`
-5. mutation ใช้ request ID คงเดิม, `MutationLog` และ Script Lock เพื่อป้องกันคำสั่งซ้ำ
-6. response ทุกตัวใช้ envelope `{ok,data,error,requestId,serverTime,apiVersion}`
+1. Browser เข้า HTTPS hostname ของ NAS ผ่าน reverse proxy port 443
+2. Fastify ให้บริการ static files และ `/api` แบบ same-origin
+3. หน้าเว็บขอ technical session อัตโนมัติ; ค่าใช้จ่ายไม่ถาม PIN ส่วนงานภายในใช้ protected session
+4. Mutation ใช้ request ID และ `mutation_log` เพื่อป้องกันคำสั่งซ้ำ
+5. MariaDB transaction รักษาความสอดคล้องระหว่าง master, bill, item และ document metadata
 
-## Image flow
+## LINE bill flow
 
-### Web upload
-
-`File → decode orientation → resize ≤ 1800 px → JPEG quality loop → target ~1.2 MB → base64 → Apps Script → Drive → Gemini`
-
-บีบอัดพร้อมกันสูงสุด 2 รูปเพื่อลด memory spike บนมือถือ และจำกัด payload รวมหลังบีบอัด 14 MB
-
-### LINE upload
-
-LINE content ต้องถูกเก็บระหว่างรอรูปหลายหน้า ระบบจึงเก็บชั่วคราวก่อน เมื่อ Gemini อ่านครบแล้วจะขอ Drive thumbnail และแทนไฟล์ขนาดใหญ่ถ้า thumbnail มีคุณภาพ/ขนาดเหมาะสม
-
-### DOCX export
-
-อ่านรูปที่จัดเก็บ → ใช้ Drive thumbnail เมื่อรูปเกินเป้าหมาย → คำนวณสัดส่วน → ฝังใน DOCX → zip → บันทึกใน `exports/YYYY-MM` → ดาวน์โหลดแบบ chunk 1 MB
-
-## Performance decisions
-
-- Tailwind compile ตอน build ไม่มี Tailwind CDN runtime
-- SweetAlert2/Chart.js self-hosted
-- Sheet append หลายแถวด้วย `setValues` ครั้งเดียว
-- ค้นหา ID ด้วย `TextFinder`; อัปเดตทั้ง row ครั้งเดียว
-- cache master data 5 นาทีและ setup state 6 ชั่วโมง
-- upload แสดงสถานะ compression/Gemini โดยไม่บล็อกทั้งหน้า
-- long-running submit/export timeout 330 วินาที; action ปกติ 90 วินาที
-- PWA ใช้ network-first สำหรับไฟล์ static และ fallback cache เมื่อออฟไลน์ เพื่อไม่ค้างกับ release เก่า
+1. Fastify ตรวจ `x-line-signature` จาก raw request body ก่อนอ่าน event
+2. `line_webhook_events` กัน webhook event ซ้ำแบบถาวร และตอบ HTTP 200 ก่อนงาน OCR
+3. รูปถูกดาวน์โหลดจาก LINE บีบอัดเป็น JPEG และเก็บใน `line-inbox` ระหว่างรอรูปหลายหน้า
+4. Session แยกตามผู้ส่งและ group/room/user พร้อมรองรับค่าลัด จำนวนหน้า โครงการ และบริษัท
+5. เมื่อรูปครบ ระบบส่งไฟล์ที่บีบอัดแล้วให้ Gemini อ่าน บันทึกบิล และ push ผลกลับห้องต้นทาง
+6. ผู้ส่งยืนยันหรือยกเลิกบิลจาก postback ได้ รูปชั่วคราวถูกลบหลังสำเร็จหรือยกเลิก
 
 ## Security boundaries
 
-- GitHub Pages ถือว่า public client: ไม่มี API key หรือ LINE token
-- Secret ทั้งหมดอยู่ใน Apps Script Properties
-- ระบบอยู่ในโหมด `OPEN`; ผู้ที่มีลิงก์สามารถเรียกใช้งานได้ จึงไม่ใช่ขอบเขตยืนยันตัวบุคคล
-- Technical session อยู่ใน Apps Script Cache และ browser `sessionStorage` เพื่อควบคุมอายุคำขอ, mutation idempotency และ audit เท่านั้น
-- Sheet/Drive URL เปิดได้จากหน้าแอปโดยไม่ต้องยืนยัน PIN; สิทธิ์เปิดไฟล์จริงยังเป็นไปตาม Google Drive ของผู้ใช้
-- API action ใช้ allowlist ไม่รับชื่อฟังก์ชัน arbitrary จาก client
+- Token, Channel Secret, Gemini key และรหัสฐานข้อมูลอยู่ใน `.env.nas` ที่ไม่ commit เท่านั้น
+- Public endpoint เปิดเฉพาะ HTTPS 443; ไม่เปิด MariaDB 3306 หรือ WorkHub 8080 ที่ router
+- LINE webhook ใช้ HMAC-SHA256 และ constant-time comparison
+- Container ไม่มี Linux capabilities, ใช้ non-root user และ persistent volume จำกัดเฉพาะข้อมูล WorkHub
+- รูปบัตรประชาชนใช้ OCR ในอุปกรณ์และไม่ส่งเข้า AI; Gemini ใช้เฉพาะรูปบิล

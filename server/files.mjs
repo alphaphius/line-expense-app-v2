@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { config } from './config.mjs';
 import { apiError, clean, token } from './utils.mjs';
 
-const ROOTS = new Set(['uploads', 'receipt-cards', 'templates', 'exports', 'tmp']);
+const ROOTS = new Set(['uploads', 'line-inbox', 'receipt-cards', 'templates', 'exports', 'tmp']);
 
 export async function ensureDataDirs() {
   await Promise.all([...ROOTS].map(name => fs.mkdir(path.join(config.dataDir, name), { recursive: true, mode: 0o750 })));

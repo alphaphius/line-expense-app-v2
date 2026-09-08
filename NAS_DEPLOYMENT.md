@@ -1,6 +1,6 @@
 # WorkHub on Synology NAS
 
-ระบบนี้รันหน้าเว็บและ API ใน Container เดียว ใช้ MariaDB 10 ของ Synology และเก็บไฟล์ถาวรใน Docker volume ชื่อ `workhub-data` บน NAS โดยไม่พึ่ง Google Drive หรือ Google Sheets ส่วน LINE/LIFF ถูกพักไว้สำหรับเฟสถัดไป
+ระบบนี้รันหน้าเว็บ, API และ LINE webhook ใน Container เดียว ใช้ MariaDB 10 ของ Synology และเก็บไฟล์ถาวรใน Docker volume ชื่อ `workhub-data` บน NAS โดยไม่พึ่ง Google Drive หรือ Google Sheets
 
 ## 1. สำรองระบบเดิม
 
@@ -34,7 +34,7 @@ FLUSH PRIVILEGES;
 2. สร้างโฟลเดอร์ `/volume1/docker/workhub/app` และ `/volume1/docker/workhub/migration` (Container Manager จะสร้าง volume `workhub-data` ให้อัตโนมัติ)
 3. วาง source ทั้งหมดใน `/volume1/docker/workhub/app`
 4. คัดลอก `.env.nas.example` เป็น `.env.nas`
-5. ใส่ `DB_PASSWORD`, `GEMINI_API_KEY` และ `WORKHUB_PASSWORD_HASH`
+5. ใส่ `DB_PASSWORD`, `GEMINI_API_KEY`, `WORKHUB_PASSWORD_HASH`, `PUBLIC_BASE_URL`, `LINE_CHANNEL_SECRET` และ `LINE_CHANNEL_ACCESS_TOKEN`
 
 สร้าง password hash โดยรันในโฟลเดอร์โปรเจกต์:
 
@@ -67,6 +67,12 @@ http://192.168.1.200:8080/
 - ผูก certificate ที่ตรงกับ hostname
 - Forward header `X-Forwarded-Proto: https`
 
+จากนั้นตั้ง LINE Developers Console ดังนี้:
+
+- Webhook URL: `https://workhub.nasgfe1.synology.me/webhook/line`
+- เปิด **Use webhook** และ **Allow bot to join group chats**
+- กด Verify และต้องได้ HTTP 200
+
 อย่าเปิด port `8080` หรือ `3306` ออกอินเทอร์เน็ตที่ router ระบบภายนอกควรเข้าเฉพาะ HTTPS 443 ผ่าน reverse proxy
 
 ## 6. สิ่งที่ต้องตรวจหลัง Deploy
@@ -79,6 +85,7 @@ http://192.168.1.200:8080/
 - Template `.doc` และ `.docx` ผ่านการตรวจ Placeholder ครบ
 - Export Excel และ DOCX เป็นคนละปุ่ม และดาวน์โหลดได้บน Desktop/Smartphone
 - Restart container แล้วยังเห็นข้อมูลและไฟล์เดิม
+- LINE OA รับรูปจากแชตส่วนตัวและกลุ่ม เลือกจำนวนหน้า/ค่าลัด แล้วส่งผลกลับห้องต้นทาง
 
 ## 7. Backup
 
