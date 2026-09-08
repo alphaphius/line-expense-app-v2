@@ -1,6 +1,6 @@
 # WorkHub on Synology NAS
 
-ระบบนี้รันหน้าเว็บและ API ใน Container เดียว ใช้ MariaDB 10 ของ Synology และเก็บไฟล์ถาวรที่ `/volume1/docker/workhub/data` โดยไม่พึ่ง Google Drive หรือ Google Sheets ส่วน LINE/LIFF ถูกพักไว้สำหรับเฟสถัดไป
+ระบบนี้รันหน้าเว็บและ API ใน Container เดียว ใช้ MariaDB 10 ของ Synology และเก็บไฟล์ถาวรใน Docker volume ชื่อ `workhub-data` บน NAS โดยไม่พึ่ง Google Drive หรือ Google Sheets ส่วน LINE/LIFF ถูกพักไว้สำหรับเฟสถัดไป
 
 ## 1. สำรองระบบเดิม
 
@@ -31,7 +31,7 @@ FLUSH PRIVILEGES;
 ## 3. เตรียมไฟล์บน NAS
 
 1. ติดตั้ง **Container Manager** จาก Package Center
-2. สร้างโฟลเดอร์ `/volume1/docker/workhub/app` และ `/volume1/docker/workhub/data`
+2. สร้างโฟลเดอร์ `/volume1/docker/workhub/app` และ `/volume1/docker/workhub/migration` (Container Manager จะสร้าง volume `workhub-data` ให้อัตโนมัติ)
 3. วาง source ทั้งหมดใน `/volume1/docker/workhub/app`
 4. คัดลอก `.env.nas.example` เป็น `.env.nas`
 5. ใส่ `DB_PASSWORD`, `GEMINI_API_KEY` และ `WORKHUB_PASSWORD_HASH`
@@ -47,6 +47,8 @@ npm run hash:password
 ## 4. Deploy Container
 
 ใน Container Manager เลือก **Project → Create → Create docker-compose.yml** แล้วเลือก `compose.synology.yaml` จากโฟลเดอร์แอป จากนั้น Build และ Start project ชื่อ `workhub`
+
+ไฟล์ Compose ใช้ host network เพื่อให้ Container ต่อ MariaDB package ของ Synology ผ่าน `127.0.0.1` ได้โดยตรง ตั้ง memory/process limit ที่รองรับ DSM 7 และไม่ใช้ `cpus`/`NanoCPUs` เพราะ kernel ของ Synology บางรุ่นไม่ได้เปิด CPU CFS scheduler
 
 ตรวจสอบภายใน LAN:
 
@@ -83,7 +85,6 @@ http://192.168.1.200:8080/
 ตั้ง Hyper Backup ให้สำรองทั้งสองส่วนพร้อมกัน:
 
 - MariaDB database `workhub`
-- `/volume1/docker/workhub/data`
+- Docker volume `workhub-data`
 
 การกู้คืนต้องใช้ snapshot ที่อยู่ช่วงเวลาเดียวกัน เพื่อให้ record ใน MariaDB ตรงกับไฟล์บน disk
-

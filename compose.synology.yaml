@@ -8,12 +8,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env.nas
-    ports:
-      - "8080:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    network_mode: host
     volumes:
-      - /volume1/docker/workhub/data:/data
+      - workhub-data:/data
       - /volume1/docker/workhub/migration:/migration:ro
     security_opt:
       - no-new-privileges:true
@@ -21,4 +18,7 @@ services:
       - ALL
     pids_limit: 256
     mem_limit: 1536m
-    cpus: 2.0
+
+volumes:
+  workhub-data:
+    name: workhub-data

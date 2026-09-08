@@ -24,7 +24,9 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
     fs.readFile(path.join(root, 'Dockerfile'), 'utf8'),
     fs.readFile(path.join(root, 'server/migrations/001_init.sql'), 'utf8'),
   ]);
-  assert.match(compose, /\/volume1\/docker\/workhub\/data:\/data/);
+  assert.match(compose, /workhub-data:\/data/);
+  assert.match(compose, /workhub-data:\s*\n\s+name: workhub-data/);
+  assert.match(compose, /network_mode: host/);
   assert.match(env, /WORKHUB_PASSWORD_HASH=scrypt\$/);
   assert.doesNotMatch(env, /gfe123456_/);
   assert.match(dockerfile, /USER node/);
