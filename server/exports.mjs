@@ -143,9 +143,10 @@ export async function createSimpleBillDocx(title, bills) {
   const zip = new JSZip();
   const paragraphs = [`<w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>${xml(title)}</w:t></w:r></w:p>`];
   bills.forEach((bill, index) => {
-    paragraphs.push(`<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${index + 1}. ${xml(bill.vendor_name || '-')} — ${xml(bill.document_no || '-')}</w:t></w:r></w:p>`);
+    paragraphs.push(`<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${index + 1}. ${xml(bill.vendor_name || '-')}</w:t></w:r></w:p>`);
     paragraphs.push(`<w:p><w:r><w:t>วันที่ ${xml(bill.document_date || '-')} | ยอดสุทธิ ${xml(Number(bill.grand_total || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }))} บาท</w:t></w:r></w:p>`);
-    paragraphs.push(`<w:p><w:r><w:t>โครงการ ${xml(bill.project_name || '-')} | บริษัท ${xml(bill.company_name || '-')} | หมวด ${xml(bill.category_name || '-')}</w:t></w:r></w:p>`);
+    paragraphs.push(`<w:p><w:r><w:t>หมวด ${xml(bill.category_name || '-')}</w:t></w:r></w:p>`);
+    if (index < bills.length - 1) paragraphs.push(pageBreak());
   });
   zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');

@@ -61,7 +61,7 @@
 
   function readProtectedSession() {
     try {
-      const value = JSON.parse(sessionStorage.getItem(keys.protectedSession) || 'null');
+      const value = JSON.parse(localStorage.getItem(keys.protectedSession) || 'null');
       return value && Number(value.expiresAt) > Date.now() ? value : null;
     } catch (_) {
       return null;
@@ -70,8 +70,8 @@
 
   function saveProtectedSession(value) {
     protectedSession = value;
-    if (value) sessionStorage.setItem(keys.protectedSession, JSON.stringify(value));
-    else sessionStorage.removeItem(keys.protectedSession);
+    if (value) localStorage.setItem(keys.protectedSession, JSON.stringify(value));
+    else localStorage.removeItem(keys.protectedSession);
   }
 
   async function request(action, args, options) {

@@ -119,6 +119,7 @@
   async function saveTemplate(event) {
     event.preventDefault();
     if (!state.enabled) return;
+    const form = event.currentTarget;
     const file = $('receipt-template-file').files[0];
     if (!file) return Swal.fire('กรุณาเลือกไฟล์ DOC หรือ DOCX','','warning');
     const name = $('receipt-template-name').value.trim() || file.name.replace(/\.docx?$/i, '');
@@ -129,7 +130,7 @@
       state.templates.push(result);
       renderOptions();
       $('receipt-template-select').value = result.template_id;
-      event.currentTarget.reset();
+      form.reset();
       Swal.fire({ icon:'success', title:'บันทึก Template แล้ว', text:'ตรวจพบ Placeholder ครบและพร้อมสร้างเอกสาร', timer:1800, showConfirmButton:false });
     } catch (error) { Swal.fire('บันทึก Template ไม่สำเร็จ',error.message,'error'); }
     finally { button.disabled = false; }

@@ -264,6 +264,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 
 .sidebar-section-label { display:none; padding:0 20px 8px; color:#88766e; font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 .product-nav { display:flex; gap:7px; margin-top:15px; overflow-x:auto; padding:2px 1px 3px; scrollbar-width:none; }
+.header-gfe-logo { width:42px; height:42px; object-fit:contain; border-radius:10px; border:1px solid #eadfd5; background:#fff; padding:3px; }
 .product-nav::-webkit-scrollbar { display:none; }
 .product-nav__button { display:flex; min-width:max-content; min-height:48px; flex-direction:column; justify-content:center; border:1px solid #e1d2c3; border-radius:12px; background:#fffdf9; padding:7px 14px; color:#66544b; text-align:left; transition:border-color .18s,background .18s,box-shadow .18s; }
 .product-nav__button span { font-size:12px; font-weight:650; }

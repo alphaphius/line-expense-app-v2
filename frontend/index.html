@@ -34,7 +34,7 @@
   <div class="min-h-screen lg:flex">
     <aside class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-64">
       <div class="flex items-center gap-3 px-5 py-5">
-        <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">PW</div>
+        <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">WH</div>
         <div><h1 class="font-semibold leading-tight">WorkHub</h1><p class="text-xs text-slate-400">Operations workspace</p></div>
       </div>
       <p class="sidebar-section-label">เมนูค่าใช้จ่าย</p>
@@ -45,7 +45,7 @@
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.0.0 NAS · Bills AI · ID OCR Offline</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.2.0 NAS · WorkHub · ID OCR Offline</div>
     </aside>
 
     <main class="app-main w-full lg:ml-64">
@@ -54,6 +54,7 @@
           <div class="flex items-center justify-between gap-3">
             <div class="app-header-copy"><p class="text-sm text-slate-500">WorkHub</p><h2 id="view-title" class="text-xl font-semibold">ภาพรวมค่าใช้จ่าย</h2></div>
             <div class="app-header-actions">
+              <img class="header-gfe-logo" src="https://www.gfe.co.th/wp-content/uploads/2018/07/gfe-logo-150.jpg" alt="GFE" loading="lazy" referrerpolicy="no-referrer">
               <button id="open-database-btn" class="database-access-btn" type="button" aria-label="ตรวจสอบฐานข้อมูล MariaDB">ฐานข้อมูล</button>
               <button id="refresh-btn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">รีเฟรช</button>
             </div>
@@ -225,7 +226,7 @@
                 <label class="label">บริษัทผู้ซื้อ<select id="upload-company" class="field mt-2" required></select></label>
               </div>
               <label class="label block">บิลชุดนี้มีกี่หน้า
-                <input id="expected-pages" class="field mt-2" type="number" min="1" max="8" value="1" required>
+                <input id="expected-pages" class="field mt-2" type="number" min="1" max="6" value="1" required>
               </label>
               <label id="drop-zone" class="block cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center transition hover:border-emerald-500 hover:bg-emerald-50">
                 <input id="bill-files" class="hidden" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required>

@@ -131,7 +131,7 @@ function billConfirmation(bill) {
     {type:'button',style:'secondary',action:{type:'postback',label:'ยกเลิกบิล',data:`action=cancel_bill&bill_id=${bill.bill_id}`,displayText:'ยกเลิกบิลนี้'}},
   ];
   if(config.publicBaseUrl)buttons.push({type:'button',style:'link',action:{type:'uri',label:'เปิด WorkHub',uri:config.publicBaseUrl}});
-  return {type:'flex',altText:`อ่านบิลแล้ว ${bill.vendor_name||'ไม่ทราบผู้ขาย'} ${total} บาท`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'WORKHUB · BILL OCR',color:'#D8C48F',weight:'bold',size:'xs'},{type:'text',text:bill.needs_review?'กรุณาตรวจสอบข้อมูล':'พร้อมยืนยันบิล',color:'#FFFFFF',weight:'bold',size:'xl',margin:'md'}]},body:{type:'box',layout:'vertical',spacing:'md',contents:[{type:'text',text:bill.vendor_name||'ไม่ทราบผู้ขาย',weight:'bold',size:'lg',wrap:true},{type:'text',text:`เลขที่: ${bill.document_no||'-'}\nวันที่: ${bill.document_date||'-'}\nโครงการ: ${bill.project_name||'-'}\nบริษัท: ${bill.company_name||'-'}`,size:'sm',color:'#66574F',wrap:true},{type:'text',text:`ยอดสุทธิ ${total} บาท`,weight:'bold',size:'xl',color:'#8F5F42'}]},footer:{type:'box',layout:'vertical',spacing:'sm',contents:buttons}}};
+  return {type:'flex',altText:`อ่านบิลแล้ว ${bill.vendor_name||'ไม่ทราบผู้ขาย'} ${total} บาท`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'WORKHUB · BILL OCR',color:'#D8C48F',weight:'bold',size:'xs'},{type:'text',text:bill.needs_review?'กรุณาตรวจสอบข้อมูล':'พร้อมยืนยันบิล',color:'#FFFFFF',weight:'bold',size:'xl',margin:'md'}]},body:{type:'box',layout:'vertical',spacing:'md',contents:[{type:'text',text:bill.vendor_name||'ไม่ทราบผู้ขาย',weight:'bold',size:'lg',wrap:true},{type:'text',text:`วันที่: ${bill.document_date||'-'}\nโครงการ: ${bill.project_name||'-'}\nบริษัท: ${bill.company_name||'-'}`,size:'sm',color:'#66574F',wrap:true},{type:'text',text:`ยอดสุทธิ ${total} บาท`,weight:'bold',size:'xl',color:'#8F5F42'}]},footer:{type:'box',layout:'vertical',spacing:'sm',contents:buttons}}};
 }
 
 async function cleanupSessionFiles(sessionId) {
@@ -213,7 +213,7 @@ async function handlePostback(event,userId,contextId) {
   if(['confirm_bill','cancel_bill'].includes(action)){
     const bill=await one("SELECT bill_id FROM bills WHERE bill_id=:id AND source='LINE' AND source_user_id=:user AND source_context_id=:context",{id:clean(data.bill_id,64),user:userId,context:contextId});
     if(!bill)throw new Error('ไม่พบบิลนี้ หรือผู้ส่งไม่มีสิทธิ์จัดการ');
-    if(action==='confirm_bill'){const saved=await confirmBill(bill.bill_id,userId);await reply(event.replyToken,[message(`บันทึกบิล ${saved.document_no||saved.bill_id.slice(0,8)} เรียบร้อยแล้ว`)]);}
+    if(action==='confirm_bill'){await confirmBill(bill.bill_id,userId);await reply(event.replyToken,[message('บันทึกบิลเรียบร้อยแล้ว')]);}
     else {await deleteBill(bill.bill_id,userId);await reply(event.replyToken,[message('ยกเลิกบิลนี้แล้ว สามารถส่งรูปใหม่ได้เลยครับ')]);}
     return;
   }
