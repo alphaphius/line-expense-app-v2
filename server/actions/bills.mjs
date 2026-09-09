@@ -1,7 +1,7 @@
 import { config } from '../config.mjs';
 import { execute, one, select, transaction } from '../db.mjs';
 import { readBuffer, removeFile, storeBuffer, storeCompressedImage } from '../files.mjs';
-import { createSimpleBillDocx, createXlsx, DOCX_MIME, XLSX_MIME } from '../exports.mjs';
+import { createBillXlsx, createSimpleBillDocx, DOCX_MIME, XLSX_MIME } from '../exports.mjs';
 import { apiError, bool, clean, normalizeDate, normalizePeriod, nowSql, number, publicRow, token, uuid } from '../utils.mjs';
 import { enrichBill } from './masters.mjs';
 
@@ -79,12 +79,19 @@ async function getVendor(connection, ai, timestamp) {
 
 export async function submitBillPages(payload = {}) {
   const projectId=clean(payload.project_id,64); const companyId=clean(payload.company_id,64);
+  const source=clean(payload.source||'WEB',32).toUpperCase();
+  let sourceUserId=clean(payload.source_user_id,160),sourceUserName=clean(payload.source_user_name,255);
   const files=Array.isArray(payload.files)?payload.files:[];
   const expected=Math.max(1,Math.min(config.maxPagesPerBill,Number(payload.expected_pages)||files.length||1));
   if (!projectId || !companyId) throw apiError('REQUIRED_FIELDS','กรุณาเลือกโครงการและบริษัท');
   if (!files.length || files.length!==expected || files.length>config.maxPagesPerBill) throw apiError('INVALID_PAGE_COUNT',`กรุณาเลือก 1-${config.maxPagesPerBill} รูป และจำนวนหน้าต้องตรงกัน`);
   const [project,company,categories,companies]=await Promise.all([one('SELECT * FROM projects WHERE project_id=:id AND active=1',{id:projectId}),one('SELECT * FROM companies WHERE company_id=:id AND active=1',{id:companyId}),select('SELECT * FROM categories WHERE active=1'),select('SELECT * FROM companies WHERE active=1')]);
   if(!project||!company) throw apiError('MASTER_NOT_FOUND','ไม่พบโครงการหรือบริษัทที่เลือก');
+  if(source==='WEB'){
+    const owner=sourceUserId?await one('SELECT user_id,display_name FROM line_users WHERE user_id=:id',{id:sourceUserId}):null;
+    if(!owner)throw apiError('BILL_OWNER_REQUIRED','กรุณาเลือกเจ้าของบิลจากรายชื่อผู้ที่เคยส่งบิลผ่าน LINE');
+    sourceUserId=owner.user_id;sourceUserName=clean(owner.display_name,255)||'ผู้ส่งผ่าน LINE';
+  } else if(source==='LINE'&&!sourceUserId) throw apiError('LINE_OWNER_REQUIRED','ไม่พบ LINE userId ของผู้ส่งบิล');
   const billId=uuid(); const sessionId=uuid(); const stored=[];
   try {
     for(let index=0;index<files.length;index+=1){const file=files[index]||{}; stored.push(await storeCompressedImage('uploads',clean(file.name||file.fileName,180)||`bill-page-${index+1}.jpg`,file.dataUrl||file.data_url,{maxLongEdge:1800,quality:80}));}
@@ -106,12 +113,12 @@ export async function submitBillPages(payload = {}) {
     const timestamp=nowSql();
     await transaction(async connection=>{
       const vendorId=await getVendor(connection,analysis,timestamp);
-      await connection.execute('INSERT INTO upload_sessions (session_id,project_id,company_id,expected_pages,received_pages,status,source,source_user_id,source_context_id,created_at,expires_at,updated_at) VALUES (?,?,?,?,?,\'READY\',?,?,?,?,DATE_ADD(?,INTERVAL 24 HOUR),?)',[sessionId,projectId,companyId,expected,files.length,clean(payload.source||'WEB',32),clean(payload.source_user_id,160),clean(payload.source_context_id,160),timestamp,timestamp,timestamp]);
-      const values={ bill_id:billId,session_id:sessionId,project_id:projectId,company_id:companyId,category_id:clean(analysis.category_id,64),doc_type:clean(analysis.doc_type||'OTHER',80),document_no:clean(analysis.document_no,160),document_date:analysis.document_date,due_date:analysis.due_date,vendor_id:vendorId,vendor_name:clean(analysis.vendor_name,255),vendor_tax_id:taxId(analysis.vendor_tax_id),vendor_branch:clean(analysis.vendor_branch,160),vendor_address:clean(analysis.vendor_address,1000),buyer_name:clean(analysis.buyer_name,255),buyer_tax_id:buyerTax,buyer_address:clean(analysis.buyer_address,1000),currency:clean(analysis.currency||'THB',12),subtotal:number(analysis.subtotal),discount:number(analysis.discount),vat_rate:number(analysis.vat_rate),vat_amount:number(analysis.vat_amount),withholding_tax:number(analysis.withholding_tax),grand_total:number(analysis.grand_total),payment_method:clean(analysis.payment_method,120),description:clean(analysis.description,2000),notes:clean(analysis.notes,2000),page_count:expected,image_quality:clean(analysis.image_quality,40),quality_score:number(analysis.quality_score),needs_review:needsReview?1:0,review_reasons:JSON.stringify([...new Set(reasons)]),company_match:companyMatch?1:0,tax_id_match:taxMatch?1:0,address_match:addressMatch?1:0,duplicate_key:duplicateKey,status:needsReview?'NEEDS_REVIEW':'PENDING_CONFIRMATION',source:clean(payload.source||'WEB',32),source_user_id:clean(payload.source_user_id,160),source_context_id:clean(payload.source_context_id,160),folder_path:stored[0].relative.split('/').slice(0,-1).join('/'),created_at:timestamp,updated_at:timestamp };
+      await connection.execute('INSERT INTO upload_sessions (session_id,project_id,company_id,expected_pages,received_pages,status,source,source_user_id,source_context_id,created_at,expires_at,updated_at) VALUES (?,?,?,?,?,\'READY\',?,?,?,?,DATE_ADD(?,INTERVAL 24 HOUR),?)',[sessionId,projectId,companyId,expected,files.length,source,sourceUserId,clean(payload.source_context_id,160),timestamp,timestamp,timestamp]);
+      const values={ bill_id:billId,session_id:sessionId,project_id:projectId,company_id:companyId,category_id:clean(analysis.category_id,64),doc_type:clean(analysis.doc_type||'OTHER',80),document_no:clean(analysis.document_no,160),document_date:analysis.document_date,due_date:analysis.due_date,vendor_id:vendorId,vendor_name:clean(analysis.vendor_name,255),vendor_tax_id:taxId(analysis.vendor_tax_id),vendor_branch:clean(analysis.vendor_branch,160),vendor_address:clean(analysis.vendor_address,1000),buyer_name:clean(analysis.buyer_name,255),buyer_tax_id:buyerTax,buyer_address:clean(analysis.buyer_address,1000),currency:clean(analysis.currency||'THB',12),subtotal:number(analysis.subtotal),discount:number(analysis.discount),vat_rate:number(analysis.vat_rate),vat_amount:number(analysis.vat_amount),withholding_tax:number(analysis.withholding_tax),grand_total:number(analysis.grand_total),payment_method:clean(analysis.payment_method,120),description:clean(analysis.description,2000),notes:clean(analysis.notes,2000),page_count:expected,image_quality:clean(analysis.image_quality,40),quality_score:number(analysis.quality_score),needs_review:needsReview?1:0,review_reasons:JSON.stringify([...new Set(reasons)]),company_match:companyMatch?1:0,tax_id_match:taxMatch?1:0,address_match:addressMatch?1:0,duplicate_key:duplicateKey,status:needsReview?'NEEDS_REVIEW':'PENDING_CONFIRMATION',source,source_user_id:sourceUserId,source_user_name:sourceUserName,source_context_id:clean(payload.source_context_id,160),folder_path:stored[0].relative.split('/').slice(0,-1).join('/'),created_at:timestamp,updated_at:timestamp };
       const columns=Object.keys(values); await connection.execute(`INSERT INTO bills (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`,Object.values(values));
       for(let index=0;index<(analysis.items||[]).length;index+=1){const item=analysis.items[index];await connection.execute('INSERT INTO bill_items (item_id,bill_id,line_no,description,quantity,unit,unit_price,discount,vat_amount,amount,sku) VALUES (?,?,?,?,?,?,?,?,?,?,?)',[uuid(),billId,index+1,clean(item.description,1000),number(item.quantity),clean(item.unit,80),number(item.unit_price),number(item.discount),number(item.vat_amount),number(item.amount),clean(item.sku,120)]);}
       for(let index=0;index<stored.length;index+=1){const item=stored[index];await connection.execute('INSERT INTO bill_documents (doc_id,bill_id,session_id,page_no,file_path,file_name,mime_type,sha256,size_bytes,original_size_bytes,compression,width,height,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[uuid(),billId,sessionId,index+1,item.relative,item.relative.split('/').pop(),item.mime,item.sha256,item.size,item.originalSize,item.compression,item.width,item.height,timestamp]);}
-      await connection.execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (?,?,?,?,?,?,?,?)',[uuid(),'bill',billId,'AI_EXTRACT',clean(payload.source_user_id||'WEB',160),null,JSON.stringify(values),timestamp]);
+      await connection.execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (?,?,?,?,?,?,?,?)',[uuid(),'bill',billId,'AI_EXTRACT',sourceUserId||'WEB',null,JSON.stringify(values),timestamp]);
     });
     return getBillDetail(billId);
   }catch(error){await Promise.all(stored.map(item=>removeFile(item.relative)));throw error;}
@@ -128,9 +135,24 @@ export const confirmBill=(id,actor)=>setBillStatus(id,'CONFIRMED',actor);
 export const deleteBill=(id,actor)=>setBillStatus(id,'REJECTED',actor);
 export const restoreBill=(id,actor)=>setBillStatus(id,'NEEDS_REVIEW',actor);
 
-async function monthlyBills(period){const month=normalizePeriod(period);const rows=await select("SELECT b.*,p.project_name,co.company_name,c.category_name FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id WHERE b.status<>'REJECTED' AND DATE_FORMAT(COALESCE(b.document_date,b.created_at),'%Y-%m')=:month ORDER BY b.document_date,b.created_at",{month});return{month,rows:rows.map(enrichBill)};}
+function thaiLongDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return'-';const[y,m,d]=String(value).split('-').map(Number),date=new Date(Date.UTC(y,m-1,d)),days=['วันอาทิตย์','วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'],months=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];return`${days[date.getUTCDay()]} ที่ ${d} ${months[m-1]} ${y+543}`;}
 
-export async function exportMonthlyBillExcel(period,createTicket){const{month,rows}=await monthlyBills(period);const headers=['ลำดับ','วันที่เอกสาร','ผู้ขาย','เจ้าของบิล/ผู้ส่ง','รายการของ','โครงการ','บริษัท','หมวดหมู่','ยอดก่อนภาษี','VAT','หัก ณ ที่จ่าย','ยอดสุทธิ'];const values=rows.map((row,index)=>[index+1,row.document_date||'',row.vendor_name||'',row.source_user_id||'เว็บแอป',row.description||'',row.project_name||'',row.company_name||'',row.category_name||'',number(row.subtotal),number(row.vat_amount),number(row.withholding_tax),number(row.grand_total)]);const total=rows.reduce((sum,row)=>sum+number(row.grand_total),0);values.push(['','','','','','','','รวมทั้งหมด','','',total]);const buffer=await createXlsx('รายการบิล',headers,values,[8,14,30,24,32,28,32,24,16,14,16,16]);return createTicket(buffer,`สรุปบิล_${month}.xlsx`,XLSX_MIME,rows.length);}
-export async function exportMonthlyBillWord(period,createTicket){const{month,rows}=await monthlyBills(period);const buffer=await createSimpleBillDocx(`สรุปรายการบิล ${month}`,rows);return createTicket(buffer,`สรุปบิล_${month}.docx`,DOCX_MIME,rows.length);}
+async function billsForExport(input={}){
+  const selection=typeof input==='string'?{month:input}:(input&&typeof input==='object'?input:{}),params={},where=[];
+  if(selection.status){where.push('b.status=:status');params.status=clean(selection.status,32);}else where.push("b.status<>'REJECTED'");
+  if(selection.project_id){where.push('b.project_id=:project');params.project=clean(selection.project_id,64);}
+  if(selection.company_id){where.push('b.company_id=:company');params.company=clean(selection.company_id,64);}
+  if(selection.category_id){where.push('b.category_id=:category');params.category=clean(selection.category_id,64);}
+  if(selection.date_from){where.push('COALESCE(b.document_date,DATE(b.created_at))>=:dateFrom');params.dateFrom=sqlDate(selection.date_from);}
+  if(selection.date_to){where.push('COALESCE(b.document_date,DATE(b.created_at))<=:dateTo');params.dateTo=sqlDate(selection.date_to);}
+  if(selection.query){where.push("LOWER(CONCAT_WS(' ',b.vendor_name,b.vendor_tax_id,b.buyer_name,b.description,b.notes,b.source_user_name,p.project_name,co.company_name,c.category_name)) LIKE :query");params.query=`%${clean(selection.query,180).toLowerCase()}%`;}
+  if(selection.month){where.push("DATE_FORMAT(COALESCE(b.document_date,b.created_at),'%Y-%m')=:month");params.month=normalizePeriod(selection.month);}
+  const rows=await select(`SELECT b.*,p.project_name,co.company_name,c.category_name,COALESCE(NULLIF(b.source_user_name,''),NULLIF(lu.display_name,''),IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_name,items.item_descriptions FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id LEFT JOIN (SELECT bill_id,GROUP_CONCAT(NULLIF(description,'') ORDER BY line_no SEPARATOR ', ') AS item_descriptions FROM bill_items GROUP BY bill_id) items ON items.bill_id=b.bill_id WHERE ${where.join(' AND ')} ORDER BY COALESCE(b.document_date,DATE(b.created_at)),b.created_at`,params);
+  if(rows.length>5000)throw apiError('EXPORT_LIMIT','Export ได้สูงสุด 5,000 บิลต่อครั้ง กรุณาเพิ่มตัวกรอง');
+  return rows.map(row=>({...enrichBill(row),document_date_thai:thaiLongDate(row.document_date)}));
+}
 
-export async function backfillLineUsernames(){return{updated:0,skipped:true,message:'ระบบ LINE ถูกพักไว้ในเฟส NAS Web App และข้อมูลเดิมยังคงอยู่'};}
+function exportName(selection,extension){const period=typeof selection==='string'?normalizePeriod(selection):(selection?.month?normalizePeriod(selection.month):new Date().toISOString().slice(0,10));return`สรุปบิล_${period}.${extension}`;}
+
+export async function exportMonthlyBillExcel(selection,createTicket){const rows=await billsForExport(selection);const buffer=await createBillXlsx(rows);return createTicket(buffer,exportName(selection,'xlsx'),XLSX_MIME,rows.length);}
+export async function exportMonthlyBillWord(selection,createTicket){const rows=await billsForExport(selection);if(rows.length>300)throw apiError('EXPORT_LIMIT','DOCX ส่งออกได้สูงสุด 300 บิลต่อครั้ง กรุณาเพิ่มตัวกรอง');for(const row of rows){const documents=await select('SELECT file_path,file_name FROM bill_documents WHERE bill_id=:id ORDER BY page_no',{id:row.bill_id});row.documents=[];for(const document of documents)row.documents.push({name:document.file_name,buffer:await readBuffer(document.file_path)});}const buffer=await createSimpleBillDocx('',rows);return createTicket(buffer,exportName(selection,'docx'),DOCX_MIME,rows.length);}

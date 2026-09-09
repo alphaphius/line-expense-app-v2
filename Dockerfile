@@ -13,7 +13,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     PUBLIC_DIR=/app/dist
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl tini libreoffice-writer fonts-thai-tlwg \
+  && apt-get install -y --no-install-recommends ca-certificates curl tini libreoffice-writer fonts-noto-core fonts-thai-tlwg \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
@@ -26,4 +26,3 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 CMD curl -fsS http://127.0.0.1:8080/api/health || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "server/server.mjs"]
-

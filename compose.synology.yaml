@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: workhub:4.2.0
+    image: workhub:4.3.0
     container_name: workhub
     restart: unless-stopped
     env_file:

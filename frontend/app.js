@@ -1,4 +1,4 @@
-  const state = { masters: { projects: [], companies: [], categories: [], vendors: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
+  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
   const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
   const protectedViews = ['receipts','payroll','tasks'];
@@ -57,6 +57,8 @@
     if (!exportMonth.value) exportMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
     setOptions('upload-project', state.masters.projects, 'project_id', 'project_name', 'เลือกโครงการ');
     setOptions('upload-company', state.masters.companies, 'company_id', 'company_name', 'เลือกบริษัท');
+    setOptions('upload-owner', state.masters.billOwners || [], 'user_id', 'display_name', (state.masters.billOwners || []).length ? 'เลือกเจ้าของบิล' : 'ยังไม่มีรายชื่อจาก LINE');
+    if ((state.masters.billOwners || []).length === 1) document.getElementById('upload-owner').value = state.masters.billOwners[0].user_id;
     [1, 2].forEach(slot => {
       setOptions(`quick-project-${slot}`, state.masters.projects, 'project_id', 'project_name', 'เลือกโครงการ');
       setOptions(`quick-company-${slot}`, state.masters.companies, 'company_id', 'company_name', 'เลือกบริษัท');
@@ -113,7 +115,7 @@
     document.getElementById('review-inbox-count').textContent = reviewCount.toLocaleString('th-TH');
     document.getElementById('bill-table').innerHTML = data.bills.length ? data.bills.map(bill => `
       <tr><td>${escapeHtml(thaiDate(bill.document_date))}</td><td><div class="font-medium">${escapeHtml(bill.vendor_name || '-')}</div><div class="text-xs text-slate-400">${escapeHtml(bill.document_no || '')}</div></td>
-      <td>${escapeHtml(bill.project_name)}</td><td>${escapeHtml(bill.category_name)}</td><td>${escapeHtml(bill.source_user_id || (bill.source === 'LINE' ? 'LINE User' : 'เว็บแอป'))}</td><td class="font-medium">${money(bill.grand_total)}</td>
+      <td>${escapeHtml(bill.project_name)}</td><td>${escapeHtml(bill.category_name)}</td><td>${escapeHtml(bill.source_user_name || bill.source_user_id || (bill.source === 'LINE' ? 'LINE User' : 'เว็บแอป'))}</td><td class="font-medium">${money(bill.grand_total)}</td>
       <td>${statusBadge(bill.status)}</td><td><button class="text-emerald-700" data-bill="${escapeHtml(bill.bill_id)}">ดู/แก้ไข</button></td></tr>`).join('')
       : `<tr><td colspan="8" class="py-10 text-center text-slate-400">ไม่พบบิลใน ${escapeHtml(thaiMonthPeriod(currentMonth.period))} ตามตัวกรองที่เลือก</td></tr>`;
   }
@@ -361,7 +363,7 @@
       <tr class="hover:bg-slate-50"><td>${escapeHtml(thaiDate(bill.document_date))}</td>
       <td><button class="text-left font-medium text-emerald-700 hover:underline" data-bill="${escapeHtml(bill.bill_id)}">${escapeHtml(bill.vendor_name || 'ไม่ทราบร้านค้า')}</button><div class="text-xs text-slate-400">${escapeHtml(bill.document_no || '-')}</div></td>
       <td>${escapeHtml(bill.project_name)}</td><td class="max-w-52 truncate" title="${escapeHtml(bill.company_name)}">${escapeHtml(bill.company_name)}</td><td>${escapeHtml(bill.category_name)}</td>
-      <td>${escapeHtml(bill.source_user_id || '-')}</td><td class="font-medium">${money(bill.grand_total)}</td><td>${statusBadge(bill.status)}</td>
+      <td>${escapeHtml(bill.source_user_name || bill.source_user_id || '-')}</td><td class="font-medium">${money(bill.grand_total)}</td><td>${statusBadge(bill.status)}</td>
       <td><div class="flex items-center gap-2"><button class="rounded-lg border border-slate-200 px-3 py-1 text-xs" data-bill="${escapeHtml(bill.bill_id)}">รายละเอียด</button>${bill.status === 'REJECTED' ? `<button class="rounded-lg border border-amber-200 px-3 py-1 text-xs text-amber-700" data-restore-bill="${escapeHtml(bill.bill_id)}">กู้คืน</button>` : `<button class="rounded-lg border border-red-200 px-3 py-1 text-xs text-red-600" data-delete-bill="${escapeHtml(bill.bill_id)}">ลบ</button>`}</div></td></tr>`).join('')
       : '<tr><td colspan="9" class="py-12 text-center text-slate-400">ไม่พบรายการตามเงื่อนไข</td></tr>';
   }
@@ -528,6 +530,8 @@
     event.preventDefault();
     const files = [...document.getElementById('bill-files').files];
     const expected = Number(document.getElementById('expected-pages').value);
+    const ownerId = document.getElementById('upload-owner').value;
+    if (!ownerId) return Swal.fire('กรุณาเลือกเจ้าของบิล', 'รายชื่อจะสร้างเมื่อบุคคลนั้นเคยส่งบิลผ่าน LINE อย่างน้อยหนึ่งครั้ง', 'warning');
     if (files.length !== expected) return Swal.fire('จำนวนหน้าไม่ตรงกัน', `เลือก ${files.length} ไฟล์ แต่ระบุ ${expected} หน้า`, 'warning');
     if (files.some(file => file.size > 8 * 1024 * 1024)) return Swal.fire('ไฟล์ใหญ่เกินไป', 'ไฟล์ละไม่เกิน 8 MB', 'warning');
     const submitButton = event.submitter || event.currentTarget.querySelector('[type="submit"]');
@@ -546,7 +550,7 @@
       const bill = await window.V2Api.callWithRequestId('submitBillPages', state.uploadRequestId, {
         project_id: document.getElementById('upload-project').value,
         company_id: document.getElementById('upload-company').value,
-        expected_pages: expected, files: encodedFiles, source: 'WEB', source_user_id: '',
+        expected_pages: expected, files: encodedFiles, source: 'WEB', source_user_id: ownerId,
       });
       state.uploadRequestId = '';
       document.getElementById('upload-form').reset(); document.getElementById('file-list').innerHTML = ''; await bootstrap();
@@ -605,7 +609,7 @@
         ${detailCell('สถานะ',bill.status)}${detailCell('เหตุผลที่ต้องตรวจ',bill.review_reasons||'ไม่มี',true)}
       </div></section>
       <section class="rounded-2xl bg-slate-50 p-4"><h4 class="mb-3 font-semibold text-slate-700">รายละเอียดเพิ่มเติม</h4><div class="grid gap-3 sm:grid-cols-2">
-        ${detailCell('คำอธิบาย',bill.description,true)}${detailCell('หมายเหตุ',bill.notes,true)}${detailCell('วิธีชำระเงิน',bill.payment_method)}${detailCell('สกุลเงิน',bill.currency)}${detailCell('ผู้ส่ง',bill.source_user_id)}${detailCell('ช่องทาง',bill.source)}
+        ${detailCell('คำอธิบาย',bill.description,true)}${detailCell('หมายเหตุ',bill.notes,true)}${detailCell('วิธีชำระเงิน',bill.payment_method)}${detailCell('สกุลเงิน',bill.currency)}${detailCell('เจ้าของบิล',bill.source_user_name||bill.source_user_id)}${detailCell('ช่องทาง',bill.source)}
       </div></section>
       <section class="rounded-2xl bg-slate-50 p-4"><h4 class="mb-3 font-semibold text-slate-700">รายการสินค้า/บริการ</h4>${items?`<div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr><th>#</th><th>รายการ</th><th>จำนวน</th><th>ราคาต่อหน่วย</th><th>รวม</th></tr></thead><tbody>${items}</tbody></table></div>`:'<p class="text-slate-400">ไม่มีรายการย่อย</p>'}</section>
       <section class="rounded-2xl bg-slate-50 p-4"><h4 class="mb-3 font-semibold text-slate-700">รูปและเอกสารต้นฉบับ</h4><div class="flex flex-wrap gap-2">${documents||'<span class="text-slate-400">ไม่พบไฟล์เอกสาร</span>'}</div></section>
@@ -650,23 +654,45 @@
 
   const monthlyExportSpecs = {
     word: {
-      create:month => gas('exportMonthlyBillWord', month), buttonId:'export-monthly-btn', label:'DOCX',
+      create:selection => gas('exportMonthlyBillWord', selection), buttonId:'export-monthly-btn', label:'DOCX',
       buttonLabel:'Export DOCX', loadingLabel:'กำลังสร้าง DOCX…',
       busyTitle:'กำลังจัดรูปบิลลง DOCX…', fileDescription:'รูปบิลที่จัดหน้าและบีบอัดแล้ว',
     },
     excel: {
-      create:month => gas('exportMonthlyBillExcel', month), buttonId:'export-excel-btn', label:'Excel',
+      create:selection => gas('exportMonthlyBillExcel', selection), buttonId:'export-excel-btn', label:'Excel',
       buttonLabel:'Export Excel', loadingLabel:'กำลังสร้าง Excel…',
       busyTitle:'กำลังสร้างตาราง Excel…', fileDescription:'ตารางสรุปรายการบิล',
     },
   };
   const activeMonthlyExports = new Set();
 
+  function selectedLabel(id) {
+    const element=document.getElementById(id),option=element&&element.options[element.selectedIndex];
+    return option ? option.textContent.trim() : '';
+  }
+
+  function exportSelection() {
+    const filters={...currentBillFilters(),query:document.getElementById('bill-search').value.trim()};
+    const conditions=[];
+    if(filters.query)conditions.push(`ค้นหา: ${filters.query}`);
+    if(filters.status)conditions.push(`สถานะ: ${selectedLabel('bill-status')}`);
+    if(filters.project_id)conditions.push(`โครงการ: ${selectedLabel('bill-project-filter')}`);
+    if(filters.company_id)conditions.push(`บริษัท: ${selectedLabel('bill-company-filter')}`);
+    if(filters.category_id)conditions.push(`หมวด: ${selectedLabel('bill-category-filter')}`);
+    if(filters.date_from)conditions.push(`ตั้งแต่วันที่: ${thaiDate(filters.date_from)}`);
+    if(filters.date_to)conditions.push(`ถึงวันที่: ${thaiDate(filters.date_to)}`);
+    if(!conditions.length){const now=new Date(),month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;return{selection:{month},conditions:[`เดือนปัจจุบัน: ${thaiMonthPeriod(month)}`]};}
+    return{selection:filters,conditions};
+  }
+
   async function exportMonthlyFile(kind) {
     const spec = monthlyExportSpecs[kind];
     if (!spec || activeMonthlyExports.has(kind)) return;
-    const month = document.getElementById('export-month').value;
-    if (!/^\d{4}-\d{2}$/.test(month)) return Swal.fire('กรุณาเลือกเดือน','','warning');
+    const exportPlan=exportSelection();
+    let preview;
+    try{preview=await gas('listBills',{...exportPlan.selection,page:1,page_size:10});}catch(error){return Swal.fire('ตรวจสอบรายการ Export ไม่สำเร็จ',error.message,'error');}
+    const confirmation=await Swal.fire({icon:'question',title:`ยืนยัน Export ${spec.label}`,html:`<div class="export-confirmation"><p>ระบบจะส่งออกตามเงื่อนไขต่อไปนี้</p><ul>${exportPlan.conditions.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul><strong>${Number(preview.total||0).toLocaleString('th-TH')} บิล</strong></div>`,showCancelButton:true,confirmButtonText:`สร้าง ${spec.label}`,cancelButtonText:'กลับไปตรวจตัวกรอง',confirmButtonColor:'#8f5f42'});
+    if(!confirmation.isConfirmed)return;
     const button = document.getElementById(spec.buttonId);
     const label = button.querySelector('[data-export-label]');
     activeMonthlyExports.add(kind);
@@ -675,13 +701,13 @@
     if (label) label.textContent = spec.loadingLabel;
     showActivityToast(spec.busyTitle, 'กำลังเตรียมเฉพาะไฟล์ที่เลือก คุณยังเปิดดูส่วนอื่นได้');
     try {
-      const file = await spec.create(month);
+      const file = await spec.create(exportPlan.selection);
       let downloadInProgress = false;
       showActivityToast(`${spec.label} พร้อมดาวน์โหลด`, `${Number(file.count || 0).toLocaleString('th-TH')} บิล · ${formatFileSize(file.sizeBytes)}`, 'success');
       await Swal.fire({
         icon:'success',
         title:`${spec.label} พร้อมดาวน์โหลด`,
-        html:`<p class="mb-2 text-sm text-slate-500">พบ ${Number(file.count || 0).toLocaleString('th-TH')} บิลในเดือนที่เลือก</p><p class="mb-4 text-xs text-slate-400">ดาวน์โหลดจาก NAS ผ่านหน้าแอปได้โดยตรง และรองรับไฟล์ขนาดใหญ่กว่า 45 MB</p><div class="export-download-grid export-download-grid--single"><a href="#" role="button" data-export-download="${kind}">ดาวน์โหลด ${spec.label}<small data-export-progress="${kind}">${spec.fileDescription} · ${formatFileSize(file.sizeBytes)}</small></a></div>`,
+        html:`<p class="mb-2 text-sm text-slate-500">พบ ${Number(file.count || 0).toLocaleString('th-TH')} บิลตามเงื่อนไขที่ยืนยัน</p><p class="mb-4 text-xs text-slate-400">ดาวน์โหลดจาก NAS ผ่านหน้าแอปได้โดยตรง และรองรับไฟล์ขนาดใหญ่กว่า 45 MB</p><div class="export-download-grid export-download-grid--single"><a href="#" role="button" data-export-download="${kind}">ดาวน์โหลด ${spec.label}<small data-export-progress="${kind}">${spec.fileDescription} · ${formatFileSize(file.sizeBytes)}</small></a></div>`,
         confirmButtonText:'ปิด',
         confirmButtonColor:'#8f5f42',
         width:520,
@@ -841,6 +867,22 @@
     }
   }
 
+  async function openBillForEdit(billId) {
+    showActivityToast('กำลังเปิดฟอร์มแก้ไข…', 'โหลดข้อมูลและรูปบิลรายการที่เลือก');
+    try {
+      const bill=await gas('getBillDetail',billId);
+      hideActivityToast();
+      switchView('bills');
+      await editBill(bill);
+      if(history.replaceState)history.replaceState({},document.title,location.pathname);
+      return true;
+    } catch(error) {
+      hideActivityToast();
+      await Swal.fire({icon:'error',title:'เปิดบิลเพื่อแก้ไขไม่ได้',text:error.message});
+      return false;
+    }
+  }
+
   async function startPendingReviewWorkflow(initialBillId) {
     if (state.reviewWorkflowActive) return;
     state.reviewWorkflowActive = true;
@@ -921,14 +963,14 @@
 
   async function loadSystemStatus() {
     try { const s = await gas('getSystemStatus'); const diagnostics = s.lineDiagnostics || {}; const gemini = s.geminiDiagnostics || {}; document.getElementById('system-status').innerHTML = [
-      ['ฐานข้อมูล',s.spreadsheet,true],['พื้นที่จัดเก็บ NAS',s.folder,true],['Gemini API Key',gemini.message || (s.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!gemini.valid],['LINE (เฟสถัดไป)',s.lineConfigured?'ตั้งค่าแล้ว':'พักไว้ก่อน',true],['AI Model',s.model,true]
+      ['ฐานข้อมูล',s.spreadsheet,true],['พื้นที่จัดเก็บ NAS',s.folder,true],['Gemini API Key',gemini.message || (s.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!gemini.valid],['LINE Messaging API',s.lineConfigured?'ตั้งค่าแล้ว':'ยังตั้งค่าไม่ครบ',!!s.lineConfigured],['AI Model',s.model,true]
     ].map(item=>`<div class="flex items-center justify-between rounded-xl bg-slate-50 p-4"><div><p class="text-xs text-slate-400">${item[0]}</p><p class="text-sm font-medium">${escapeHtml(item[1])}</p></div><span class="h-3 w-3 rounded-full ${item[2]?'bg-emerald-500':'bg-amber-400'}"></span></div>`).join('') +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Webhook URL</p><p class="mt-1 break-all text-xs">${escapeHtml((diagnostics.webhook||{}).endpoint || '-')}</p></div>` +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">LIFF URL</p><p class="mt-1 break-all text-xs">${escapeHtml(diagnostics.liff_url || '-')}</p></div>` +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">ลิงก์สำรอง Android/Samsung (เปิด Chrome)</p><p class="mt-1 break-all text-xs">${escapeHtml(diagnostics.android_external_url || '-')}</p></div>` +
     ((diagnostics.rich_menus||[]).map(menu=>`<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Rich Menu: ${escapeHtml(menu.name)}</p>${(menu.uri_actions||[]).map(uri=>`<p class="mt-1 break-all text-xs">${escapeHtml(uri)}</p>`).join('')||'<p class="mt-1 text-xs text-amber-600">ไม่พบ URI action</p>'}</div>`).join('')) +
     ((diagnostics.warnings||[]).length ? `<div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><p class="font-semibold">สิ่งที่ต้องแก้</p><ul class="mt-2 list-disc pl-5">${diagnostics.warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul></div>` : '<div class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">ไม่พบข้อผิดพลาดในการตั้งค่า LINE/LIFF</div>') +
-    '<button id="backfill-users" class="primary-btn w-full" disabled>LINE จะเปิดใช้งานในเฟสถัดไป</button>'; } catch(error) { document.getElementById('system-status').textContent = error.message; }
+    '<button id="backfill-users" class="primary-btn w-full">อัปเดตชื่อผู้ส่งจาก LINE</button>'; } catch(error) { document.getElementById('system-status').textContent = error.message; }
   }
 
   document.addEventListener('click', async event => {
@@ -1008,7 +1050,8 @@
       await bootstrap();
       const linkedBillId = window.INITIAL_BILL_ID || '';
       window.setTimeout(() => {
-        startPendingReviewWorkflow(linkedBillId).catch(showFatal);
+        if(linkedBillId&&window.INITIAL_BILL_EDIT)openBillForEdit(linkedBillId).catch(showFatal);
+        else startPendingReviewWorkflow(linkedBillId).catch(showFatal);
       }, 450);
     } catch (error) { showFatal(error); }
   }

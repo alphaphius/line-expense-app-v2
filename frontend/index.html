@@ -32,39 +32,42 @@
   </div>
 
   <div class="min-h-screen lg:flex">
-    <aside class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-64">
-      <div class="flex items-center gap-3 px-5 py-5">
-        <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">WH</div>
-        <div><h1 class="font-semibold leading-tight">WorkHub</h1><p class="text-xs text-slate-400">Operations workspace</p></div>
+    <aside class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-72">
+      <div class="sidebar-brand-row">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">WH</div>
+          <div class="min-w-0"><h1 class="font-semibold leading-tight">WorkHub</h1><p class="text-xs text-slate-400">Operations workspace</p></div>
+        </div>
+        <img class="header-gfe-logo" src="https://www.gfe.co.th/wp-content/uploads/2018/07/gfe-logo-150.jpg" alt="GFE" loading="lazy" referrerpolicy="no-referrer">
       </div>
+      <p class="sidebar-section-label">ส่วนงานหลัก</p>
+      <nav class="product-nav" aria-label="ส่วนงานหลัก">
+        <button class="product-nav__button active" data-view="dashboard" data-product="expenses"><span>ค่าใช้จ่าย</span><small>Expense</small></button>
+        <button class="product-nav__button" data-view="receipts" data-product="receipts"><span>เอกสารใบรับเงิน</span><small>Payment receipts</small></button>
+        <button class="product-nav__button" data-view="payroll" data-product="payroll"><span>สรุปค่าแรง</span><small>Payroll</small></button>
+        <button class="product-nav__button" data-view="tasks" data-product="tasks"><span>Task manager</span><small>Tasks</small></button>
+      </nav>
       <p class="sidebar-section-label">เมนูค่าใช้จ่าย</p>
-      <nav class="flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2">
+      <nav class="expense-nav flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2" aria-label="เมนูค่าใช้จ่าย">
         <button class="nav-btn active" data-view="dashboard">ภาพรวม</button>
         <button class="nav-btn" data-view="bills">บิลทั้งหมด</button>
         <button class="nav-btn" data-view="upload">เพิ่มบิล</button>
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.2.0 NAS · WorkHub · ID OCR Offline</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.3.0 NAS · WorkHub · ID OCR Offline</div>
     </aside>
 
-    <main class="app-main w-full lg:ml-64">
+    <main class="app-main w-full lg:ml-72">
       <header class="app-header border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur lg:px-8">
         <div class="mx-auto max-w-7xl">
           <div class="flex items-center justify-between gap-3">
             <div class="app-header-copy"><p class="text-sm text-slate-500">WorkHub</p><h2 id="view-title" class="text-xl font-semibold">ภาพรวมค่าใช้จ่าย</h2></div>
             <div class="app-header-actions">
-              <img class="header-gfe-logo" src="https://www.gfe.co.th/wp-content/uploads/2018/07/gfe-logo-150.jpg" alt="GFE" loading="lazy" referrerpolicy="no-referrer">
               <button id="open-database-btn" class="database-access-btn" type="button" aria-label="ตรวจสอบฐานข้อมูล MariaDB">ฐานข้อมูล</button>
               <button id="refresh-btn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">รีเฟรช</button>
             </div>
           </div>
-          <nav class="product-nav" aria-label="ส่วนงานหลัก">
-            <button class="product-nav__button active" data-view="dashboard" data-product="expenses"><span>ค่าใช้จ่าย</span><small>Expense</small></button>
-            <button class="product-nav__button" data-view="receipts" data-product="receipts"><span>เอกสารใบรับเงิน</span><small>Payment receipts</small></button>
-            <button class="product-nav__button" data-view="payroll" data-product="payroll"><span>สรุปค่าแรง</span><small>Payroll</small></button>
-            <button class="product-nav__button" data-view="tasks" data-product="tasks"><span>Task manager</span><small>Tasks</small></button>
-          </nav>
         </div>
       </header>
 
@@ -194,8 +197,8 @@
               <button id="search-bills-btn" class="primary-btn">ค้นหา</button>
             </div>
             <div class="monthly-export mt-4 border-t border-slate-100 pt-4">
-              <div class="min-w-0 flex-1"><p class="text-sm font-semibold">ส่งออกเอกสารประจำเดือน</p><p class="mt-1 text-xs text-slate-500">เลือกสร้างเฉพาะไฟล์ที่ต้องการ เพื่อลดเวลารอและขนาดการดาวน์โหลด</p></div>
-              <label class="text-xs text-slate-500">เลือกเดือน<input id="export-month" type="month" class="field mt-1"></label>
+              <div class="min-w-0 flex-1"><p class="text-sm font-semibold">ส่งออกตามข้อมูลที่กำลังแสดง</p><p class="mt-1 text-xs text-slate-500">ถ้าไม่ได้ใช้ตัวกรอง ระบบจะส่งออกบิลทั้งหมดของเดือนปัจจุบัน และจะแสดงเงื่อนไขให้ยืนยันก่อนทุกครั้ง</p></div>
+              <input id="export-month" type="month" class="hidden" tabindex="-1" aria-hidden="true">
               <div class="monthly-export__actions" role="group" aria-label="เลือกรูปแบบไฟล์ส่งออก">
                 <button id="export-monthly-btn" type="button" class="export-btn export-btn--docx"><span data-export-label>Export DOCX</span><small>รวมรูปบิล</small></button>
                 <button id="export-excel-btn" type="button" class="export-btn export-btn--excel"><span data-export-label>Export Excel</span><small>ตารางสรุป</small></button>
@@ -224,13 +227,14 @@
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="label">โครงการ<select id="upload-project" class="field mt-2" required></select></label>
                 <label class="label">บริษัทผู้ซื้อ<select id="upload-company" class="field mt-2" required></select></label>
+                <label class="label md:col-span-2">เจ้าของบิล<select id="upload-owner" class="field mt-2" required></select><small class="mt-1 block text-xs text-slate-500">รายชื่อมาจากผู้ที่เคยส่งบิลผ่าน LINE</small></label>
               </div>
               <label class="label block">บิลชุดนี้มีกี่หน้า
                 <input id="expected-pages" class="field mt-2" type="number" min="1" max="6" value="1" required>
               </label>
               <label id="drop-zone" class="block cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center transition hover:border-emerald-500 hover:bg-emerald-50">
                 <input id="bill-files" class="hidden" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required>
-                <div class="text-3xl">📄</div><p class="mt-2 font-medium">กดเพื่อเลือกรูปหรือ PDF</p><p class="mt-1 text-xs text-slate-500">สูงสุด 8 หน้า · ไฟล์ละไม่เกิน 8 MB</p>
+                <div class="text-3xl">📄</div><p class="mt-2 font-medium">กดเพื่อเลือกรูปหรือ PDF</p><p class="mt-1 text-xs text-slate-500">สูงสุด 6 หน้า · ไฟล์ละไม่เกิน 8 MB</p>
               </label>
               <div id="file-list" class="grid gap-3 sm:grid-cols-2"></div>
               <button class="primary-btn w-full py-3" type="submit">วิเคราะห์บิลด้วย Gemini</button>
@@ -255,7 +259,7 @@
                   <label class="label">จำนวนหน้าปกติ
                     <select id="quick-page-count-1" class="field mt-2" required>
                       <option value="1">1 หน้า</option><option value="2">2 หน้า</option><option value="3">3 หน้า</option><option value="4">4 หน้า</option>
-                      <option value="5">5 หน้า</option><option value="6">6 หน้า</option><option value="7">7 หน้า</option><option value="8">8 หน้า</option>
+                      <option value="5">5 หน้า</option><option value="6">6 หน้า</option>
                     </select>
                   </label>
                   <label class="label">โครงการ<select id="quick-project-1" class="field mt-2" required></select></label>
@@ -273,7 +277,7 @@
                   <label class="label">จำนวนหน้าปกติ
                     <select id="quick-page-count-2" class="field mt-2" required>
                       <option value="1">1 หน้า</option><option value="2">2 หน้า</option><option value="3">3 หน้า</option><option value="4">4 หน้า</option>
-                      <option value="5">5 หน้า</option><option value="6">6 หน้า</option><option value="7">7 หน้า</option><option value="8">8 หน้า</option>
+                      <option value="5">5 หน้า</option><option value="6">6 หน้า</option>
                     </select>
                   </label>
                   <label class="label">โครงการ<select id="quick-project-2" class="field mt-2" required></select></label>

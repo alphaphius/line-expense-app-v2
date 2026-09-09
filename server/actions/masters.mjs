@@ -40,13 +40,14 @@ export async function ensureDefaults() {
 }
 
 export async function listMasterData() {
-  const [projects, companies, categories, vendors] = await Promise.all([
+  const [projects, companies, categories, vendors, billOwners] = await Promise.all([
     select('SELECT * FROM projects WHERE active = 1 ORDER BY project_name'),
     select('SELECT * FROM companies WHERE active = 1 ORDER BY company_name'),
     select('SELECT * FROM categories WHERE active = 1 ORDER BY category_name'),
     select('SELECT * FROM vendors ORDER BY use_count DESC, last_used_at DESC LIMIT 500'),
+    select("SELECT user_id, display_name, picture_url, last_seen_at FROM line_users WHERE user_id <> '' ORDER BY display_name, last_seen_at DESC LIMIT 500"),
   ]);
-  return { projects: projects.map(publicRow), companies: companies.map(publicRow), categories: categories.map(publicRow), vendors: vendors.map(publicRow) };
+  return { projects: projects.map(publicRow), companies: companies.map(publicRow), categories: categories.map(publicRow), vendors: vendors.map(publicRow), billOwners: billOwners.map(publicRow) };
 }
 
 export async function saveMasterData(type, payload = {}, actor = 'WEB') {
@@ -90,6 +91,8 @@ export async function deleteMasterData(type, id, actor = 'WEB') {
 }
 
 function ownerLabel(bill) {
+  const sourceName = clean(bill.source_user_name, 255);
+  if (sourceName) return sourceName;
   const sourceUser = clean(bill.source_user_id, 120);
   if (sourceUser && !/^U[0-9a-f]{20,64}$/i.test(sourceUser)) return sourceUser;
   return clean(bill.source).toUpperCase() === 'LINE' ? 'ผู้ส่งผ่าน LINE' : 'เว็บแอป';
@@ -118,7 +121,7 @@ export async function listBills(filters = {}) {
   if (filters.date_to) { where.push('COALESCE(b.document_date, DATE(b.created_at)) <= :toDate'); params.toDate = clean(filters.date_to, 10); }
   if (filters.year) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%Y') = :year"); params.year = clean(filters.year, 4); }
   if (filters.month) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%m') = :month"); params.month = clean(filters.month, 2).padStart(2, '0'); }
-  if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }
+  if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, b.source_user_name, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }
   const from = `FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
   const count = await one(`SELECT COUNT(*) AS total ${from}`, params);
   const allowedSorts = new Set(['document_date','created_at','grand_total','vendor_name','status','document_no']);

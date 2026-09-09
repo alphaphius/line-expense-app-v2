@@ -31,6 +31,7 @@ const expectedV1Ids = [
   'quick-settings-status-1', 'quick-settings-status-2', 'refresh-btn',
   'review-inbox', 'review-inbox-count', 'search-bills-btn', 'system-status',
   'upload-company', 'upload-form', 'upload-project', 'upload-quick-options',
+  'upload-owner',
   'upload-quick-preset', 'uploader-summary-bars', 'uploader-summary-card',
   'uploader-summary-period', 'vendor-suggestions', 'vendor-tags', 'view-bills',
   'view-dashboard', 'view-masters', 'view-system', 'view-title', 'view-upload',
@@ -39,8 +40,8 @@ const expectedV1Ids = [
 const expectedV1Calls = [
   'backfillLineUsernames', 'clearQuickSettings', 'confirmBill', 'deleteBill',
   'deleteMasterData', 'exportMonthlyBillExcel', 'exportMonthlyBillWord',
-  'getBillDetail', 'getBillDetail', 'getBillDocumentPreview', 'getBootstrapData',
-  'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills',
+  'getBillDetail', 'getBillDetail', 'getBillDetail', 'getBillDocumentPreview', 'getBootstrapData',
+  'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills', 'listBills',
   'listPendingReviewBills', 'restoreBill', 'saveMasterData', 'saveQuickSettings',
   'submitBillPages', 'updateBill', 'verifyDatabaseAccess',
 ];
@@ -53,6 +54,8 @@ test('GitHub Pages HTML preserves every V1 screen element id', async () => {
   ['view-receipts','view-payroll','view-tasks','receipt-template-form','receipt-card-files','receipt-quick-edit-list','receipt-registry-list','receipt-export-docx-btn','receipt-export-excel-btn'].forEach(id => assert.ok(actualIds.has(id), `missing WorkHub element #${id}`));
   assert.doesNotMatch(v2, /<\?(?:=|!=)/);
   assert.doesNotMatch(v2, /cdn\.tailwindcss\.com/);
+  assert.ok(v2.indexOf('ส่วนงานหลัก') < v2.indexOf('เมนูค่าใช้จ่าย'), 'primary WorkHub modules must appear above expense navigation');
+  assert.ok(v2.indexOf('image GFE') < 0, 'accessibility snapshots must not be embedded in source');
 });
 
 test('frontend calls the same business functions as V1 through the API adapter', async () => {
@@ -134,6 +137,8 @@ test('protected work areas require a server-issued session while expenses stay o
   const backend = await read('apps-script/19_ProtectedAccess.gs');
   assert.match(api, /protectedToken/);
   assert.match(api, /openProtectedSession/);
+  assert.match(api, /localStorage\.setItem\(keys\.protectedSession/);
+  assert.match(api, /result && result\.error && result\.error\.message/);
   assert.match(app, /protectedViews = \['receipts','payroll','tasks'\]/);
   assert.match(backend, /function requireProtectedSession_/);
   assert.match(backend, /PROTECTED_MAX_ATTEMPTS/);

@@ -98,8 +98,12 @@
         }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error('Backend ตอบกลับ HTTP ' + response.status);
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const error = new Error(result && result.error && result.error.message || 'Backend ตอบกลับ HTTP ' + response.status);
+        error.code = result && result.error && result.error.code || 'HTTP_' + response.status;
+        throw error;
+      }
       if (!result || result.ok !== true) {
         const error = new Error(result && result.error && result.error.message || 'Backend ตอบกลับไม่ถูกต้อง');
         error.code = result && result.error && result.error.code || 'API_ERROR';
@@ -153,6 +157,7 @@
     }
     if (!session || Number(session.expiresAt) <= Date.now()) await startOpenSession();
     window.INITIAL_BILL_ID = new URLSearchParams(location.search).get('bill_id') || '';
+    window.INITIAL_BILL_EDIT = new URLSearchParams(location.search).get('edit') === '1';
     window.AUTO_REVIEW_BILL_ID = '';
     window.OPEN_EXTERNAL_BROWSER = new URLSearchParams(location.search).get('openExternalBrowser') === '1';
     return health;

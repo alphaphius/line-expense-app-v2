@@ -96,10 +96,30 @@ async function saveLineImage(session,messageId,pageNo) {
 
 function pageCountMessage(sessionId,received,quick) {
   const configured=(quick?.slots||[]).filter(item=>item.configured);
-  const controls=[];
-  for(const slot of configured)controls.push({type:'button',style:controls.length?'secondary':'primary',height:'sm',color:'#8F5F42',action:{type:'postback',label:`ใช้${slot.label}`,data:`action=use_quick_settings&session_id=${sessionId}&slot=${slot.slot}`,displayText:`ใช้${slot.label} สำหรับบิลนี้`}});
-  for(let count=received;count<=config.maxPagesPerBill;count+=1)controls.push({type:'button',style:!configured.length&&count===1?'primary':'secondary',height:'sm',color:'#8F5F42',action:{type:'postback',label:count===1?'1 หน้า (ใบเดียว)':`${count} หน้า`,data:`action=set_pages&session_id=${sessionId}&pages=${count}`,displayText:`บิลนี้มี ${count} หน้า`}});
-  return {type:'flex',altText:'เลือกจำนวนหน้าของบิล',contents:{type:'bubble',size:'kilo',header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'20px',contents:[{type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#D6B77A',weight:'bold',size:'xs'},{type:'text',text:configured.length?'เลือกค่าลัดหรือจำนวนหน้า':'บิลชุดนี้มีกี่หน้า?',color:'#FFFFFF',weight:'bold',size:'xl',margin:'md',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'18px',spacing:'sm',contents:[{type:'text',text:'เอกสารหลายหน้าให้เลือกจำนวนหน้ารวม แล้วส่งภาพต่อจนครบ',color:'#795442',size:'xs',wrap:true},...configured.map(slot=>({type:'text',text:`⚡ ${slot.label}: ${slot.page_count} หน้า · ${slot.project_name} · ${slot.company_name}`,color:'#5C4438',size:'xs',wrap:true})),...controls]}}};
+  const body=[
+    {type:'box',layout:'vertical',cornerRadius:'18px',backgroundColor:'#F8EADB',paddingAll:'16px',contents:[
+      {type:'text',text:'บิลทั่วไปเลือก “1 หน้า (ใบเดียว)”',color:'#7C4D3A',weight:'bold',size:'sm',wrap:true},
+      {type:'text',text:'หากเป็นเอกสารต่อเนื่องหลายหน้า ให้เลือกจำนวนหน้ารวมทั้งหมด',color:'#8C756A',size:'xs',margin:'md',wrap:true},
+    ]},
+  ];
+  for(const slot of configured){
+    body.push({type:'box',layout:'vertical',cornerRadius:'18px',backgroundColor:'#F6E4D1',paddingAll:'16px',margin:'lg',contents:[
+      {type:'text',text:`⚡ ${slot.label}`,color:'#8A4B2F',weight:'bold',size:'lg'},
+      {type:'box',layout:'baseline',margin:'md',contents:[{type:'text',text:'จำนวนหน้า',color:'#8C756A',size:'sm',flex:3},{type:'text',text:`${slot.page_count} หน้า`,color:'#44312A',weight:'bold',size:'sm',align:'end',flex:4}]},
+      {type:'box',layout:'baseline',contents:[{type:'text',text:'โครงการ',color:'#8C756A',size:'sm',flex:3},{type:'text',text:clean(slot.project_name,100),color:'#44312A',weight:'bold',size:'sm',align:'end',wrap:true,flex:4}]},
+      {type:'box',layout:'baseline',contents:[{type:'text',text:'บริษัท',color:'#8C756A',size:'sm',flex:3},{type:'text',text:clean(slot.company_name,100),color:'#44312A',weight:'bold',size:'sm',align:'end',wrap:true,flex:4}]},
+    ]});
+    body.push({type:'button',style:'primary',height:'sm',color:'#A1603D',margin:'md',action:{type:'postback',label:`ใช้${slot.label}`,data:`action=use_quick_settings&session_id=${sessionId}&slot=${slot.slot}`,displayText:`ใช้${slot.label} สำหรับบิลนี้`}});
+  }
+  body.push({type:'separator',margin:'xl',color:'#E1CDBD'},{type:'text',text:'หรือกำหนดจำนวนหน้าเอง',color:'#795442',weight:'bold',size:'sm',margin:'lg'});
+  const counts=[];
+  for(let count=received;count<=config.maxPagesPerBill;count+=2){
+    const columns=[];
+    for(const value of [count,count+1])if(value<=config.maxPagesPerBill)columns.push({type:'button',style:'primary',height:'sm',color:'#604437',flex:1,action:{type:'postback',label:value===1?'1 หน้า (ใบเดียว)':`${value} หน้า`,data:`action=set_pages&session_id=${sessionId}&pages=${value}`,displayText:`บิลนี้มี ${value} หน้า`}});
+    body.push({type:'box',layout:'horizontal',spacing:'sm',margin:counts.length?'sm':'md',contents:columns});counts.push(count);
+  }
+  body.push({type:'button',style:'secondary',height:'sm',margin:'xl',color:'#B84C3F',action:{type:'postback',label:'ยกเลิกรูปนี้',data:`action=cancel_session&session_id=${sessionId}`,displayText:'ยกเลิกรูปที่ส่งล่าสุด'}});
+  return {type:'flex',altText:'เลือกวิธีรับบิลหรือยกเลิก',contents:{type:'bubble',size:'mega',header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md'},{type:'text',text:'ใช้ค่าลัดเพื่อข้ามการเลือกโครงการและบริษัท',color:'#D8C8C0',size:'sm',margin:'sm',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:body}}};
 }
 
 async function projectSelectionMessage(sessionId) {
@@ -114,24 +134,42 @@ async function companySelectionMessage(sessionId) {
   return message('เลือกชื่อบริษัทผู้ซื้อที่บิลควรระบุ',rows.map(row=>postback(clean(row.company_name,20),`action=select_company&session_id=${sessionId}&company_id=${row.company_id}`,`เลือก ${clean(row.company_name,35)}`)));
 }
 
-async function displayName(userId,source) {
-  if(!userId)return 'LINE User';
+async function lineProfile(userId,source) {
+  if(!userId)return {displayName:'LINE User',pictureUrl:''};
   try {
     let path=`/v2/bot/profile/${encodeURIComponent(userId)}`;
     if(source?.groupId)path=`/v2/bot/group/${encodeURIComponent(source.groupId)}/member/${encodeURIComponent(userId)}`;
     else if(source?.roomId)path=`/v2/bot/room/${encodeURIComponent(source.roomId)}/member/${encodeURIComponent(userId)}`;
-    return clean((await lineRequest(path)).displayName||'LINE User',100);
-  } catch { return 'LINE User'; }
+    const profile=await lineRequest(path);
+    return {displayName:clean(profile.displayName||'LINE User',255),pictureUrl:clean(profile.pictureUrl,1000)};
+  } catch { return {displayName:'LINE User',pictureUrl:''}; }
 }
 
+async function rememberLineUser(userId,profile){if(!userId)return;const timestamp=nowSql();await execute("INSERT INTO line_users (user_id,display_name,picture_url,first_seen_at,last_seen_at) VALUES (:id,:name,:picture,:first,:last) ON DUPLICATE KEY UPDATE display_name=VALUES(display_name),picture_url=IF(VALUES(picture_url)<>'',VALUES(picture_url),picture_url),last_seen_at=VALUES(last_seen_at)",{id:userId,name:clean(profile.displayName,255)||'LINE User',picture:clean(profile.pictureUrl,1000),first:timestamp,last:timestamp});}
+
+function thaiLongDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return'-';const[y,m,d]=String(value).split('-').map(Number),date=new Date(Date.UTC(y,m-1,d)),days=['วันอาทิตย์','วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'],months=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];return`${days[date.getUTCDay()]} ที่ ${d} ${months[m-1]} ${y+543}`;}
+function moneyText(value){return number(value).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function resultMark(ok){return ok?'✓ ตรงกัน':'! ไม่ตรง/อ่านไม่พบ';}
+function row(label,value,color='#44312A'){return{type:'box',layout:'baseline',spacing:'sm',contents:[{type:'text',text:label,color:'#8C756A',size:'sm',flex:4},{type:'text',text:clean(value,300)||'-',color,weight:'bold',size:'sm',align:'end',wrap:true,flex:7}]};}
+
 function billConfirmation(bill) {
-  const total=number(bill.grand_total).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const total=moneyText(bill.grand_total),reasons=clean(bill.review_reasons,1000),dateClear=!/ไม่พบวันที่เอกสารชัดเจน|วันที่.*ไม่ชัด/i.test(reasons),duplicate=/บิลซ้ำ/i.test(reasons);
+  const allCompanyChecks=!!bill.company_match&&!!bill.tax_id_match&&!!bill.address_match;
   const buttons=[
     {type:'button',style:'primary',color:'#31473A',action:{type:'postback',label:'ยืนยันบิล',data:`action=confirm_bill&bill_id=${bill.bill_id}`,displayText:'ยืนยันบิลนี้'}},
-    {type:'button',style:'secondary',action:{type:'postback',label:'ยกเลิกบิล',data:`action=cancel_bill&bill_id=${bill.bill_id}`,displayText:'ยกเลิกบิลนี้'}},
+    ...(config.publicBaseUrl?[{type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'แก้ไขข้อมูลบิล',uri:`${config.publicBaseUrl}/?bill_id=${encodeURIComponent(bill.bill_id)}&edit=1`}}]:[]),
+    {type:'button',style:'secondary',color:'#B84C3F',action:{type:'postback',label:'ยกเลิกบิล',data:`action=cancel_bill&bill_id=${bill.bill_id}`,displayText:'ยกเลิกบิลนี้'}},
   ];
-  if(config.publicBaseUrl)buttons.push({type:'button',style:'link',action:{type:'uri',label:'เปิด WorkHub',uri:config.publicBaseUrl}});
-  return {type:'flex',altText:`อ่านบิลแล้ว ${bill.vendor_name||'ไม่ทราบผู้ขาย'} ${total} บาท`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'WORKHUB · BILL OCR',color:'#D8C48F',weight:'bold',size:'xs'},{type:'text',text:bill.needs_review?'กรุณาตรวจสอบข้อมูล':'พร้อมยืนยันบิล',color:'#FFFFFF',weight:'bold',size:'xl',margin:'md'}]},body:{type:'box',layout:'vertical',spacing:'md',contents:[{type:'text',text:bill.vendor_name||'ไม่ทราบผู้ขาย',weight:'bold',size:'lg',wrap:true},{type:'text',text:`วันที่: ${bill.document_date||'-'}\nโครงการ: ${bill.project_name||'-'}\nบริษัท: ${bill.company_name||'-'}`,size:'sm',color:'#66574F',wrap:true},{type:'text',text:`ยอดสุทธิ ${total} บาท`,weight:'bold',size:'xl',color:'#8F5F42'}]},footer:{type:'box',layout:'vertical',spacing:'sm',contents:buttons}}};
+  const verificationColor=bill.needs_review?'#A15A34':'#77703F';
+  return {type:'flex',altText:`อ่านบิลแล้ว ${bill.vendor_name||'ไม่ทราบผู้ขาย'} ${total} บาท`,contents:{type:'bubble',size:'mega',header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'AI BILL CAPTURE',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:clean(bill.vendor_name,200)||'ไม่ทราบชื่อร้าน',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md',wrap:true},{type:'text',text:clean(bill.category_name,120)||'ไม่ระบุหมวดหมู่',color:'#E1D4CD',weight:'bold',size:'md',margin:'sm',wrap:true},{type:'text',text:bill.needs_review?'! มีข้อมูลที่ต้องตรวจสอบ':'✓ ข้อมูลสำคัญผ่านการตรวจสอบแล้ว',color:bill.needs_review?'#F4C67A':'#E6D88F',weight:'bold',size:'sm',margin:'lg',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[
+    {type:'text',text:'ข้อมูลที่ AI อ่านได้',color:'#8A4B36',weight:'bold',size:'lg'},
+    {type:'separator',margin:'md',color:'#DECBBB'},
+    row('โครงการ',bill.project_name),row('บริษัท',bill.company_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),
+    {type:'box',layout:'vertical',cornerRadius:'18px',backgroundColor:'#F8EADB',paddingAll:'16px',margin:'lg',contents:[row('ก่อน VAT',`${moneyText(bill.subtotal)} บาท`),row('VAT',`${moneyText(bill.vat_amount)} บาท`),{type:'separator',margin:'md',color:'#D9BFA8'},{type:'text',text:'ยอดสุทธิ',color:'#8C756A',weight:'bold',size:'sm',margin:'md'},{type:'text',text:`${total} บาท`,color:'#8A4428',weight:'bold',size:'xxl',align:'end',margin:'sm'}]},
+    {type:'text',text:'ผลตรวจสอบข้อมูลบริษัท',color:'#8A4B36',weight:'bold',size:'lg',margin:'xl'},
+    row('ชื่อบริษัท',resultMark(bill.company_match),verificationColor),row('เลขผู้เสียภาษี',resultMark(bill.tax_id_match),verificationColor),row('ที่อยู่',resultMark(bill.address_match),verificationColor),row('คุณภาพรูป',`${clean(bill.image_quality,40)||'-'} · ${Math.round(number(bill.quality_score))}%`),row('ผู้ส่ง',bill.source_user_name||'ผู้ส่งผ่าน LINE'),row('วันที่ในบิล',dateClear?'✓ ระบุชัดเจน':'! ไม่ชัดเจน ใช้วันที่อัปโหลด',dateClear?'#77703F':'#A15A34'),row('บิลซ้ำ',duplicate?'! พบรายการที่อาจซ้ำ':'✓ ไม่พบ',duplicate?'#A15A34':'#77703F'),
+    ...(reasons?[{type:'box',layout:'vertical',cornerRadius:'14px',backgroundColor:allCompanyChecks&&!bill.needs_review?'#F3F0E4':'#FFF0E2',paddingAll:'14px',margin:'lg',contents:[{type:'text',text:reasons,color:'#6E6044',size:'xs',wrap:true}]}]:[]),
+  ]},footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'sm',contents:buttons}}};
 }
 
 async function cleanupSessionFiles(sessionId) {
@@ -149,12 +187,13 @@ async function processSession(sessionId,userId,contextId,replyToken,source) {
   await reply(replyToken,[message('รับข้อมูลครบแล้ว กำลังให้ Gemini อ่านและบีบอัดบิล กรุณารอสักครู่…')]);
   const pages=await select('SELECT * FROM line_upload_pages WHERE session_id=:id ORDER BY page_no',{id:sessionId});
   try {
+    const profile=await lineProfile(userId,source);
+    await rememberLineUser(userId,profile);
     const files=await Promise.all(pages.map(async page=>({name:page.file_name,dataUrl:`data:${page.mime_type};base64,${(await readBuffer(page.file_path)).toString('base64')}`})));
-    const bill=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_context_id:contextId});
+    const bill=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_user_name:profile.displayName,source_context_id:contextId});
     await execute("UPDATE upload_sessions SET status='COMPLETED',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
     await cleanupSessionFiles(sessionId);
-    const name=await displayName(userId,source);
-    await push(contextId,[message(`อ่านบิลของ ${name} เสร็จแล้ว`),billConfirmation(bill)]);
+    await push(contextId,[billConfirmation(bill)]);
   } catch(error) {
     await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
     await push(contextId,[message(`วิเคราะห์บิลไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปยังถูกเก็บไว้ พิมพ์ “ยกเลิก” เพื่อเริ่มใหม่ หรือลองเลือกบริษัทอีกครั้งหลังแก้การตั้งค่า`)]).catch(()=>{});
@@ -183,6 +222,12 @@ async function handleImage(event,userId,contextId) {
 async function handlePostback(event,userId,contextId) {
   const data=Object.fromEntries(new URLSearchParams(clean(event.postback?.data,1000)));
   const action=clean(data.action,80);
+  if(action==='cancel_session'){
+    const session=await requireSession(data.session_id,userId,contextId);
+    await execute("UPDATE upload_sessions SET status='CANCELLED',updated_at=:updated WHERE session_id=:id",{id:session.session_id,updated:nowSql()});
+    await cleanupSessionFiles(session.session_id);
+    await reply(event.replyToken,[message('ยกเลิกรูปชุดนี้แล้ว ส่งรูปใหม่ได้เลยครับ')]);return;
+  }
   if(action==='set_pages'){
     const session=await requireSession(data.session_id,userId,contextId),pages=Math.max(1,Math.min(config.maxPagesPerBill,Number(data.pages)||1));
     if(pages<number(session.received_pages))throw new Error('จำนวนหน้าต้องไม่น้อยกว่ารูปที่ส่งมาแล้ว');
@@ -254,3 +299,18 @@ export async function handleLineWebhook(events,logger=console) {
     }
   }
 }
+
+export async function backfillLineUsernames(){
+  const rows=await select("SELECT DISTINCT source_user_id FROM bills WHERE source='LINE' AND source_user_id<>'' ORDER BY source_user_id LIMIT 500");
+  let updated=0,skipped=0;
+  for(const row of rows){
+    const profile=await lineProfile(row.source_user_id,{});
+    if(profile.displayName==='LINE User'){skipped+=1;continue;}
+    await rememberLineUser(row.source_user_id,profile);
+    const result=await execute("UPDATE bills SET source_user_name=:name WHERE source='LINE' AND source_user_id=:id",{id:row.source_user_id,name:profile.displayName});
+    updated+=Number(result.affectedRows)||0;
+  }
+  return{updated,skipped,message:`อัปเดตชื่อผู้ส่งแล้ว ${updated} บิล${skipped?` · อ่านชื่อไม่ได้ ${skipped} คน`:''}`};
+}
+
+export { billConfirmation, pageCountMessage };

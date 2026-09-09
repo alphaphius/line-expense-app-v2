@@ -4,10 +4,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 import sharp from 'sharp';
-import { createReceiptDocx, createXlsx, inspectTemplate } from '../server/exports.mjs';
+import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, inspectTemplate } from '../server/exports.mjs';
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
-import { verifyLineSignature } from '../server/line.mjs';
+import { billConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -69,6 +69,48 @@ test('manual XLSX export is a valid OOXML zip', async () => {
   const zip = await JSZip.loadAsync(buffer);
   assert.ok(zip.file('xl/workbook.xml'));
   assert.match(await zip.file('xl/worksheets/sheet1.xml').async('string'), /ทดสอบ/);
+});
+
+test('bill XLSX contains detail and owner summary sheets with totals', async () => {
+  const buffer=await createBillXlsx([
+    {document_date:'2026-09-08',vendor_name:'ร้าน ก',owner_name:'สมชาย',item_descriptions:'น้ำมัน',project_name:'DMR',company_name:'GFE',category_name:'น้ำมัน',subtotal:100,vat_amount:7,withholding_tax:0,grand_total:107},
+    {document_date:'2026-09-09',vendor_name:'ร้าน ข',owner_name:'สมชาย',item_descriptions:'ที่พัก',project_name:'DMR',company_name:'GFE',category_name:'ที่พัก',subtotal:200,vat_amount:14,withholding_tax:0,grand_total:214},
+  ]);
+  const zip=await JSZip.loadAsync(buffer);
+  const workbook=await zip.file('xl/workbook.xml').async('string');
+  const detail=await zip.file('xl/worksheets/sheet1.xml').async('string');
+  const summary=await zip.file('xl/worksheets/sheet2.xml').async('string');
+  assert.match(workbook,/รายการบิล/);
+  assert.match(workbook,/สรุปตามเจ้าของ/);
+  assert.match(detail,/เจ้าของบิล/);
+  assert.match(detail,/รายการของ/);
+  assert.match(detail,/รวมทั้งหมด/);
+  assert.match(summary,/สมชาย/);
+  assert.match(summary,/321/);
+});
+
+test('bill DOCX includes compressed bill images and omits document numbers', async () => {
+  const image=await sharp({create:{width:900,height:1200,channels:3,background:'#f4eee8'}}).jpeg().toBuffer();
+  const buffer=await createSimpleBillDocx('',[{vendor_name:'ร้านทดสอบ',document_date:'2026-09-08',document_date_thai:'วันอังคาร ที่ 8 กันยายน 2569',grand_total:190,category_name:'การบริการ',document_no:'SHOULD-NOT-APPEAR',documents:[{buffer:image}]}]);
+  const zip=await JSZip.loadAsync(buffer);
+  const documentXml=await zip.file('word/document.xml').async('string');
+  assert.match(documentXml,/ร้านทดสอบ/);
+  assert.match(documentXml,/วันอังคาร ที่ 8 กันยายน 2569/);
+  assert.doesNotMatch(documentXml,/SHOULD-NOT-APPEAR/);
+  assert.ok(zip.file('word/media/bill-1-page-1.jpg'));
+});
+
+test('LINE Flex preserves the legacy visual sections, six-page limit, cancel and direct edit', () => {
+  const chooser=JSON.stringify(pageCountMessage('session-1',1,{slots:[{slot:1,label:'ค่าลัด 1',configured:true,page_count:1,project_name:'DMR',company_name:'GFE'}]}));
+  assert.match(chooser,/เลือกวิธีรับบิล/);
+  assert.match(chooser,/ยกเลิกรูปนี้/);
+  assert.match(chooser,/6 หน้า/);
+  assert.doesNotMatch(chooser,/7 หน้า|8 หน้า/);
+  const flex=JSON.stringify(billConfirmation({bill_id:'bill-1',vendor_name:'ร้านทดสอบ',category_name:'การบริการ',project_name:'DMR',company_name:'GFE',document_date:'2026-09-08',subtotal:190,vat_amount:0,grand_total:190,company_match:true,tax_id_match:true,address_match:true,image_quality:'CLEAR',quality_score:95,source_user_name:'Fiat Taksakorn',needs_review:false,review_reasons:''}));
+  assert.match(flex,/AI BILL CAPTURE/);
+  assert.match(flex,/ผลตรวจสอบข้อมูลบริษัท/);
+  assert.match(flex,/Fiat Taksakorn/);
+  assert.doesNotMatch(flex,/เลขที่เอกสาร|document_no/);
 });
 
 test('receipt DOCX clones templates, replaces split placeholders, and adds compressed cards', async () => {
