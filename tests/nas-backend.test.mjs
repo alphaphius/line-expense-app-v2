@@ -8,7 +8,7 @@ import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, in
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
 import { billConfirmation, billSavedConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
-import { normalizeQualityScore } from '../server/actions/bills.mjs';
+import { addressesMatch, normalizeQualityScore } from '../server/actions/bills.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -45,6 +45,7 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(lineSchema, /CREATE TABLE IF NOT EXISTS line_upload_pages/);
   assert.match(server, /request\.rawJsonBody/);
   assert.match(server, /\/webhook\/line/);
+  assert.match(server, /repairAddressMatchFlags/);
   assert.match(line, /timingSafeEqual/);
   assert.match(line, /INSERT IGNORE INTO line_webhook_events/);
 });
@@ -70,6 +71,13 @@ test('Gemini quality scores accept both 0-1 and 0-100 scales', () => {
   assert.equal(normalizeQualityScore(0.95), 95);
   assert.equal(normalizeQualityScore(95), 95);
   assert.equal(normalizeQualityScore(120), 100);
+});
+
+test('Thai company addresses match despite labels, spacing, and Bangkok abbreviations', () => {
+  const companyAddress = '151 ถนนนวลจันทร์ แขวงนวลจันทร์ เขตบึงกุ่ม กทม. 10230';
+  const electronicBillAddress = 'เลขที่ 151 ถนน นวลจันทร์ แขวงนวลจันทร์ เขตบึงกุ่ม กรุงเทพมหานคร 10230';
+  assert.equal(addressesMatch(companyAddress, electronicBillAddress), true);
+  assert.equal(addressesMatch(companyAddress, '99 ถนนสุขุมวิท เขตวัฒนา กรุงเทพมหานคร 10110'), false);
 });
 
 test('manual XLSX export is a valid OOXML zip', async () => {
@@ -120,7 +128,10 @@ test('LINE Flex preserves the legacy visual sections, six-page limit, cancel and
   assert.match(flex,/Fiat Taksakorn/);
   const normalizedFlex=JSON.stringify(billConfirmation({bill_id:'bill-2',vendor_name:'ร้านทดสอบ',category_name:'การบริการ',project_name:'DMR',company_name:'GFE',document_date:'2026-09-08',subtotal:190,vat_amount:0,grand_total:190,company_match:true,tax_id_match:true,address_match:true,image_quality:'CLEAR',quality_score:1,source_user_name:'Fiat Taksakorn',needs_review:false,review_reasons:''}));
   assert.match(normalizedFlex,/CLEAR · 100%/);
-  assert.match(JSON.stringify(billSavedConfirmation({bill_id:'bill-1',vendor_name:'ร้านทดสอบ',category_name:'การบริการ',document_date:'2026-09-08',grand_total:190})),/บันทึกบิลเรียบร้อย/);
+  const savedFlex=JSON.stringify(billSavedConfirmation({bill_id:'bill-1',vendor_name:'ร้านทดสอบ',category_name:'การบริการ',document_date:'2026-09-08',grand_total:190,source_user_name:'Fiat Taksakorn'}));
+  assert.match(savedFlex,/บันทึกบิลเรียบร้อย/);
+  assert.match(savedFlex,/เจ้าของบิล/);
+  assert.match(savedFlex,/Fiat Taksakorn/);
   assert.doesNotMatch(flex,/เลขที่เอกสาร|document_no/);
 });
 

@@ -574,6 +574,7 @@
       const bill = await window.V2Api.callWithRequestId('submitBillPages', state.uploadRequestId, {
         project_id: document.getElementById('upload-project').value,
         company_id: document.getElementById('upload-company').value,
+        document_date: document.getElementById('upload-document-date').value,
         expected_pages: expected, files: encodedFiles, source: 'WEB', source_user_id: ownerId,
       });
       state.uploadRequestId = '';
@@ -851,11 +852,16 @@
   function optionHtml(rows, valueKey, labelKey, selected) { return rows.map(row => `<option value="${escapeHtml(row[valueKey])}" ${String(row[valueKey]) === String(selected) ? 'selected' : ''}>${escapeHtml(row[labelKey])}</option>`).join(''); }
 
   async function editBill(bill, options = {}) {
+    if (!(state.masters.billOwners || []).length) {
+      try { await refreshBillOwners(); } catch (_) {}
+    }
+    const ownerOptions = state.masters.billOwners || [];
     const html = `<div class="grid gap-3 text-left sm:grid-cols-2">
       <label class="text-sm">โครงการ<select id="eb-project_id" class="swal2-select !m-0 !w-full">${optionHtml(state.masters.projects,'project_id','project_name',bill.project_id)}</select></label>
       <label class="text-sm">บริษัท<select id="eb-company_id" class="swal2-select !m-0 !w-full">${optionHtml(state.masters.companies,'company_id','company_name',bill.company_id)}</select></label>
       <label class="text-sm">หมวด<select id="eb-category_id" class="swal2-select !m-0 !w-full"><option value="">ไม่ระบุ</option>${optionHtml(state.masters.categories,'category_id','category_name',bill.category_id)}</select></label>
       <label class="text-sm">ประเภทเอกสาร<select id="eb-doc_type" class="swal2-select !m-0 !w-full">${['TAX_INVOICE','RECEIPT','CASH_BILL','INVOICE','DELIVERY_NOTE','TOLL','TRANSFER_SLIP','OTHER'].map(v=>`<option ${v===bill.doc_type?'selected':''}>${v}</option>`).join('')}</select></label>
+      <label class="text-sm sm:col-span-2">เจ้าของบิล<select id="eb-source_user_id" class="swal2-select !m-0 !w-full"><option value="">เลือกเจ้าของบิล</option>${optionHtml(ownerOptions,'user_id','display_name',bill.source_user_id)}</select><small class="mt-1 block text-xs text-slate-400">รายชื่อผู้ที่เคยใช้งานผ่าน LINE</small></label>
       ${editInput('document_no','เลขที่เอกสาร',bill.document_no)}${editInput('document_date','วันที่เอกสาร',bill.document_date,'date')}
       ${editInput('vendor_name','ชื่อร้านค้า',bill.vendor_name,'text','vendor-suggestions')}${taxIdEditInput('vendor_tax_id','Tax ID ร้านค้า',bill.vendor_tax_id)}
       ${editInput('buyer_name','ชื่อผู้ซื้อ',bill.buyer_name)}${taxIdEditInput('buyer_tax_id','Tax ID ผู้ซื้อ',bill.buyer_tax_id)}
@@ -865,6 +871,7 @@
     const result = await Swal.fire({ title:'แก้ไขข้อมูลบิล', html, width:800, showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#8f5f42', preConfirm:() => {
       const payload = { bill_id:bill.bill_id };
       document.querySelectorAll('[id^="eb-"]').forEach(el => payload[el.id.slice(3)] = el.value);
+      if (!payload.source_user_id) return Swal.showValidationMessage('กรุณาเลือกเจ้าของบิล');
       for (const key of ['vendor_tax_id','buyer_tax_id']) {
         payload[key] = String(payload[key] || '').replace(/\D/g, '');
         if (payload[key] && !/^\d{13}$/.test(payload[key])) return Swal.showValidationMessage((key === 'vendor_tax_id' ? 'Tax ID ร้านค้า' : 'Tax ID ผู้ซื้อ') + ' ต้องมี 13 หลัก');

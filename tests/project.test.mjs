@@ -31,7 +31,7 @@ const expectedV1Ids = [
   'quick-settings-status-1', 'quick-settings-status-2', 'refresh-btn',
   'review-inbox', 'review-inbox-count', 'search-bills-btn', 'system-status',
   'upload-company', 'upload-form', 'upload-project', 'upload-quick-options',
-  'upload-owner',
+  'upload-owner', 'upload-document-date',
   'upload-quick-preset', 'uploader-summary-bars', 'uploader-summary-card',
   'uploader-summary-period', 'vendor-suggestions', 'vendor-tags', 'view-bills',
   'view-dashboard', 'view-masters', 'view-system', 'view-title', 'view-upload',
@@ -63,6 +63,8 @@ test('frontend calls the same business functions as V1 through the API adapter',
   const calls = source => Array.from(source.matchAll(/(?:gas|callWithRequestId)\('([A-Za-z0-9_]+)'/g), match => match[1]).sort();
   assert.deepEqual(calls(v2), expectedV1Calls);
   assert.match(v2, /window\.V2Api\.call/);
+  assert.match(v2, /document_date:\s*document\.getElementById\('upload-document-date'\)\.value/);
+  assert.match(v2, /eb-source_user_id/);
   assert.doesNotMatch(v2, /google\.script\.run/);
 });
 

@@ -11,6 +11,33 @@ const thaiNormalize = value => clean(value, 1000).toLowerCase().replace(/[\s.,()
 const taxId = value => clean(value, 30).replace(/\D/g, '').slice(0, 13);
 const sqlDate = value => normalizeDate(value);
 
+const addressCanonical = value => clean(value, 1200)
+  .toLowerCase()
+  .replace(/กรุงเทพมหานคร|กรุงเทพฯ|กทม\.?/g, 'กรุงเทพ')
+  .replace(/(?:ที่อยู่|เลขที่|หมู่ที่|หมู่|ซอย|ถนน|แขวง|เขต|ตำบล|อำเภอ|จังหวัด)/g, ' ')
+  .replace(/\b(?:moo|soi|road|subdistrict|district|province)\b/gi, ' ')
+  .replace(/[^0-9a-zก-๙]+/g, '');
+
+const addressTokens = value => clean(value, 1200)
+  .toLowerCase()
+  .replace(/กรุงเทพมหานคร|กรุงเทพฯ|กทม\.?/g, ' กรุงเทพ ')
+  .replace(/(?:ที่อยู่|เลขที่|หมู่ที่|หมู่|ซอย|ถนน|แขวง|เขต|ตำบล|อำเภอ|จังหวัด)/g, ' ')
+  .replace(/\b(?:moo|soi|road|subdistrict|district|province)\b/gi, ' ')
+  .split(/[^0-9a-zก-๙]+/)
+  .filter(tokenValue => tokenValue.length >= 2);
+
+export function addressesMatch(expected, actual) {
+  const left = addressCanonical(expected);
+  const right = addressCanonical(actual);
+  if (left.length < 8 || right.length < 8) return false;
+  if (left.includes(right) || right.includes(left)) return true;
+  const expectedTokens = new Set(addressTokens(expected));
+  const actualTokens = new Set(addressTokens(actual));
+  if (!expectedTokens.size || !actualTokens.size) return false;
+  const overlap = [...expectedTokens].filter(tokenValue => actualTokens.has(tokenValue)).length;
+  return overlap / Math.min(expectedTokens.size, actualTokens.size) >= 0.7;
+}
+
 export function normalizeQualityScore(value) {
   const raw = number(value);
   const percent = raw > 0 && raw <= 1 ? raw * 100 : raw;
@@ -30,7 +57,9 @@ async function analyzeWithGemini(images, context) {
   const prompt = [
     `อ่านเอกสารค่าใช้จ่ายภาษาไทย ${images.length} หน้าเป็นบิลเดียว รวมรายการต่อเนื่องและอย่านับยอดซ้ำ`,
     `วันที่รับเข้า ${context.receivedDate} ใช้อ้างอิงเท่านั้น วันที่เอกสารต้องเป็น YYYY-MM-DD ค.ศ. ถ้าอ่านไม่ครบให้ค่าว่าง ห้ามเดา`,
-    'ตรวจบริษัทผู้ซื้อโดยเน้นเลขผู้เสียภาษี 13 หลักก่อนชื่อและที่อยู่ ช่องอ่านไม่ได้ใช้ค่าว่างหรือ 0',
+    `วันที่ที่ผู้อัปโหลดกำหนดเอง: ${context.requestedDate || 'ไม่ได้ระบุ'} ถ้ามีค่านี้ ให้ยังอ่านวันที่จากเอกสารตามจริง แต่ไม่ต้องแจ้งตรวจสอบเฉพาะเรื่องวันที่ เพราะระบบจะใช้วันที่ที่ผู้ใช้กำหนด`,
+    'แยกข้อมูลผู้ขายกับผู้ซื้อให้ชัด: ข้อมูลหัวเอกสารก่อนช่องชื่อ/ที่อยู่มักเป็นผู้ขาย ส่วนชื่อและที่อยู่หลังป้าย "ชื่อ" และ "ที่อยู่" คือบริษัทผู้ซื้อ',
+    'อ่าน buyer_name, buyer_tax_id และ buyer_address จากส่วนผู้ซื้อบนเอกสารให้ครบทุกบรรทัด โดยเน้นเลขผู้เสียภาษี 13 หลักก่อน แล้วอ่านเลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด และรหัสไปรษณีย์ ช่องอ่านไม่ได้ใช้ค่าว่างหรือ 0 ห้ามคัดลอกจากข้อมูลบริษัทอ้างอิง',
     'quality_score ต้องเป็นคะแนนเต็ม 100 (0 ถึง 100 เท่านั้น เช่น ภาพชัดมากให้ 95-100) ห้ามใช้สเกล 0 ถึง 1',
     'ถ้าภาพไม่ชัดหรือข้อมูลสำคัญไม่ครบ ให้ needs_review=true และเขียนเหตุผลภาษาไทย',
     `บริษัท: ${JSON.stringify(context.companies.map(item=>({id:item.company_id,name:item.company_name,branch:item.branch_name,tax_id:item.tax_id,address:item.address})))}`,
@@ -54,14 +83,16 @@ async function analyzeWithGemini(images, context) {
     result.company_id = allowedCompanies.has(String(result.company_id)) ? String(result.company_id) : '';
     result.category_id = allowedCategories.has(String(result.category_id)) ? String(result.category_id) : '';
     const extractedDate = sqlDate(result.document_date);
-    result.document_date = extractedDate || context.receivedDate;
+    const requestedDate = sqlDate(context.requestedDate);
+    result.document_date = requestedDate || extractedDate || context.receivedDate;
     result.due_date = sqlDate(result.due_date);
     result.vendor_tax_id = taxId(result.vendor_tax_id);
     result.buyer_tax_id = taxId(result.buyer_tax_id);
     result.review_reasons = Array.isArray(result.review_reasons) ? result.review_reasons.map(value=>clean(value,180)).filter(Boolean) : [];
-    if (!extractedDate) result.review_reasons.push(`ไม่พบวันที่เอกสารชัดเจน ระบบใช้วันที่รับเข้า ${context.receivedDate} ชั่วคราว`);
+    if (requestedDate) result.review_reasons = result.review_reasons.filter(reason => !/วันที่.*(?:ไม่|อ่าน|ชัด|พบ)/i.test(reason));
+    else if (!extractedDate) result.review_reasons.push(`ไม่พบวันที่เอกสารชัดเจน ระบบใช้วันที่รับเข้า ${context.receivedDate} ชั่วคราว`);
     result.quality_score = normalizeQualityScore(result.quality_score);
-    result.needs_review = bool(result.needs_review) || !extractedDate || result.quality_score < 70 || !clean(result.vendor_name);
+    result.needs_review = result.review_reasons.length > 0 || (!requestedDate && !extractedDate) || result.quality_score < 70 || !clean(result.vendor_name);
     result.items = Array.isArray(result.items) ? result.items.slice(0,200) : [];
     await execute('INSERT INTO ai_usage (usage_id,bill_id,model,prompt_version,input_tokens,output_tokens,thought_tokens,total_tokens,latency_ms,success,error,created_at) VALUES (:id,:bill,:model,:prompt,:input,:output,:thought,:total,:latency,1,\'\',:created)', { id:uuid(), bill:context.billId, model:config.geminiModel, prompt:'bill-th-nas-v1', input:number(responseBody.usageMetadata?.promptTokenCount), output:number(responseBody.usageMetadata?.candidatesTokenCount), thought:number(responseBody.usageMetadata?.thoughtsTokenCount), total:number(responseBody.usageMetadata?.totalTokenCount), latency:Date.now()-started, created:nowSql() });
     return result;
@@ -87,6 +118,9 @@ async function getVendor(connection, ai, timestamp) {
 export async function submitBillPages(payload = {}) {
   const projectId=clean(payload.project_id,64); const companyId=clean(payload.company_id,64);
   const source=clean(payload.source||'WEB',32).toUpperCase();
+  const requestedDateInput=clean(payload.document_date,20);
+  const requestedDate=requestedDateInput?sqlDate(requestedDateInput):'';
+  if(requestedDateInput&&!requestedDate)throw apiError('INVALID_DOCUMENT_DATE','วันที่ในบิลที่ระบุไม่ถูกต้อง');
   let sourceUserId=clean(payload.source_user_id,160),sourceUserName=clean(payload.source_user_name,255);
   const files=Array.isArray(payload.files)?payload.files:[];
   const expected=Math.max(1,Math.min(config.maxPagesPerBill,Number(payload.expected_pages)||files.length||1));
@@ -105,11 +139,11 @@ export async function submitBillPages(payload = {}) {
     const receivedDate=new Date().toISOString().slice(0,10);
     // Read only after compression so Gemini and saved document use the exact same bytes.
     const images=await Promise.all(stored.map(async item=>({buffer:await readBuffer(item.relative)})));
-    const analysis=await analyzeWithGemini(images,{companies,categories,billId,receivedDate});
+    const analysis=await analyzeWithGemini(images,{companies,categories,billId,receivedDate,requestedDate});
     const targetTax=taxId(company.tax_id); const buyerTax=taxId(analysis.buyer_tax_id);
     const taxMatch=!!targetTax&&targetTax===buyerTax;
     const companyMatch=String(analysis.company_id)===String(companyId)||thaiNormalize(analysis.buyer_name)===thaiNormalize(company.company_name);
-    const addressMatch=!!thaiNormalize(analysis.buyer_address)&&thaiNormalize(company.address).includes(thaiNormalize(analysis.buyer_address).slice(0,20));
+    const addressMatch=addressesMatch(company.address,analysis.buyer_address);
     const duplicateKey=[taxId(analysis.vendor_tax_id)||thaiNormalize(analysis.vendor_name),clean(analysis.document_no,160),analysis.document_date,number(analysis.grand_total).toFixed(2)].join('|');
     const duplicate=await one("SELECT bill_id FROM bills WHERE duplicate_key=:key AND status<>'REJECTED' LIMIT 1",{key:duplicateKey});
     const reasons=[...(analysis.review_reasons||[])];
@@ -135,7 +169,27 @@ export async function getBillDetail(billId){const row=await one('SELECT b.*,p.pr
 
 export async function getBillDocumentPreview(docId){const doc=await one('SELECT * FROM bill_documents WHERE doc_id=:id',{id:clean(docId,64)});if(!doc)throw apiError('DOCUMENT_NOT_FOUND','ไม่พบไฟล์เอกสาร');const buffer=await readBuffer(doc.file_path);if(buffer.length>8*1024*1024)throw apiError('PREVIEW_TOO_LARGE','ไฟล์ใหญ่เกินกว่าจะแสดงตัวอย่าง');return{fileName:doc.file_name,mimeType:doc.mime_type,dataUrl:`data:${doc.mime_type};base64,${buffer.toString('base64')}`,externalUrl:''};}
 
-export async function updateBill(payload={},actor='WEB'){const id=clean(payload.bill_id,64);const before=await one('SELECT * FROM bills WHERE bill_id=:id',{id});if(!before)throw apiError('BILL_NOT_FOUND','ไม่พบบิล');if(before.status==='REJECTED')throw apiError('BILL_REJECTED','กรุณากู้คืนบิลก่อนแก้ไข');const patch={};for(const field of BILL_FIELDS)if(Object.hasOwn(payload,field)){if(['subtotal','discount','vat_rate','vat_amount','withholding_tax','grand_total'].includes(field))patch[field]=number(payload[field]);else if(['document_date','due_date'].includes(field))patch[field]=sqlDate(payload[field]);else if(['vendor_tax_id','buyer_tax_id'].includes(field))patch[field]=taxId(payload[field]);else patch[field]=clean(payload[field],['description','notes','vendor_address','buyer_address'].includes(field)?2000:255);}if(!patch.project_id&&!before.project_id||!patch.company_id&&!before.company_id)throw apiError('REQUIRED_FIELDS','กรุณาเลือกโครงการและบริษัท');const company=await one('SELECT * FROM companies WHERE company_id=:id',{id:patch.company_id||before.company_id});const effective={...before,...patch};patch.tax_id_match=company&&taxId(company.tax_id)===taxId(effective.buyer_tax_id)?1:0;patch.company_match=company&&thaiNormalize(company.company_name)===thaiNormalize(effective.buyer_name)?1:0;patch.address_match=company&&thaiNormalize(company.address).includes(thaiNormalize(effective.buyer_address).slice(0,20))?1:0;patch.needs_review=!patch.tax_id_match||!patch.address_match||!effective.document_date||!effective.vendor_name?1:0;patch.status=patch.needs_review?'NEEDS_REVIEW':'PENDING_CONFIRMATION';patch.updated_at=nowSql();const columns=Object.keys(patch);await execute(`UPDATE bills SET ${columns.map(key=>`${key}=:${key}`).join(',')} WHERE bill_id=:bill_id`,{...patch,bill_id:id});await execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (:log,\'bill\',:id,\'UPDATE\',:actor,:before,:after,:created)',{log:uuid(),id,actor,before:JSON.stringify(publicRow(before)),after:JSON.stringify(patch),created:nowSql()});return getBillDetail(id);}
+export async function repairAddressMatchFlags() {
+  const rows = await select(`SELECT b.bill_id,b.buyer_address,b.tax_id_match,b.company_match,b.document_date,b.vendor_name,b.needs_review,b.review_reasons,b.status,c.address AS company_address
+    FROM bills b JOIN companies c ON c.company_id=b.company_id
+    WHERE b.address_match=0 AND b.buyer_address<>'' AND c.address<>'' AND b.status<>'REJECTED'`);
+  let repaired = 0;
+  for (const row of rows) {
+    if (!addressesMatch(row.company_address, row.buyer_address)) continue;
+    let reasons = [];
+    try { reasons = Array.isArray(row.review_reasons) ? row.review_reasons : JSON.parse(row.review_reasons || '[]'); } catch (_) { reasons = clean(row.review_reasons, 2000).split(' | '); }
+    reasons = reasons.map(reason => clean(reason, 180)).filter(reason => reason && !/ที่อยู่ผู้ซื้อไม่ตรงกับบริษัทที่เลือก/.test(reason));
+    const needsReview = reasons.length > 0 || !bool(row.tax_id_match) || !bool(row.company_match) || !row.document_date || !clean(row.vendor_name);
+    const status = row.status === 'NEEDS_REVIEW' && !needsReview ? 'PENDING_CONFIRMATION' : row.status;
+    await execute('UPDATE bills SET address_match=1,needs_review=:review,status=:status,review_reasons=:reasons,updated_at=:updated WHERE bill_id=:id', {
+      id:row.bill_id, review:needsReview?1:0, status, reasons:JSON.stringify(reasons), updated:nowSql(),
+    });
+    repaired += 1;
+  }
+  return repaired;
+}
+
+export async function updateBill(payload={},actor='WEB'){const id=clean(payload.bill_id,64);const before=await one('SELECT * FROM bills WHERE bill_id=:id',{id});if(!before)throw apiError('BILL_NOT_FOUND','ไม่พบบิล');if(before.status==='REJECTED')throw apiError('BILL_REJECTED','กรุณากู้คืนบิลก่อนแก้ไข');const patch={};for(const field of BILL_FIELDS)if(Object.hasOwn(payload,field)){if(['subtotal','discount','vat_rate','vat_amount','withholding_tax','grand_total'].includes(field))patch[field]=number(payload[field]);else if(['document_date','due_date'].includes(field))patch[field]=sqlDate(payload[field]);else if(['vendor_tax_id','buyer_tax_id'].includes(field))patch[field]=taxId(payload[field]);else patch[field]=clean(payload[field],['description','notes','vendor_address','buyer_address'].includes(field)?2000:255);}if(Object.hasOwn(payload,'source_user_id')){const ownerId=clean(payload.source_user_id,160);const owner=ownerId?await one('SELECT user_id,display_name FROM line_users WHERE user_id=:id',{id:ownerId}):null;if(!owner)throw apiError('BILL_OWNER_REQUIRED','กรุณาเลือกเจ้าของบิลจากรายชื่อผู้ที่เคยส่งบิลผ่าน LINE');patch.source_user_id=owner.user_id;patch.source_user_name=clean(owner.display_name,255)||'ผู้ส่งผ่าน LINE';}if(!patch.project_id&&!before.project_id||!patch.company_id&&!before.company_id)throw apiError('REQUIRED_FIELDS','กรุณาเลือกโครงการและบริษัท');const company=await one('SELECT * FROM companies WHERE company_id=:id',{id:patch.company_id||before.company_id});const effective={...before,...patch};patch.tax_id_match=company&&taxId(company.tax_id)===taxId(effective.buyer_tax_id)?1:0;patch.company_match=company&&(String(effective.company_id)===String(company.company_id)||thaiNormalize(company.company_name)===thaiNormalize(effective.buyer_name))?1:0;patch.address_match=company&&addressesMatch(company.address,effective.buyer_address)?1:0;patch.needs_review=!patch.tax_id_match||!patch.address_match||!effective.document_date||!effective.vendor_name?1:0;patch.status=patch.needs_review?'NEEDS_REVIEW':'PENDING_CONFIRMATION';patch.updated_at=nowSql();const columns=Object.keys(patch);await execute(`UPDATE bills SET ${columns.map(key=>`${key}=:${key}`).join(',')} WHERE bill_id=:bill_id`,{...patch,bill_id:id});await execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (:log,\'bill\',:id,\'UPDATE\',:actor,:before,:after,:created)',{log:uuid(),id,actor,before:JSON.stringify(publicRow(before)),after:JSON.stringify(patch),created:nowSql()});return getBillDetail(id);}
 
 async function setBillStatus(id,status,actor){const before=await one('SELECT * FROM bills WHERE bill_id=:id',{id:clean(id,64)});if(!before)throw apiError('BILL_NOT_FOUND','ไม่พบบิล');const timestamp=nowSql();const patch=status==='CONFIRMED'?{status,needs_review:0,confirmed_at:timestamp,updated_at:timestamp}:status==='REJECTED'?{status,needs_review:0,confirmed_at:before.confirmed_at||null,updated_at:timestamp}:{status:'NEEDS_REVIEW',needs_review:1,confirmed_at:null,updated_at:timestamp};await execute('UPDATE bills SET status=:status,needs_review=:needs_review,confirmed_at=:confirmed_at,updated_at=:updated_at WHERE bill_id=:id',{...patch,id});await execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (:log,\'bill\',:id,:action,:actor,:before,:after,:created)',{log:uuid(),id,action:status,actor:clean(actor||'WEB',160),before:JSON.stringify(publicRow(before)),after:JSON.stringify(patch),created:timestamp});return getBillDetail(id);}
 export const confirmBill=(id,actor)=>setBillStatus(id,'CONFIRMED',actor);

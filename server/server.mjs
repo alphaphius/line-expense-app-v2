@@ -5,6 +5,7 @@ import { config } from './config.mjs';
 import { closeDb, migrate, ping } from './db.mjs';
 import { ensureDataDirs } from './files.mjs';
 import { ensureDefaults } from './actions/masters.mjs';
+import { repairAddressMatchFlags } from './actions/bills.mjs';
 import { apiErrorEnvelope, handleApi } from './api.mjs';
 import { handleLineWebhook, verifyLineSignature } from './line.mjs';
 
@@ -15,6 +16,7 @@ app.addContentTypeParser('text/plain',{parseAs:'string'},(request,body,done)=>{t
 await ensureDataDirs();
 await migrate();
 await ensureDefaults();
+await repairAddressMatchFlags();
 await ping();
 
 app.addHook('onSend',async(request,reply,payload)=>{reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','same-origin').header('Permissions-Policy','camera=(), microphone=(), geolocation=()').header('X-Frame-Options','SAMEORIGIN');return payload;});

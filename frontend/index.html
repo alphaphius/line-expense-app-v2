@@ -55,7 +55,7 @@
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.3.1 NAS · WorkHub · ID OCR Offline</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.3.2 NAS · WorkHub · ID OCR Offline</div>
     </aside>
 
     <main class="app-main w-full lg:ml-72">
@@ -227,7 +227,8 @@
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="label">โครงการ<select id="upload-project" class="field mt-2" required></select></label>
                 <label class="label">บริษัทผู้ซื้อ<select id="upload-company" class="field mt-2" required></select></label>
-                <label class="label md:col-span-2">เจ้าของบิล<select id="upload-owner" class="field mt-2" required></select><small id="upload-owner-help" class="mt-1 block text-xs text-slate-500" aria-live="polite">รายชื่อมาจากผู้ที่เคยส่งบิลผ่าน LINE และรีเฟรชอัตโนมัติเมื่อเปิดหน้านี้</small></label>
+                <label class="label">วันที่ในบิล (ระบุเองได้)<input id="upload-document-date" class="field mt-2" type="date"><small class="mt-1 block text-xs text-slate-500">หากระบุ ระบบจะใช้วันที่นี้แทนวันที่ที่ Gemini อ่าน เหมาะสำหรับบิลย้อนหลังหรือวันที่ไม่ชัดเจน</small></label>
+                <label class="label">เจ้าของบิล<select id="upload-owner" class="field mt-2" required></select><small id="upload-owner-help" class="mt-1 block text-xs text-slate-500" aria-live="polite">รายชื่อมาจากผู้ที่เคยส่งบิลผ่าน LINE และรีเฟรชอัตโนมัติเมื่อเปิดหน้านี้</small></label>
               </div>
               <label class="label block">บิลชุดนี้มีกี่หน้า
                 <input id="expected-pages" class="field mt-2" type="number" min="1" max="6" value="1" required>
