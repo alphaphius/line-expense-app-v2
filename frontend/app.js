@@ -48,7 +48,31 @@
     document.getElementById('view-title').textContent = viewTitles[view];
     if (view === 'system') loadSystemStatus();
     if (view === 'bills') loadAllBills(1);
+    if (view === 'upload') refreshBillOwners().catch(() => {});
     if (view === 'receipts' && window.ReceiptModule) window.ReceiptModule.activate();
+  }
+
+  let billOwnerRefreshPromise = null;
+  async function refreshBillOwners() {
+    if (billOwnerRefreshPromise) return billOwnerRefreshPromise;
+    const select = document.getElementById('upload-owner');
+    const helper = document.getElementById('upload-owner-help');
+    const previous = select.value;
+    helper.textContent = 'กำลังอัปเดตรายชื่อผู้ส่งบิลจาก LINE…';
+    billOwnerRefreshPromise = gas('getBillOwners').then(rows => {
+      state.masters.billOwners = Array.isArray(rows) ? rows : [];
+      setOptions('upload-owner', state.masters.billOwners, 'user_id', 'display_name', state.masters.billOwners.length ? 'เลือกเจ้าของบิล' : 'ยังไม่มีรายชื่อจาก LINE', true);
+      if (previous && state.masters.billOwners.some(row => row.user_id === previous)) select.value = previous;
+      else if (state.masters.billOwners.length === 1) select.value = state.masters.billOwners[0].user_id;
+      helper.textContent = state.masters.billOwners.length
+        ? `พบ ${state.masters.billOwners.length.toLocaleString('th-TH')} รายชื่อจาก LINE · อัปเดตล่าสุดแล้ว`
+        : 'ยังไม่มีรายชื่อ กรุณาส่งบิลผ่าน LINE อย่างน้อยหนึ่งครั้ง แล้วกลับมาเปิดหน้านี้ใหม่';
+      return state.masters.billOwners;
+    }).catch(error => {
+      helper.textContent = `อัปเดตรายชื่อไม่สำเร็จ: ${error.message}`;
+      throw error;
+    }).finally(() => { billOwnerRefreshPromise = null; });
+    return billOwnerRefreshPromise;
   }
 
   function renderFilters() {

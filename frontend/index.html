@@ -38,7 +38,7 @@
           <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">WH</div>
           <div class="min-w-0"><h1 class="font-semibold leading-tight">WorkHub</h1><p class="text-xs text-slate-400">Operations workspace</p></div>
         </div>
-        <img class="header-gfe-logo" src="https://www.gfe.co.th/wp-content/uploads/2018/07/gfe-logo-150.jpg" alt="GFE" loading="lazy" referrerpolicy="no-referrer">
+        <img class="header-gfe-logo" src="https://www.gfe.co.th/wp-content/uploads/2018/07/gfe-logo-150.jpg" alt="GFE" width="42" height="42" style="width:42px;height:42px" referrerpolicy="no-referrer">
       </div>
       <p class="sidebar-section-label">ส่วนงานหลัก</p>
       <nav class="product-nav" aria-label="ส่วนงานหลัก">
@@ -55,7 +55,7 @@
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.3.0 NAS · WorkHub · ID OCR Offline</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.3.1 NAS · WorkHub · ID OCR Offline</div>
     </aside>
 
     <main class="app-main w-full lg:ml-72">
@@ -227,7 +227,7 @@
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="label">โครงการ<select id="upload-project" class="field mt-2" required></select></label>
                 <label class="label">บริษัทผู้ซื้อ<select id="upload-company" class="field mt-2" required></select></label>
-                <label class="label md:col-span-2">เจ้าของบิล<select id="upload-owner" class="field mt-2" required></select><small class="mt-1 block text-xs text-slate-500">รายชื่อมาจากผู้ที่เคยส่งบิลผ่าน LINE</small></label>
+                <label class="label md:col-span-2">เจ้าของบิล<select id="upload-owner" class="field mt-2" required></select><small id="upload-owner-help" class="mt-1 block text-xs text-slate-500" aria-live="polite">รายชื่อมาจากผู้ที่เคยส่งบิลผ่าน LINE และรีเฟรชอัตโนมัติเมื่อเปิดหน้านี้</small></label>
               </div>
               <label class="label block">บิลชุดนี้มีกี่หน้า
                 <input id="expected-pages" class="field mt-2" type="number" min="1" max="6" value="1" required>

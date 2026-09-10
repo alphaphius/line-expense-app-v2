@@ -7,7 +7,8 @@ import sharp from 'sharp';
 import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, inspectTemplate } from '../server/exports.mjs';
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
-import { billConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
+import { billConfirmation, billSavedConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
+import { normalizeQualityScore } from '../server/actions/bills.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -64,6 +65,13 @@ test('scrypt password hashes verify without storing plaintext', async () => {
   assert.doesNotMatch(encoded, /test-password/);
 });
 
+test('Gemini quality scores accept both 0-1 and 0-100 scales', () => {
+  assert.equal(normalizeQualityScore(1), 100);
+  assert.equal(normalizeQualityScore(0.95), 95);
+  assert.equal(normalizeQualityScore(95), 95);
+  assert.equal(normalizeQualityScore(120), 100);
+});
+
 test('manual XLSX export is a valid OOXML zip', async () => {
   const buffer = await createXlsx('รายการ', ['ชื่อ', 'ยอด'], [['ทดสอบ', 1250.5]], [30, 15]);
   const zip = await JSZip.loadAsync(buffer);
@@ -110,6 +118,9 @@ test('LINE Flex preserves the legacy visual sections, six-page limit, cancel and
   assert.match(flex,/AI BILL CAPTURE/);
   assert.match(flex,/ผลตรวจสอบข้อมูลบริษัท/);
   assert.match(flex,/Fiat Taksakorn/);
+  const normalizedFlex=JSON.stringify(billConfirmation({bill_id:'bill-2',vendor_name:'ร้านทดสอบ',category_name:'การบริการ',project_name:'DMR',company_name:'GFE',document_date:'2026-09-08',subtotal:190,vat_amount:0,grand_total:190,company_match:true,tax_id_match:true,address_match:true,image_quality:'CLEAR',quality_score:1,source_user_name:'Fiat Taksakorn',needs_review:false,review_reasons:''}));
+  assert.match(normalizedFlex,/CLEAR · 100%/);
+  assert.match(JSON.stringify(billSavedConfirmation({bill_id:'bill-1',vendor_name:'ร้านทดสอบ',category_name:'การบริการ',document_date:'2026-09-08',grand_total:190})),/บันทึกบิลเรียบร้อย/);
   assert.doesNotMatch(flex,/เลขที่เอกสาร|document_no/);
 });
 

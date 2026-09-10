@@ -11,6 +11,12 @@ const thaiNormalize = value => clean(value, 1000).toLowerCase().replace(/[\s.,()
 const taxId = value => clean(value, 30).replace(/\D/g, '').slice(0, 13);
 const sqlDate = value => normalizeDate(value);
 
+export function normalizeQualityScore(value) {
+  const raw = number(value);
+  const percent = raw > 0 && raw <= 1 ? raw * 100 : raw;
+  return Math.max(0, Math.min(100, Math.round(percent * 1000) / 1000));
+}
+
 async function analyzeWithGemini(images, context) {
   if (!config.geminiApiKey) throw apiError('GEMINI_NOT_CONFIGURED', 'ยังไม่ได้ตั้งค่า GEMINI_API_KEY บน NAS', 503);
   const schema = {
@@ -25,6 +31,7 @@ async function analyzeWithGemini(images, context) {
     `อ่านเอกสารค่าใช้จ่ายภาษาไทย ${images.length} หน้าเป็นบิลเดียว รวมรายการต่อเนื่องและอย่านับยอดซ้ำ`,
     `วันที่รับเข้า ${context.receivedDate} ใช้อ้างอิงเท่านั้น วันที่เอกสารต้องเป็น YYYY-MM-DD ค.ศ. ถ้าอ่านไม่ครบให้ค่าว่าง ห้ามเดา`,
     'ตรวจบริษัทผู้ซื้อโดยเน้นเลขผู้เสียภาษี 13 หลักก่อนชื่อและที่อยู่ ช่องอ่านไม่ได้ใช้ค่าว่างหรือ 0',
+    'quality_score ต้องเป็นคะแนนเต็ม 100 (0 ถึง 100 เท่านั้น เช่น ภาพชัดมากให้ 95-100) ห้ามใช้สเกล 0 ถึง 1',
     'ถ้าภาพไม่ชัดหรือข้อมูลสำคัญไม่ครบ ให้ needs_review=true และเขียนเหตุผลภาษาไทย',
     `บริษัท: ${JSON.stringify(context.companies.map(item=>({id:item.company_id,name:item.company_name,branch:item.branch_name,tax_id:item.tax_id,address:item.address})))}`,
     `หมวดหมู่: ${JSON.stringify(context.categories.map(item=>({id:item.category_id,name:item.category_name,aliases:item.aliases})))}`,
@@ -53,7 +60,7 @@ async function analyzeWithGemini(images, context) {
     result.buyer_tax_id = taxId(result.buyer_tax_id);
     result.review_reasons = Array.isArray(result.review_reasons) ? result.review_reasons.map(value=>clean(value,180)).filter(Boolean) : [];
     if (!extractedDate) result.review_reasons.push(`ไม่พบวันที่เอกสารชัดเจน ระบบใช้วันที่รับเข้า ${context.receivedDate} ชั่วคราว`);
-    result.quality_score = Math.max(0, Math.min(100, number(result.quality_score)));
+    result.quality_score = normalizeQualityScore(result.quality_score);
     result.needs_review = bool(result.needs_review) || !extractedDate || result.quality_score < 70 || !clean(result.vendor_name);
     result.items = Array.isArray(result.items) ? result.items.slice(0,200) : [];
     await execute('INSERT INTO ai_usage (usage_id,bill_id,model,prompt_version,input_tokens,output_tokens,thought_tokens,total_tokens,latency_ms,success,error,created_at) VALUES (:id,:bill,:model,:prompt,:input,:output,:thought,:total,:latency,1,\'\',:created)', { id:uuid(), bill:context.billId, model:config.geminiModel, prompt:'bill-th-nas-v1', input:number(responseBody.usageMetadata?.promptTokenCount), output:number(responseBody.usageMetadata?.candidatesTokenCount), thought:number(responseBody.usageMetadata?.thoughtsTokenCount), total:number(responseBody.usageMetadata?.totalTokenCount), latency:Date.now()-started, created:nowSql() });

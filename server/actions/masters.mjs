@@ -39,15 +39,20 @@ export async function ensureDefaults() {
   if (!groupCount) await execute('INSERT INTO labor_groups (group_id, group_name, group_type, project_id, active, created_at, updated_at) VALUES (:id, :name, :type, :project, 1, :created, :updated)', { id: uuid(), name: 'แรงงานประจำ', type: 'PERMANENT', project: '', created: timestamp, updated: timestamp });
 }
 
+export async function listBillOwners() {
+  const rows = await select("SELECT user_id, display_name, picture_url, last_seen_at FROM line_users WHERE user_id REGEXP '^U[0-9A-Fa-f]{32}$' ORDER BY display_name, last_seen_at DESC LIMIT 500");
+  return rows.map(publicRow);
+}
+
 export async function listMasterData() {
   const [projects, companies, categories, vendors, billOwners] = await Promise.all([
     select('SELECT * FROM projects WHERE active = 1 ORDER BY project_name'),
     select('SELECT * FROM companies WHERE active = 1 ORDER BY company_name'),
     select('SELECT * FROM categories WHERE active = 1 ORDER BY category_name'),
     select('SELECT * FROM vendors ORDER BY use_count DESC, last_used_at DESC LIMIT 500'),
-    select("SELECT user_id, display_name, picture_url, last_seen_at FROM line_users WHERE user_id <> '' ORDER BY display_name, last_seen_at DESC LIMIT 500"),
+    listBillOwners(),
   ]);
-  return { projects: projects.map(publicRow), companies: companies.map(publicRow), categories: categories.map(publicRow), vendors: vendors.map(publicRow), billOwners: billOwners.map(publicRow) };
+  return { projects: projects.map(publicRow), companies: companies.map(publicRow), categories: categories.map(publicRow), vendors: vendors.map(publicRow), billOwners };
 }
 
 export async function saveMasterData(type, payload = {}, actor = 'WEB') {

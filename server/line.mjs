@@ -4,7 +4,7 @@ import { execute, one, select, transaction } from './db.mjs';
 import { readBuffer, removeFile, storeCompressedImage } from './files.mjs';
 import { clean, nowSql, number, uuid } from './utils.mjs';
 import { getQuickSettings } from './actions/masters.mjs';
-import { confirmBill, deleteBill, submitBillPages } from './actions/bills.mjs';
+import { confirmBill, deleteBill, normalizeQualityScore, submitBillPages } from './actions/bills.mjs';
 
 const LINE_API = 'https://api.line.me';
 const LINE_DATA_API = 'https://api-data.line.me';
@@ -54,6 +54,14 @@ async function reply(replyToken, messages) {
 async function push(target, messages) {
   if(!target)return;
   await lineRequest('/v2/bot/message/push',{method:'POST',body:{to:target,messages:messages.slice(0,5)}});
+}
+
+async function pushWithRetry(target, messages) {
+  let lastError;
+  for(let attempt=1;attempt<=3;attempt+=1){
+    try{return await push(target,messages);}catch(error){lastError=error;if(attempt<3)await new Promise(resolve=>setTimeout(resolve,attempt*450));}
+  }
+  throw lastError;
 }
 
 async function reserveEvent(event) {
@@ -152,6 +160,11 @@ function moneyText(value){return number(value).toLocaleString('th-TH',{minimumFr
 function resultMark(ok){return ok?'✓ ตรงกัน':'! ไม่ตรง/อ่านไม่พบ';}
 function row(label,value,color='#44312A'){return{type:'box',layout:'baseline',spacing:'sm',contents:[{type:'text',text:label,color:'#8C756A',size:'sm',flex:4},{type:'text',text:clean(value,300)||'-',color,weight:'bold',size:'sm',align:'end',wrap:true,flex:7}]};}
 
+function billSavedConfirmation(bill){
+  const buttons=config.publicBaseUrl?[{type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'เปิดและแก้ไขบิล',uri:`${config.publicBaseUrl}/?bill_id=${encodeURIComponent(bill.bill_id)}&edit=1`}}]:[];
+  return{type:'flex',altText:`บันทึกบิล ${bill.vendor_name||''} เรียบร้อยแล้ว`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'บันทึกบิลเรียบร้อย',color:'#FFFFFF',weight:'bold',size:'xl'},{type:'text',text:'ข้อมูลถูกเพิ่มเข้า WorkHub แล้ว',color:'#DCE9DF',size:'sm',margin:'sm'}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[row('ชื่อร้าน',bill.vendor_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),row('ยอดสุทธิ',`${moneyText(bill.grand_total)} บาท`)]},...(buttons.length?{footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:buttons}}:{})}};
+}
+
 function billConfirmation(bill) {
   const total=moneyText(bill.grand_total),reasons=clean(bill.review_reasons,1000),dateClear=!/ไม่พบวันที่เอกสารชัดเจน|วันที่.*ไม่ชัด/i.test(reasons),duplicate=/บิลซ้ำ/i.test(reasons);
   const allCompanyChecks=!!bill.company_match&&!!bill.tax_id_match&&!!bill.address_match;
@@ -167,7 +180,7 @@ function billConfirmation(bill) {
     row('โครงการ',bill.project_name),row('บริษัท',bill.company_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),
     {type:'box',layout:'vertical',cornerRadius:'18px',backgroundColor:'#F8EADB',paddingAll:'16px',margin:'lg',contents:[row('ก่อน VAT',`${moneyText(bill.subtotal)} บาท`),row('VAT',`${moneyText(bill.vat_amount)} บาท`),{type:'separator',margin:'md',color:'#D9BFA8'},{type:'text',text:'ยอดสุทธิ',color:'#8C756A',weight:'bold',size:'sm',margin:'md'},{type:'text',text:`${total} บาท`,color:'#8A4428',weight:'bold',size:'xxl',align:'end',margin:'sm'}]},
     {type:'text',text:'ผลตรวจสอบข้อมูลบริษัท',color:'#8A4B36',weight:'bold',size:'lg',margin:'xl'},
-    row('ชื่อบริษัท',resultMark(bill.company_match),verificationColor),row('เลขผู้เสียภาษี',resultMark(bill.tax_id_match),verificationColor),row('ที่อยู่',resultMark(bill.address_match),verificationColor),row('คุณภาพรูป',`${clean(bill.image_quality,40)||'-'} · ${Math.round(number(bill.quality_score))}%`),row('ผู้ส่ง',bill.source_user_name||'ผู้ส่งผ่าน LINE'),row('วันที่ในบิล',dateClear?'✓ ระบุชัดเจน':'! ไม่ชัดเจน ใช้วันที่อัปโหลด',dateClear?'#77703F':'#A15A34'),row('บิลซ้ำ',duplicate?'! พบรายการที่อาจซ้ำ':'✓ ไม่พบ',duplicate?'#A15A34':'#77703F'),
+    row('ชื่อบริษัท',resultMark(bill.company_match),verificationColor),row('เลขผู้เสียภาษี',resultMark(bill.tax_id_match),verificationColor),row('ที่อยู่',resultMark(bill.address_match),verificationColor),row('คุณภาพรูป',`${clean(bill.image_quality,40)||'-'} · ${Math.round(normalizeQualityScore(bill.quality_score))}%`),row('ผู้ส่ง',bill.source_user_name||'ผู้ส่งผ่าน LINE'),row('วันที่ในบิล',dateClear?'✓ ระบุชัดเจน':'! ไม่ชัดเจน ใช้วันที่อัปโหลด',dateClear?'#77703F':'#A15A34'),row('บิลซ้ำ',duplicate?'! พบรายการที่อาจซ้ำ':'✓ ไม่พบ',duplicate?'#A15A34':'#77703F'),
     ...(reasons?[{type:'box',layout:'vertical',cornerRadius:'14px',backgroundColor:allCompanyChecks&&!bill.needs_review?'#F3F0E4':'#FFF0E2',paddingAll:'14px',margin:'lg',contents:[{type:'text',text:reasons,color:'#6E6044',size:'xs',wrap:true}]}]:[]),
   ]},footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'sm',contents:buttons}}};
 }
@@ -186,17 +199,21 @@ async function processSession(sessionId,userId,contextId,replyToken,source) {
   await execute("UPDATE upload_sessions SET status='PROCESSING',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
   await reply(replyToken,[message('รับข้อมูลครบแล้ว กำลังให้ Gemini อ่านและบีบอัดบิล กรุณารอสักครู่…')]);
   const pages=await select('SELECT * FROM line_upload_pages WHERE session_id=:id ORDER BY page_no',{id:sessionId});
+  let billCreated=false;
   try {
     const profile=await lineProfile(userId,source);
     await rememberLineUser(userId,profile);
     const files=await Promise.all(pages.map(async page=>({name:page.file_name,dataUrl:`data:${page.mime_type};base64,${(await readBuffer(page.file_path)).toString('base64')}`})));
     const bill=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_user_name:profile.displayName,source_context_id:contextId});
+    billCreated=true;
     await execute("UPDATE upload_sessions SET status='COMPLETED',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
     await cleanupSessionFiles(sessionId);
-    await push(contextId,[billConfirmation(bill)]);
+    await pushWithRetry(contextId,[billConfirmation(bill)]);
   } catch(error) {
-    await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-    await push(contextId,[message(`วิเคราะห์บิลไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปยังถูกเก็บไว้ พิมพ์ “ยกเลิก” เพื่อเริ่มใหม่ หรือลองเลือกบริษัทอีกครั้งหลังแก้การตั้งค่า`)]).catch(()=>{});
+    if(!billCreated){
+      await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
+      await push(contextId,[message(`วิเคราะห์บิลไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปยังถูกเก็บไว้ พิมพ์ “ยกเลิก” เพื่อเริ่มใหม่ หรือลองเลือกบริษัทอีกครั้งหลังแก้การตั้งค่า`)]).catch(()=>{});
+    }
     error.lineNotified=true;
     throw error;
   }
@@ -258,7 +275,7 @@ async function handlePostback(event,userId,contextId) {
   if(['confirm_bill','cancel_bill'].includes(action)){
     const bill=await one("SELECT bill_id FROM bills WHERE bill_id=:id AND source='LINE' AND source_user_id=:user AND source_context_id=:context",{id:clean(data.bill_id,64),user:userId,context:contextId});
     if(!bill)throw new Error('ไม่พบบิลนี้ หรือผู้ส่งไม่มีสิทธิ์จัดการ');
-    if(action==='confirm_bill'){await confirmBill(bill.bill_id,userId);await reply(event.replyToken,[message('บันทึกบิลเรียบร้อยแล้ว')]);}
+    if(action==='confirm_bill'){const saved=await confirmBill(bill.bill_id,userId);await reply(event.replyToken,[billSavedConfirmation(saved)]);}
     else {await deleteBill(bill.bill_id,userId);await reply(event.replyToken,[message('ยกเลิกบิลนี้แล้ว สามารถส่งรูปใหม่ได้เลยครับ')]);}
     return;
   }
@@ -313,4 +330,4 @@ export async function backfillLineUsernames(){
   return{updated,skipped,message:`อัปเดตชื่อผู้ส่งแล้ว ${updated} บิล${skipped?` · อ่านชื่อไม่ได้ ${skipped} คน`:''}`};
 }
 
-export { billConfirmation, pageCountMessage };
+export { billConfirmation, billSavedConfirmation, pageCountMessage };
