@@ -321,6 +321,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .receipt-upload-summary { margin-top:13px; border-radius:11px; background:#f5ece2; padding:11px 14px; color:#725c50; font-size:11px; }
 .receipt-upload-summary.hidden,.receipt-quick-edit-card.hidden { display:none; }
 .receipt-process-btn { width:100%; margin-top:13px; }
+.receipt-batch-actions { display:flex; align-items:center; gap:8px; }
 .receipt-quick-edit-list { display:grid; gap:12px; margin-top:18px; }
 .receipt-edit-row { display:grid; grid-template-columns:54px minmax(170px,.8fr) minmax(170px,.8fr) minmax(260px,1.3fr) auto; align-items:start; gap:10px; border:1px solid #e3d5c7; border-radius:14px; background:#fffdf9; padding:13px; }
 .receipt-edit-row__index { display:grid; width:42px; height:42px; place-items:center; border-radius:12px; background:#f0e4d8; color:#795442; font-size:12px; font-weight:700; }
@@ -382,6 +383,8 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   .receipt-setup-card,.receipt-upload-card,.receipt-quick-edit-card,.receipt-registry-card { padding:17px; }
   .receipt-section-head { flex-direction:column; }
   .receipt-section-head > button { width:100%; }
+  .receipt-batch-actions { width:100%; }
+  .receipt-batch-actions > button { flex:1; }
   .receipt-setup-grid,.receipt-filter-bar { grid-template-columns:1fr; }
   .receipt-dropzone { min-height:155px; padding:18px; text-align:center; }
   .receipt-edit-row { grid-template-columns:36px minmax(0,1fr); }

@@ -79,10 +79,12 @@ test('browser scripts parse and image compression is bounded', async () => {
   assert.match(optimizer, /Math\.min\(2, list\.length\)/);
 });
 
-test('payment receipt module uses bounded local OCR, quick edit, duplicate review, and split exports', async () => {
+test('payment receipt module queues compressed cards before Gemini AI, supports resume, quick edit, duplicate review, and split exports', async () => {
   const frontend = await read('frontend/receipts.js');
-  assert.match(frontend, /OfflineThaiIdOcr\.recognize/);
-  assert.match(frontend, /saveReceiptCardDraft/);
+  assert.match(frontend, /queueReceiptCard/);
+  assert.match(frontend, /processReceiptBatchAI/);
+  assert.match(frontend, /resumeBatchAI/);
+  assert.doesNotMatch(frontend, /OfflineThaiIdOcr\.recognize/);
   assert.match(frontend, /saveReceiptRegistrations/);
   assert.match(frontend, /previewReceiptExport/);
   assert.match(frontend, /exportReceiptDocuments/);
@@ -186,8 +188,8 @@ test('service worker caches only same-origin static GET assets', async () => {
   assert.match(worker, /url\.origin !== self\.location\.origin/);
   assert.doesNotMatch(worker, /script\.google\.com/);
   assert.match(worker, /\.\/receipts\.js/);
-  assert.match(worker, /\.\/offline-ocr\.js/);
-  assert.match(worker, /vendor\/tesseract/);
+  assert.doesNotMatch(worker, /\.\/offline-ocr\.js/);
+  assert.doesNotMatch(worker, /vendor\/tesseract/);
   assert.match(worker, /event\.request\.mode === 'navigate'/);
   assert.match(worker, /Response\.error\(\)/);
 });

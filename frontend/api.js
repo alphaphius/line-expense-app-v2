@@ -11,7 +11,7 @@
   let endpoint = normalizeEndpoint(config.apiEndpoint || localStorage.getItem(keys.endpoint) || '/api');
   let session = readSession();
   let protectedSession = readProtectedSession();
-  const longActions = ['submitBillPages', 'exportMonthlyBillWord', 'exportMonthlyBillExcel', 'backfillLineUsernames', 'saveReceiptTemplate', 'saveReceiptCardDraft', 'exportReceiptDocuments', 'exportReceiptRosterExcel'];
+  const longActions = ['submitBillPages', 'exportMonthlyBillWord', 'exportMonthlyBillExcel', 'backfillLineUsernames', 'saveReceiptTemplate', 'queueReceiptCard', 'processReceiptBatchAI', 'saveReceiptCardDraft', 'exportReceiptDocuments', 'exportReceiptRosterExcel'];
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();

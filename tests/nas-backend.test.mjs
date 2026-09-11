@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
 import { billConfirmation, billSavedConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
 import { addressesMatch, normalizeQualityScore } from '../server/actions/bills.mjs';
+import { buildReceiptAiRequest, normalizeReceiptAiResult } from '../server/actions/receipts.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -21,18 +22,20 @@ async function templateDocx() {
 }
 
 test('NAS deployment artifacts keep secrets out of source and use persistent storage', async () => {
-  const [compose, env, dockerfile, schema, lineSchema, server, line] = await Promise.all([
+  const [compose, env, dockerfile, schema, lineSchema, receiptAiSchema, server, line] = await Promise.all([
     fs.readFile(path.join(root, 'compose.synology.yaml'), 'utf8'),
     fs.readFile(path.join(root, '.env.nas.example'), 'utf8'),
     fs.readFile(path.join(root, 'Dockerfile'), 'utf8'),
     fs.readFile(path.join(root, 'server/migrations/001_init.sql'), 'utf8'),
     fs.readFile(path.join(root, 'server/migrations/002_line_messaging.sql'), 'utf8'),
+    fs.readFile(path.join(root, 'server/migrations/004_receipt_ai_ocr.sql'), 'utf8'),
     fs.readFile(path.join(root, 'server/server.mjs'), 'utf8'),
     fs.readFile(path.join(root, 'server/line.mjs'), 'utf8'),
   ]);
   assert.match(compose, /workhub-data:\/data/);
   assert.match(compose, /workhub-data:\s*\n\s+name: workhub-data/);
   assert.match(compose, /network_mode: host/);
+  assert.match(compose, /workhub-receipt-ai\.env/);
   assert.match(env, /WORKHUB_PASSWORD_HASH=scrypt\$/);
   assert.doesNotMatch(env, /gfe123456_/);
   assert.match(dockerfile, /USER node/);
@@ -41,6 +44,8 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(schema, /INDEX idx_bills_duplicate/);
   assert.match(env, /PUBLIC_BASE_URL=https:\/\/workhub\.nasgfe1\.synology\.me/);
   assert.match(env, /LINE_CHANNEL_SECRET=REPLACE_/);
+  assert.match(env, /RECEIPT_GEMINI_API_KEY=REPLACE_/);
+  assert.match(receiptAiSchema, /ai_attempts/);
   assert.match(lineSchema, /CREATE TABLE IF NOT EXISTS line_webhook_events/);
   assert.match(lineSchema, /CREATE TABLE IF NOT EXISTS line_upload_pages/);
   assert.match(server, /request\.rawJsonBody/);
@@ -48,6 +53,18 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(server, /repairAddressMatchFlags/);
   assert.match(line, /timingSafeEqual/);
   assert.match(line, /INSERT IGNORE INTO line_webhook_events/);
+});
+
+test('Gemini Thai-ID batching maps each image and normalizes safe editable fields', () => {
+  const request=buildReceiptAiRequest([{buffer:Buffer.from('one')},{buffer:Buffer.from('two')}]);
+  assert.equal(request.contents[0].parts.filter(part=>part.inlineData).length,2);
+  assert.match(request.contents[0].parts[1].text,/IMAGE_INDEX=1/);
+  assert.equal(request.generationConfig.responseMimeType,'application/json');
+  const result=normalizeReceiptAiResult({full_name:'นาย ตัวอย่าง นามรอง สาธิตสกุล',national_id:'1 1017 00207 03 0',address:'1/11  ถนนสุขุมวิท  กรุงเทพมหานคร',confidence:.99,warnings:[]});
+  assert.equal(result.fullName,'ตัวอย่าง นามรอง สาธิตสกุล');
+  assert.equal(result.national,'1101700207030');
+  assert.equal(result.confidence,99);
+  assert.equal(result.address,'1/11 ถนนสุขุมวิท กรุงเทพมหานคร');
 });
 
 test('LINE webhook signature validates the exact raw request body', () => {

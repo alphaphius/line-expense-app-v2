@@ -17,12 +17,12 @@ for (const file of ['index.html', 'manifest.webmanifest']) {
   await cp(path.join(frontend, file), path.join(dist, file));
 }
 
-const versionedAssets = ['styles.css','config.js','api.js','image-optimizer.js','offline-ocr.js','protected-access.js','receipts.js','app.js','pwa.js'];
+const versionedAssets = ['styles.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','app.js','pwa.js'];
 let builtIndex = await readFile(path.join(dist, 'index.html'), 'utf8');
 for (const asset of versionedAssets) builtIndex = builtIndex.replaceAll(`./${asset}`, `./${asset}?v=${packageJson.version}`);
 await writeFile(path.join(dist, 'index.html'), builtIndex);
 
-for (const file of ['api.js', 'image-optimizer.js', 'offline-ocr.js', 'protected-access.js', 'receipts.js', 'app.js', 'pwa.js']) {
+for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'app.js', 'pwa.js']) {
   await build({
     entryPoints: [path.join(frontend, file)],
     outfile: path.join(dist, file),
@@ -55,16 +55,5 @@ try { await cp(path.join(frontend, 'icons'), path.join(dist, 'icons'), { recursi
 await Promise.all([
   cp(path.join(root, 'node_modules', 'sweetalert2', 'dist', 'sweetalert2.all.min.js'), path.join(dist, 'vendor', 'sweetalert2.all.min.js')),
   cp(path.join(root, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), path.join(dist, 'vendor', 'chart.umd.js')),
-]);
-const tesseractDist = path.join(dist, 'vendor', 'tesseract');
-await mkdir(path.join(tesseractDist, 'core'), { recursive: true });
-await mkdir(path.join(tesseractDist, 'lang'), { recursive: true });
-await Promise.all([
-  cp(path.join(root, 'node_modules', 'tesseract.js', 'dist', 'tesseract.min.js'), path.join(tesseractDist, 'tesseract.min.js')),
-  cp(path.join(root, 'node_modules', 'tesseract.js', 'dist', 'worker.min.js'), path.join(tesseractDist, 'worker.min.js')),
-  cp(path.join(root, 'node_modules', '@tesseract.js-data', 'tha', '4.0.0_best_int', 'tha.traineddata.gz'), path.join(tesseractDist, 'lang', 'tha.traineddata.gz')),
-  ...['tesseract-core-lstm.wasm.js', 'tesseract-core-lstm.wasm', 'tesseract-core-simd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm', 'tesseract-core-relaxedsimd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm'].map(file =>
-    cp(path.join(root, 'node_modules', 'tesseract.js-core', file), path.join(tesseractDist, 'core', file))
-  ),
 ]);
 console.log(`Built ${packageJson.name} ${packageJson.version} → ${dist}`);

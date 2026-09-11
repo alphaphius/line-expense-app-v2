@@ -19,8 +19,6 @@
   <script defer src="./config.js"></script>
   <script defer src="./api.js"></script>
   <script defer src="./image-optimizer.js"></script>
-  <script defer src="./vendor/tesseract/tesseract.min.js"></script>
-  <script defer src="./offline-ocr.js"></script>
   <script defer src="./protected-access.js"></script>
   <script defer src="./receipts.js"></script>
   <script defer src="./app.js"></script>
@@ -55,7 +53,7 @@
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.3.2 NAS · WorkHub · ID OCR Offline</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.4.0 NAS · WorkHub · Gemini ID OCR</div>
     </aside>
 
     <main class="app-main w-full lg:ml-72">
@@ -307,7 +305,7 @@
           </div>
 
           <article class="receipt-hero">
-            <div><p class="eyebrow">PAYMENT RECEIPTS</p><h3>สร้างใบรับเงินจากบัตรประชาชน</h3><p>อัปโหลดหลายรูป ระบบจะบีบอัดและอ่านภาษาไทยบนอุปกรณ์โดยไม่ใช้ Gemini ก่อนแสดง Quick Edit ทีละคน</p></div>
+            <div><p class="eyebrow">PAYMENT RECEIPTS</p><h3>สร้างใบรับเงินจากบัตรประชาชน</h3><p>อัปโหลดหลายรูป ระบบจะบีบอัดและเก็บต้นฉบับบน NAS ก่อนให้ Gemini อ่านเป็นชุด แล้วแสดง Quick Edit ทีละคน</p></div>
             <div class="receipt-hero__stats"><strong id="receipt-total-count">0</strong><span>รายชื่อในระบบ</span></div>
           </article>
 
@@ -329,17 +327,17 @@
             </article>
 
             <article class="card receipt-upload-card">
-              <div class="receipt-section-head"><div><span class="step-kicker">02 · อ่านข้อมูล</span><h3>อัปโหลดรูปบัตรประชาชน</h3><p>สูงสุด 40 รูปต่อชุด · OCR ภาษาไทยทำงานบนอุปกรณ์ · ครั้งแรกจะโหลดชุดภาษาแล้วเก็บไว้ใช้ครั้งถัดไป</p></div></div>
+              <div class="receipt-section-head"><div><span class="step-kicker">02 · อ่านข้อมูล</span><h3>อัปโหลดรูปบัตรประชาชน</h3><p>สูงสุด 40 รูปต่อชุด · เก็บรูปบน NAS ก่อนอ่าน · Gemini ประมวลผลหลายรูปต่อคำขอเพื่อลด token</p></div></div>
               <label id="receipt-card-dropzone" class="receipt-dropzone">
                 <input id="receipt-card-files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-                <span class="receipt-dropzone__icon" aria-hidden="true">＋</span><strong>เลือกรูปบัตรประชาชน</strong><small>JPG, PNG, WEBP · บีบอัดก่อนบันทึก · ไม่ส่งรูปไปยัง Gemini</small>
+                <span class="receipt-dropzone__icon" aria-hidden="true">＋</span><strong>เลือกรูปบัตรประชาชน</strong><small>JPG, PNG, WEBP · บีบอัดและบันทึกบน NAS ก่อนส่งให้ Gemini</small>
               </label>
               <div id="receipt-upload-summary" class="receipt-upload-summary hidden" aria-live="polite"></div>
               <button id="receipt-process-btn" class="primary-btn receipt-process-btn" type="button" disabled>เริ่มอ่านข้อมูล <span id="receipt-selected-count">0</span> รูป</button>
             </article>
 
             <article id="receipt-quick-edit-card" class="card receipt-quick-edit-card hidden">
-              <div class="receipt-section-head"><div><span class="step-kicker">03 · ตรวจสอบ</span><h3>Quick Edit</h3><p id="receipt-batch-progress">รอประมวลผล</p></div><button id="receipt-save-all-btn" class="primary-btn" type="button" disabled>บันทึกทั้งหมด</button></div>
+              <div class="receipt-section-head"><div><span class="step-kicker">03 · ตรวจสอบ</span><h3>Quick Edit</h3><p id="receipt-batch-progress">รอประมวลผล</p></div><div class="receipt-batch-actions"><button id="receipt-resume-ai-btn" class="secondary-btn hidden" type="button">ทำต่อด้วย AI</button><button id="receipt-save-all-btn" class="primary-btn" type="button" disabled>บันทึกทั้งหมด</button></div></div>
               <div id="receipt-quick-edit-list" class="receipt-quick-edit-list"></div>
             </article>
 

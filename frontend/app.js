@@ -993,8 +993,8 @@
   async function runBusy(fn, title) { Swal.fire({ title, allowOutsideClick:false, didOpen:()=>Swal.showLoading() }); try { return await fn(); } finally { Swal.close(); } }
 
   async function loadSystemStatus() {
-    try { const s = await gas('getSystemStatus'); const diagnostics = s.lineDiagnostics || {}; const gemini = s.geminiDiagnostics || {}; document.getElementById('system-status').innerHTML = [
-      ['ฐานข้อมูล',s.spreadsheet,true],['พื้นที่จัดเก็บ NAS',s.folder,true],['Gemini API Key',gemini.message || (s.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!gemini.valid],['LINE Messaging API',s.lineConfigured?'ตั้งค่าแล้ว':'ยังตั้งค่าไม่ครบ',!!s.lineConfigured],['AI Model',s.model,true]
+    try { const s = await gas('getSystemStatus'); const diagnostics = s.lineDiagnostics || {}; const gemini = s.geminiDiagnostics || {}; const receiptGemini=s.receiptGeminiDiagnostics||{}; document.getElementById('system-status').innerHTML = [
+      ['ฐานข้อมูล',s.spreadsheet,true],['พื้นที่จัดเก็บ NAS',s.folder,true],['Gemini API · บิล',gemini.message || (s.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!gemini.valid],['โมเดล · บิล',s.model,true],['Gemini API · เอกสารใบรับเงิน',receiptGemini.message || (s.receiptGeminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'),!!receiptGemini.valid],['โมเดล · เอกสารใบรับเงิน',s.receiptModel,true],['LINE Messaging API',s.lineConfigured?'ตั้งค่าแล้ว':'ยังตั้งค่าไม่ครบ',!!s.lineConfigured]
     ].map(item=>`<div class="flex items-center justify-between rounded-xl bg-slate-50 p-4"><div><p class="text-xs text-slate-400">${item[0]}</p><p class="text-sm font-medium">${escapeHtml(item[1])}</p></div><span class="h-3 w-3 rounded-full ${item[2]?'bg-emerald-500':'bg-amber-400'}"></span></div>`).join('') +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Webhook URL</p><p class="mt-1 break-all text-xs">${escapeHtml((diagnostics.webhook||{}).endpoint || '-')}</p></div>` +
     `<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">LIFF URL</p><p class="mt-1 break-all text-xs">${escapeHtml(diagnostics.liff_url || '-')}</p></div>` +

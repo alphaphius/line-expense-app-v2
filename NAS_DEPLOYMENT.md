@@ -36,6 +36,7 @@ FLUSH PRIVILEGES;
 4. คัดลอก `.env.nas.example` เป็น `.env.nas`
 5. ใส่ `DB_PASSWORD` และ `WORKHUB_PASSWORD_HASH` ใน `.env.nas`
 6. เก็บ `GEMINI_API_KEY`, `PUBLIC_BASE_URL`, `LINE_CHANNEL_SECRET` และ `LINE_CHANNEL_ACCESS_TOKEN` ใน `workhub-line.env` แยกจากค่าฐานข้อมูล เพื่อหมุน Token ได้โดยไม่แตะรหัส MariaDB
+7. สร้าง `/volume1/docker/workhub/secrets/workhub-receipt-ai.env` สิทธิ์ `600` สำหรับ `RECEIPT_GEMINI_API_KEY` และ `RECEIPT_GEMINI_MODEL=gemini-3.6-flash` โดยเฉพาะ ห้ามใช้ key เดียวกับส่วนบิล
 
 สร้าง password hash โดยรันในโฟลเดอร์โปรเจกต์:
 

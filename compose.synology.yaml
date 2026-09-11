@@ -3,12 +3,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: workhub:4.3.2
+    image: workhub:4.4.0
     container_name: workhub
     restart: unless-stopped
     env_file:
       - .env.nas
       - workhub-line.env
+      - /volume1/docker/workhub/secrets/workhub-receipt-ai.env
     network_mode: host
     volumes:
       - workhub-data:/data

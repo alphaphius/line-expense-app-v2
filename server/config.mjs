@@ -9,9 +9,9 @@ const int = (name, fallback) => {
 
 export const config = Object.freeze({
   appName: 'WorkHub',
-  appVersion: '4.3.2-nas',
+  appVersion: '4.4.0-nas',
   apiVersion: '2.0',
-  schemaVersion: 3,
+  schemaVersion: 4,
   host: process.env.HOST || '0.0.0.0',
   port: int('PORT', 8080),
   dataDir: path.resolve(process.env.DATA_DIR || './.workhub-data'),
@@ -34,6 +34,9 @@ export const config = Object.freeze({
   maxBodyBytes: int('MAX_BODY_BYTES', 18 * 1024 * 1024),
   maxPagesPerBill: int('MAX_PAGES_PER_BILL', 6),
   receiptMaxBatchCards: int('RECEIPT_MAX_BATCH_CARDS', 40),
+  receiptGeminiApiKey: process.env.RECEIPT_GEMINI_API_KEY || '',
+  receiptGeminiModel: process.env.RECEIPT_GEMINI_MODEL || 'gemini-3.6-flash',
+  receiptAiImagesPerRequest: Math.max(1, Math.min(8, int('RECEIPT_AI_IMAGES_PER_REQUEST', 6))),
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, ''),

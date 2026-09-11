@@ -3,7 +3,7 @@
 
   const state = {
     loaded: false, enabled: false, templates: [], groups: [], projects: [], registrations: [],
-    selectedFiles: [], batchId: '', draftRows: [], processing: false,
+    selectedFiles: [], batchId: '', draftRows: [], processing: false, activeBatch: null, aiModel: '',
   };
 
   const $ = id => document.getElementById(id);
@@ -36,7 +36,10 @@
       state.groups = workspace.groups || [];
       state.projects = workspace.projects || [];
       state.registrations = (workspace.registrations && workspace.registrations.rows) || [];
+      state.aiModel = workspace.aiModel || '';
+      state.activeBatch = workspace.activeBatch || null;
       renderWorkspace(workspace.securityMessage || '');
+      restoreActiveBatch();
     } catch (error) {
       state.loaded = true;
       state.enabled = false;
@@ -65,6 +68,25 @@
     $('receipt-group-select').innerHTML = '<option value="">เลือกกลุ่มแรงงาน</option>' + groupOptions;
     $('receipt-filter-group').innerHTML = '<option value="">ทุกกลุ่มแรงงาน</option>' + groupOptions;
     if (state.groups.some(row => row.group_id === groupValue)) $('receipt-group-select').value = groupValue;
+  }
+
+  function serverDraft(row) {
+    return Object.assign({}, row, {
+      status:row.status || 'AI_QUEUED',
+      full_name:row.full_name || '', national_id:row.national_id || '', address:row.address || '',
+      warnings:String(row.ocr_warnings || '').split(' | ').filter(Boolean), error:row.ai_last_error || '', file:null,
+    });
+  }
+
+  function restoreActiveBatch() {
+    const active=state.activeBatch;
+    if(!active||!active.batch||!(active.rows||[]).length)return;
+    state.batchId=active.batch.batch_id;
+    state.draftRows=active.rows.map(serverDraft);
+    $('receipt-template-select').value=active.batch.template_id;
+    $('receipt-group-select').value=active.batch.group_id;
+    $('receipt-quick-edit-card').classList.remove('hidden');
+    renderDraftRows();
   }
 
   function readFilters() {
@@ -170,49 +192,39 @@
 
   async function processCards() {
     if (state.processing || !state.selectedFiles.length) return;
+    if(state.batchId&&state.draftRows.length)return Swal.fire('มีชุดที่กำลังทำอยู่','กรุณาตรวจสอบ บันทึก หรือกดทำต่อด้วย AI ให้ชุดปัจจุบันเสร็จก่อน','info');
     const templateId = $('receipt-template-select').value;
     const groupId = $('receipt-group-select').value;
     if (!templateId || !groupId) return Swal.fire('กรุณาเลือก Template และกลุ่มแรงงาน','','warning');
     state.processing = true;
     $('receipt-process-btn').disabled = true;
     $('receipt-quick-edit-card').classList.remove('hidden');
-    state.draftRows = state.selectedFiles.map((file,index) => ({ local_id:`local-${index}`, file, status:'QUEUED', full_name:'', national_id:'', address:'', warnings:[], error:'' }));
+    state.draftRows = state.selectedFiles.map((file,index) => ({ local_id:`local-${index}`, file, status:'UPLOAD_QUEUED', full_name:'', national_id:'', address:'', warnings:[], error:'' }));
     renderDraftRows();
     try {
-      const ocrRuntime = await window.OfflineThaiIdOcr.initialize(progress => {
-        const percent = Math.round(Number(progress.progress || 0) * 100);
-        $('receipt-batch-progress').textContent = `${progress.status} ${percent}% · โหลดครั้งแรกครั้งเดียว`;
-      });
       const batch = await gas('createReceiptBatch', { template_id:templateId, group_id:groupId, total_count:state.selectedFiles.length, created_by:'WEB' });
       state.batchId = batch.batch_id;
       let next = 0;
-      async function worker() {
+      async function uploadWorker() {
         while (next < state.draftRows.length) {
           const index = next++;
           const row = state.draftRows[index];
           row.status = 'COMPRESSING'; renderDraftRow(index);
           try {
-            const optimized = await window.ImageOptimizer.compressImage(row.file, { maxLongEdge:1600, targetBytes:700*1024, quality:.8, minQuality:.54 });
-            row.status = 'OCR'; renderDraftRow(index);
-            let lastProgress = -1;
-            const ocr = await window.OfflineThaiIdOcr.recognize(optimized.dataUrl, progress => {
-              const percent = Math.round(Number(progress.progress || 0) * 100);
-              if (percent !== 100 && percent - lastProgress < 5) return;
-              lastProgress = percent;
-              row.ocr_label = `${progress.status} ${percent}%`;
-              renderDraftRow(index);
-            });
+            const optimized = await window.ImageOptimizer.compressImage(row.file, { maxLongEdge:1600, targetBytes:750*1024, quality:.82, minQuality:.58 });
+            row.status = 'UPLOADING'; renderDraftRow(index);
             const requestId = window.V2Api.newRequestId();
-            const result = await protectedCallWithRequestId('saveReceiptCardDraft', requestId, {
+            const result = await protectedCallWithRequestId('queueReceiptCard', requestId, {
               batch_id:state.batchId, file_name:optimized.name, data_url:optimized.dataUrl,
-              original_size:optimized.originalSize, optimized_size:optimized.optimizedSize, ocr,
+              original_size:optimized.originalSize, optimized_size:optimized.optimizedSize,
             });
-            Object.assign(row, result, { status:'READY', ocr_label:'', warnings:String(result.ocr_warnings || '').split(' | ').filter(Boolean) });
-          } catch (error) { Object.assign(row, { status:'ERROR', error:error.message }); }
+            Object.assign(row,serverDraft(result),{file:null});
+          } catch (error) { Object.assign(row, { status:'UPLOAD_ERROR', error:error.message }); }
           renderDraftRow(index); updateBatchProgress();
         }
       }
-      await Promise.all(Array.from({ length:Math.min(ocrRuntime.workers,state.draftRows.length) }, worker));
+      await Promise.all(Array.from({ length:Math.min(3,state.draftRows.length) }, uploadWorker));
+      if(state.draftRows.some(row=>row.status==='AI_QUEUED'))await resumeBatchAI(false);
     } catch (error) { Swal.fire('เริ่มประมวลผลไม่สำเร็จ',error.message,'error'); }
     finally {
       state.processing = false;
@@ -221,18 +233,52 @@
     }
   }
 
+  function mergeBatchRows(result) {
+    const rows=(result&&result.rows)||[];
+    rows.forEach(serverRow=>{
+      const index=state.draftRows.findIndex(row=>row.registration_id===serverRow.registration_id);
+      const normalized=serverDraft(serverRow);
+      if(index>=0)state.draftRows[index]=Object.assign(state.draftRows[index],normalized);
+      else state.draftRows.push(normalized);
+    });
+    if(result&&result.batch)state.activeBatch={batch:result.batch,rows:result.rows||[],counts:result.counts||{},pending:result.pending||0};
+    renderDraftRows();
+  }
+
+  async function resumeBatchAI(includeRetry=true,registrationIds=[]) {
+    if(state.processing&&includeRetry)return;
+    const ownsProcessing=!state.processing;
+    if(ownsProcessing)state.processing=true;
+    $('receipt-resume-ai-btn').disabled=true;
+    try {
+      let allowRetry=includeRetry,guard=0;
+      while(guard++<10){
+        const requestId=window.V2Api.newRequestId();
+        const result=await protectedCallWithRequestId('processReceiptBatchAI',requestId,{batch_id:state.batchId,registration_ids:registrationIds,include_retry:allowRetry});
+        mergeBatchRows(result);
+        registrationIds=[];allowRetry=false;
+        if(result.waiting||!result.processed||!result.counts||!result.counts.queued) {
+          if(result.waiting)await Swal.fire({icon:'info',title:'เก็บรูปไว้แล้ว',text:result.error||'Gemini ยังไม่พร้อม รูปทั้งหมดอยู่บน NAS กดทำต่อด้วย AI ภายหลังได้',confirmButtonColor:'#8f5f42'});
+          break;
+        }
+      }
+    } catch(error){await Swal.fire('AI อ่านข้อมูลไม่สำเร็จ',`${error.message}\nรูปที่อัปโหลดสำเร็จยังเก็บอยู่บน NAS`,'error');}
+    finally{if(ownsProcessing)state.processing=false;$('receipt-resume-ai-btn').disabled=false;updateBatchProgress();}
+  }
+
   function draftRowHtml(row, index) {
-    const loading = ['QUEUED','COMPRESSING','OCR'].includes(row.status);
+    const loading = ['UPLOAD_QUEUED','COMPRESSING','UPLOADING','AI_QUEUED','AI_PROCESSING'].includes(row.status);
     const duplicate = !!row.duplicate_type;
-    const statusClass = row.status === 'ERROR' ? 'is-error' : duplicate ? 'is-duplicate' : loading ? 'is-loading' : '';
-    const statusText = row.ocr_label || ({ QUEUED:'รอคิว',COMPRESSING:'กำลังบีบอัด',OCR:'OCR บนอุปกรณ์',READY:'พร้อมตรวจสอบ',ERROR:'ผิดพลาด' })[row.status] || row.status;
+    const failed = ['UPLOAD_ERROR','AI_RETRY'].includes(row.status);
+    const statusClass = failed ? 'is-error' : duplicate ? 'is-duplicate' : loading ? 'is-loading' : '';
+    const statusText = ({ UPLOAD_QUEUED:'รออัปโหลด',COMPRESSING:'กำลังบีบอัด',UPLOADING:'กำลังเก็บบน NAS',AI_QUEUED:'รอ Gemini',AI_PROCESSING:'Gemini กำลังอ่าน',AI_RETRY:'รอทำต่อ',OCR_READY:'พร้อมตรวจสอบ',UPLOAD_ERROR:'อัปโหลดไม่สำเร็จ' })[row.status] || row.status;
     const warning = row.error || (row.warnings || []).join(' · ') || (duplicate ? `พบข้อมูลซ้ำ (${row.duplicate_type})` : '');
     return `<div class="receipt-edit-row" data-draft-index="${index}">
       <span class="receipt-edit-row__index">${String(index+1).padStart(2,'0')}</span>
       <label>ชื่อ-นามสกุล<input class="field" data-draft-field="full_name" value="${escapeHtml(row.full_name)}" ${loading?'disabled':''}></label>
       <label>เลขบัตรประชาชน<input class="field" data-draft-field="national_id" inputmode="numeric" maxlength="17" value="${escapeHtml(row.national_id)}" ${loading?'disabled':''}></label>
       <label>ที่อยู่<textarea class="field" data-draft-field="address" ${loading?'disabled':''}>${escapeHtml(row.address)}</textarea></label>
-      <div class="receipt-row-state"><span class="receipt-status-pill ${statusClass}">${escapeHtml(statusText)}</span>${warning?`<small class="receipt-row-warning">${escapeHtml(warning)}</small>`:''}${duplicate?'<label class="receipt-existing-check"><input type="checkbox" data-allow-existing> เชื่อมกับบุคคลเดิมที่พบ</label>':''}${row.status==='ERROR'?`<button type="button" class="secondary-btn" data-retry-card="${index}">ลองใหม่</button>`:''}</div>
+      <div class="receipt-row-state"><span class="receipt-status-pill ${statusClass}">${escapeHtml(statusText)}</span>${warning?`<small class="receipt-row-warning">${escapeHtml(warning)}</small>`:''}${duplicate?'<label class="receipt-existing-check"><input type="checkbox" data-allow-existing> เชื่อมกับบุคคลเดิมที่พบ</label>':''}${failed?`<button type="button" class="secondary-btn" data-retry-card="${index}">ลองใหม่</button>`:''}</div>
     </div>`;
   }
 
@@ -243,10 +289,12 @@
     else renderDraftRows();
   }
   function updateBatchProgress() {
-    const ready = state.draftRows.filter(row => row.status === 'READY').length;
-    const errors = state.draftRows.filter(row => row.status === 'ERROR').length;
-    $('receipt-batch-progress').textContent = `${ready.toLocaleString('th-TH')} พร้อมตรวจสอบ · ${errors.toLocaleString('th-TH')} ผิดพลาด · ทั้งหมด ${state.draftRows.length.toLocaleString('th-TH')}`;
+    const ready = state.draftRows.filter(row => row.status === 'OCR_READY').length;
+    const errors = state.draftRows.filter(row => ['UPLOAD_ERROR','AI_RETRY'].includes(row.status)).length;
+    const queued = state.draftRows.filter(row => ['AI_QUEUED','AI_PROCESSING'].includes(row.status)).length;
+    $('receipt-batch-progress').textContent = `${ready.toLocaleString('th-TH')} พร้อมตรวจสอบ · ${queued.toLocaleString('th-TH')} รอ AI · ${errors.toLocaleString('th-TH')} รอทำต่อ · ทั้งหมด ${state.draftRows.length.toLocaleString('th-TH')}`;
     $('receipt-save-all-btn').disabled = state.processing || !ready || errors > 0;
+    $('receipt-resume-ai-btn').classList.toggle('hidden',!state.batchId||(!queued&&!errors));
   }
 
   function syncDraftInputs() {
@@ -259,7 +307,7 @@
 
   async function saveAll() {
     syncDraftInputs();
-    const rows = state.draftRows.filter(row => row.status === 'READY').map(row => ({
+    const rows = state.draftRows.filter(row => row.status === 'OCR_READY').map(row => ({
       registration_id:row.registration_id, full_name:row.full_name, national_id:row.national_id,
       address:row.address, allow_existing_worker:row.allow_existing_worker,
     }));
@@ -268,7 +316,7 @@
     try {
       const result = await gas('saveReceiptRegistrations', { batch_id:state.batchId, rows });
       await refreshRegistry();
-      state.draftRows = []; state.selectedFiles = []; $('receipt-card-files').value = '';
+      state.draftRows = []; state.selectedFiles = []; state.batchId=''; state.activeBatch=null; $('receipt-card-files').value = '';
       $('receipt-quick-edit-card').classList.add('hidden'); $('receipt-upload-summary').classList.add('hidden'); $('receipt-selected-count').textContent = '0';
       Swal.fire({ icon:'success', title:`บันทึกแล้ว ${result.count.toLocaleString('th-TH')} คน`, text:'worker_id พร้อมเชื่อมระบบเช็กชื่อและค่าแรง', timer:2200, showConfirmButton:false });
     } catch (error) { Swal.fire('บันทึกไม่สำเร็จ',error.message,'error'); }
@@ -278,18 +326,19 @@
   async function retryCard(index) {
     const row = state.draftRows[index];
     if (!row || state.processing) return;
-    row.status = 'COMPRESSING'; row.error = ''; renderDraftRow(index);
+    state.processing=true;row.error='';
     try {
-      const optimized = await window.ImageOptimizer.compressImage(row.file, { maxLongEdge:1600, targetBytes:700*1024, quality:.8, minQuality:.54 });
-      row.status = 'OCR'; renderDraftRow(index);
-      const ocr = await window.OfflineThaiIdOcr.recognize(optimized.dataUrl, progress => {
-        row.ocr_label = `${progress.status} ${Math.round(Number(progress.progress || 0) * 100)}%`;
-        renderDraftRow(index);
-      });
-      const result = await gas('saveReceiptCardDraft', { batch_id:state.batchId, file_name:optimized.name, data_url:optimized.dataUrl, ocr });
-      Object.assign(row,result,{status:'READY',warnings:String(result.ocr_warnings||'').split(' | ').filter(Boolean)});
-    } catch (error) { row.status='ERROR'; row.error=error.message; }
-    renderDraftRow(index); updateBatchProgress();
+      if(row.status==='UPLOAD_ERROR'&&row.file){
+        row.status='COMPRESSING';renderDraftRow(index);
+        const optimized=await window.ImageOptimizer.compressImage(row.file,{maxLongEdge:1600,targetBytes:750*1024,quality:.82,minQuality:.58});
+        row.status='UPLOADING';renderDraftRow(index);
+        const result=await protectedCallWithRequestId('queueReceiptCard',window.V2Api.newRequestId(),{batch_id:state.batchId,file_name:optimized.name,data_url:optimized.dataUrl,original_size:optimized.originalSize,optimized_size:optimized.optimizedSize});
+        Object.assign(row,serverDraft(result),{file:null});
+      }
+      state.processing=false;
+      await resumeBatchAI(true,row.registration_id?[row.registration_id]:[]);
+    } catch (error) { row.status=row.registration_id?'AI_RETRY':'UPLOAD_ERROR'; row.error=error.message; }
+    finally{state.processing=false;renderDraftRow(index);updateBatchProgress();}
   }
 
   async function exportSelected(format) {
@@ -334,6 +383,7 @@
     $('receipt-new-group-btn').addEventListener('click',createGroup);
     $('receipt-card-files').addEventListener('change',chooseCardFiles);
     $('receipt-process-btn').addEventListener('click',processCards);
+    $('receipt-resume-ai-btn').addEventListener('click',()=>resumeBatchAI(true));
     $('receipt-save-all-btn').addEventListener('click',saveAll);
     $('receipt-search-btn').addEventListener('click',()=>refreshRegistry().catch(error=>Swal.fire('ค้นหาไม่สำเร็จ',error.message,'error')));
     $('receipt-search').addEventListener('keydown',event=>{if(event.key==='Enter')refreshRegistry().catch(()=>{});});

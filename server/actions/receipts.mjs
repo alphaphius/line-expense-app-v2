@@ -23,6 +23,67 @@ function validNationalId(value) {
   return (11 - (sum % 11)) % 10 === Number(id[12]);
 }
 
+export function normalizeReceiptAiResult(input = {}) {
+  const names = splitName(input.full_name);
+  const national = normalizeNationalId(input.national_id);
+  const address = clean(input.address, 1000).replace(/\s+/g, ' ');
+  const rawConfidence = number(input.confidence);
+  const confidence = Math.max(0, Math.min(100, rawConfidence > 0 && rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence));
+  const warnings = (Array.isArray(input.warnings) ? input.warnings : []).map(item => clean(item, 180)).filter(Boolean);
+  if (national && !validNationalId(national)) warnings.push('เลขบัตรไม่ผ่าน checksum กรุณาตรวจสอบ');
+  if (!names.fullName || !national || !address) warnings.push('AI อ่านข้อมูลไม่ครบ กรุณาตรวจสอบและแก้ไขก่อนบันทึก');
+  return { ...names, national, address, confidence, warnings:[...new Set(warnings)] };
+}
+
+export function buildReceiptAiRequest(cards = []) {
+  const schema = {
+    type:'array',
+    items:{
+      type:'object', additionalProperties:false,
+      properties:{ image_index:{type:'integer'}, full_name:{type:'string'}, national_id:{type:'string'}, address:{type:'string'}, confidence:{type:'number'}, warnings:{type:'array',items:{type:'string'}} },
+      required:['image_index','full_name','national_id','address','confidence','warnings'],
+    },
+  };
+  const prompt = [
+    `อ่านบัตรประจำตัวประชาชนไทย ${cards.length} รูป แต่ละรูปคือคนละหนึ่งคน`,
+    'คืนข้อมูลหนึ่งรายการต่อหนึ่งรูปตาม image_index ห้ามสลับคนหรือรวมข้อมูลข้ามรูป',
+    'full_name ใช้ชื่อและนามสกุลภาษาไทยตามที่มองเห็น โดยไม่ใส่คำนำหน้า นาย/นาง/นางสาว',
+    'national_id ใช้ตัวเลข 13 หลักเท่านั้น ไม่ใส่เว้นวรรคหรือขีด',
+    'address อ่านที่อยู่ภาษาไทยให้ครบตั้งแต่เลขที่ หมู่ ซอย ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด ตามที่มองเห็น',
+    'confidence เป็นคะแนน 0-100 ถ้าไม่แน่ใจให้เว้นค่าว่างและเขียนคำเตือนภาษาไทย ห้ามเดาข้อมูลที่อ่านไม่ชัด',
+  ].join('\n');
+  const parts = [{ text:prompt }];
+  cards.forEach((card,index) => {
+    parts.push({ text:`IMAGE_INDEX=${index + 1}` });
+    parts.push({ inlineData:{ mimeType:'image/jpeg', data:card.buffer.toString('base64') } });
+  });
+  return {
+    systemInstruction:{parts:[{text:'You are a precise Thai national-ID extraction engine. Read only visible text and return schema-valid JSON.'}]},
+    contents:[{role:'user',parts}],
+    generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema,maxOutputTokens:Math.min(4096,768+cards.length*384),temperature:0,thinkingConfig:{thinkingLevel:'minimal'}},
+  };
+}
+
+async function analyzeReceiptCards(cards, batchId) {
+  if (!config.receiptGeminiApiKey) throw apiError('RECEIPT_AI_NOT_CONFIGURED','ยังไม่ได้ตั้งค่า Gemini API สำหรับเอกสารใบรับเงิน',503);
+  const started = Date.now(); let responseBody = {};
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.receiptGeminiModel)}:generateContent`, {
+      method:'POST', headers:{'content-type':'application/json','x-goog-api-key':config.receiptGeminiApiKey}, body:JSON.stringify(buildReceiptAiRequest(cards)), signal:AbortSignal.timeout(180000),
+    });
+    responseBody = await response.json();
+    if (!response.ok) { const error=new Error(clean(responseBody?.error?.message||`Gemini HTTP ${response.status}`,500)); error.httpStatus=response.status; error.retryAfterSeconds=Math.max(10,Math.min(300,number(response.headers.get('retry-after'))||30)); throw error; }
+    const output=(responseBody.candidates?.[0]?.content?.parts||[]).filter(part=>!part.thought&&part.text).map(part=>part.text).join('');
+    if(!output)throw new Error('Gemini ไม่ส่งข้อมูลกลับมา');
+    const parsed=JSON.parse(output);if(!Array.isArray(parsed))throw new Error('Gemini ส่งรูปแบบข้อมูลไม่ถูกต้อง');
+    await execute('INSERT INTO ai_usage (usage_id,bill_id,model,prompt_version,input_tokens,output_tokens,thought_tokens,total_tokens,latency_ms,success,error,created_at) VALUES (:id,:bill,:model,:prompt,:input,:output,:thought,:total,:latency,1,\'\',:created)',{id:uuid(),bill:`receipt:${batchId}`,model:config.receiptGeminiModel,prompt:'thai-id-batch-v1',input:number(responseBody.usageMetadata?.promptTokenCount),output:number(responseBody.usageMetadata?.candidatesTokenCount),thought:number(responseBody.usageMetadata?.thoughtsTokenCount),total:number(responseBody.usageMetadata?.totalTokenCount),latency:Date.now()-started,created:nowSql()});
+    return parsed;
+  } catch(error) {
+    await execute('INSERT INTO ai_usage (usage_id,bill_id,model,prompt_version,input_tokens,output_tokens,thought_tokens,total_tokens,latency_ms,success,error,created_at) VALUES (:id,:bill,:model,:prompt,0,0,0,0,:latency,0,:error,:created)',{id:uuid(),bill:`receipt:${batchId}`,model:config.receiptGeminiModel,prompt:'thai-id-batch-v1',latency:Date.now()-started,error:clean(error.message,500),created:nowSql()});
+    throw error;
+  }
+}
+
 async function groupsWithProjects() {
   return (await select('SELECT g.*, COALESCE(p.project_name,\'\') AS site_name FROM labor_groups g LEFT JOIN projects p ON p.project_id=g.project_id WHERE g.active=1 ORDER BY g.group_name')).map(publicRow);
 }
@@ -31,8 +92,22 @@ function registrationForClient(row, includeSensitive = false) {
   const result = publicRow(row);
   result.ocr_warnings = Array.isArray(result.ocr_warnings) ? result.ocr_warnings.join(' | ') : clean(result.ocr_warnings, 1500);
   result.national_id_masked = maskNationalId(result.national_id);
-  if (!includeSensitive && result.status !== 'OCR_READY') delete result.card_path;
+  if (!includeSensitive) delete result.card_path;
   return result;
+}
+
+async function receiptBatchSnapshot(batchId) {
+  const batch=await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id:clean(batchId,64)});
+  if(!batch)return null;
+  const rows=await select('SELECT * FROM receipt_registrations WHERE batch_id=:id ORDER BY created_at,registration_id',{id:batch.batch_id});
+  const counts={uploaded:rows.length,ready:0,queued:0,retry:0,processing:0};
+  rows.forEach(row=>{if(row.status==='OCR_READY')counts.ready+=1;else if(row.status==='AI_QUEUED')counts.queued+=1;else if(row.status==='AI_RETRY')counts.retry+=1;else if(row.status==='AI_PROCESSING')counts.processing+=1;});
+  return{batch:publicRow(batch),rows:rows.map(row=>registrationForClient(row)),counts,pending:counts.queued+counts.retry+counts.processing};
+}
+
+async function latestActiveReceiptBatch() {
+  const batch=await one(`SELECT b.* FROM receipt_batches b WHERE b.status NOT IN ('COMPLETED','CANCELLED') AND EXISTS (SELECT 1 FROM receipt_registrations r WHERE r.batch_id=b.batch_id AND r.status<>'SAVED') ORDER BY b.updated_at DESC LIMIT 1`);
+  return batch?receiptBatchSnapshot(batch.batch_id):null;
 }
 
 export async function listReceiptRegistrations(filters = {}) {
@@ -46,8 +121,10 @@ export async function listReceiptRegistrations(filters = {}) {
 }
 
 export async function getReceiptWorkspace(filters = {}) {
-  const [templates,groups,projects,registrations]=await Promise.all([select('SELECT template_id,template_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE active=1 ORDER BY updated_at DESC'),groupsWithProjects(),select('SELECT * FROM projects WHERE active=1 ORDER BY project_name'),listReceiptRegistrations(filters)]);
-  return { enabled:!!config.passwordHash, securityMessage:config.passwordHash?'':'ผู้ดูแลยังไม่ได้ตั้งรหัสผ่าน WorkHub', templates:templates.map(publicRow), groups, projects:projects.map(publicRow), registrations };
+  const [templates,groups,projects,registrations,activeBatch]=await Promise.all([select('SELECT template_id,template_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE active=1 ORDER BY updated_at DESC'),groupsWithProjects(),select('SELECT * FROM projects WHERE active=1 ORDER BY project_name'),listReceiptRegistrations(filters),latestActiveReceiptBatch()]);
+  const enabled=!!config.passwordHash&&!!config.receiptGeminiApiKey;
+  const securityMessage=!config.passwordHash?'ผู้ดูแลยังไม่ได้ตั้งรหัสผ่าน WorkHub':!config.receiptGeminiApiKey?'ยังไม่ได้ตั้งค่า Gemini API สำหรับเอกสารใบรับเงิน':'';
+  return { enabled, securityMessage, aiConfigured:!!config.receiptGeminiApiKey, aiModel:config.receiptGeminiModel, templates:templates.map(publicRow), groups, projects:projects.map(publicRow), registrations, activeBatch };
 }
 
 export async function saveLaborGroup(payload={}) {
@@ -69,9 +146,78 @@ export async function saveReceiptTemplate(payload={}) {
   try{const docx=extension==='.doc'?await convertDoc(parsed.buffer,fileName):parsed.buffer;const validation=await inspectTemplate(docx);normalized=await storeBuffer('templates',`${name}-normalized.docx`,docx);const id=uuid();const timestamp=nowSql();await execute('INSERT INTO receipt_templates (template_id,template_name,source_path,normalized_path,source_format,page_count,placeholders,active,created_at,updated_at) VALUES (:id,:name,:source,:normalized,:format,:pages,:holders,1,:created,:updated)',{id,name,source:source.relative,normalized:normalized.relative,format:extension.slice(1).toUpperCase(),pages:validation.pageCount,holders:JSON.stringify(validation.placeholders),created:timestamp,updated:timestamp});return publicRow(await one('SELECT template_id,template_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE template_id=:id',{id}));}catch(error){await removeFile(source.relative);if(normalized)await removeFile(normalized.relative);throw error;}
 }
 
-export async function createReceiptBatch(payload={}){const templateId=clean(payload.template_id,64),groupId=clean(payload.group_id,64),total=Math.trunc(number(payload.total_count));if(!await one('SELECT template_id FROM receipt_templates WHERE template_id=:id AND active=1',{id:templateId}))throw apiError('TEMPLATE_REQUIRED','กรุณาเลือก Template');if(!await one('SELECT group_id FROM labor_groups WHERE group_id=:id AND active=1',{id:groupId}))throw apiError('GROUP_REQUIRED','กรุณาเลือกกลุ่มแรงงาน');if(total<1||total>config.receiptMaxBatchCards)throw apiError('BATCH_SIZE',`อัปโหลดได้ครั้งละ 1-${config.receiptMaxBatchCards} รูป`);const id=uuid(),timestamp=nowSql();await execute('INSERT INTO receipt_batches (batch_id,template_id,group_id,status,total_count,processed_count,error_count,created_by,created_at,updated_at) VALUES (:id,:template,:groupId,\'PROCESSING\',:total,0,0,:actor,:created,:updated)',{id,template:templateId,groupId,total,actor:clean(payload.created_by||'WEB',160),created:timestamp,updated:timestamp});return publicRow(await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id}));}
+export async function createReceiptBatch(payload={}){if(!config.receiptGeminiApiKey)throw apiError('RECEIPT_AI_NOT_CONFIGURED','ยังไม่ได้ตั้งค่า Gemini API สำหรับเอกสารใบรับเงิน',503);const templateId=clean(payload.template_id,64),groupId=clean(payload.group_id,64),total=Math.trunc(number(payload.total_count));if(!await one('SELECT template_id FROM receipt_templates WHERE template_id=:id AND active=1',{id:templateId}))throw apiError('TEMPLATE_REQUIRED','กรุณาเลือก Template');if(!await one('SELECT group_id FROM labor_groups WHERE group_id=:id AND active=1',{id:groupId}))throw apiError('GROUP_REQUIRED','กรุณาเลือกกลุ่มแรงงาน');if(total<1||total>config.receiptMaxBatchCards)throw apiError('BATCH_SIZE',`อัปโหลดได้ครั้งละ 1-${config.receiptMaxBatchCards} รูป`);const id=uuid(),timestamp=nowSql();await execute('INSERT INTO receipt_batches (batch_id,template_id,group_id,status,total_count,processed_count,error_count,created_by,ai_model,last_error,created_at,updated_at) VALUES (:id,:template,:groupId,\'UPLOADING\',:total,0,0,:actor,:model,\'\',:created,:updated)',{id,template:templateId,groupId,total,actor:clean(payload.created_by||'WEB',160),model:config.receiptGeminiModel,created:timestamp,updated:timestamp});return publicRow(await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id}));}
 
 async function findDuplicate(nationalId,digest,exclude=''){return one("SELECT registration_id,worker_id,CASE WHEN national_id=:national AND :national<>'' THEN 'NATIONAL_ID' WHEN card_sha256=:digest THEN 'IMAGE' ELSE 'NAME' END AS duplicate_type FROM receipt_registrations WHERE registration_id<>:exclude AND status<>'REJECTED' AND ((national_id=:national AND :national<>'') OR card_sha256=:digest) ORDER BY updated_at DESC LIMIT 1",{national:nationalId,digest,exclude});}
+
+export async function queueReceiptCard(payload={}) {
+  const batch=await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id:clean(payload.batch_id,64)});
+  if(!batch)throw apiError('BATCH_NOT_FOUND','ไม่พบชุดอัปโหลด');
+  if(batch.status==='COMPLETED'||batch.status==='CANCELLED')throw apiError('BATCH_CLOSED','ชุดอัปโหลดนี้ปิดแล้ว');
+  const count=await one('SELECT COUNT(*) AS total FROM receipt_registrations WHERE batch_id=:id',{id:batch.batch_id});
+  if(number(count?.total)>=number(batch.total_count))throw apiError('BATCH_FULL','อัปโหลดรูปครบจำนวนของชุดนี้แล้ว');
+  let stored;
+  try {
+    stored=await storeCompressedImage('receipt-cards',payload.file_name||'id-card.jpg',payload.data_url,{maxLongEdge:1600,quality:82});
+    const duplicate=await findDuplicate('',stored.sha256);
+    const id=uuid(),timestamp=nowSql();
+    await execute(`INSERT INTO receipt_registrations (registration_id,batch_id,worker_id,template_id,group_id,full_name,first_name,last_name,national_id,address,card_path,card_file_name,card_sha256,card_size_bytes,ocr_confidence,ocr_warnings,duplicate_type,duplicate_of,status,ocr_provider,ai_model,ai_attempts,ai_last_error,created_at,updated_at)
+      VALUES (:id,:batch,'',:template,:groupId,'','','','','',:path,:fileName,:sha,:size,0,'[]',:duplicateType,:duplicateOf,'AI_QUEUED','GEMINI',:model,0,'',:created,:updated)`,{id,batch:batch.batch_id,template:batch.template_id,groupId:batch.group_id,path:stored.relative,fileName:stored.relative.split('/').pop(),sha:stored.sha256,size:stored.size,duplicateType:duplicate?.duplicate_type||'',duplicateOf:duplicate?.registration_id||'',model:config.receiptGeminiModel,created:timestamp,updated:timestamp});
+    const after=await one('SELECT COUNT(*) AS total FROM receipt_registrations WHERE batch_id=:id',{id:batch.batch_id});
+    await execute("UPDATE receipt_batches SET processed_count=:count,status=:status,last_error='',updated_at=:updated WHERE batch_id=:id",{id:batch.batch_id,count:number(after?.total),status:number(after?.total)>=number(batch.total_count)?'AI_QUEUED':'UPLOADING',updated:timestamp});
+    return registrationForClient(await one('SELECT * FROM receipt_registrations WHERE registration_id=:id',{id}));
+  } catch(error) {
+    if(stored)await removeFile(stored.relative);
+    await execute("UPDATE receipt_batches SET error_count=error_count+1,last_error=:error,updated_at=:updated WHERE batch_id=:id",{id:batch.batch_id,error:clean(error.message,500),updated:nowSql()});
+    throw error;
+  }
+}
+
+async function refreshReceiptBatchState(batchId,lastError='') {
+  const snapshot=await receiptBatchSnapshot(batchId);if(!snapshot)return null;
+  const {counts}=snapshot;
+  const status=counts.processing||counts.queued?'PROCESSING':counts.retry?'AI_WAITING':counts.ready?'REVIEW':'UPLOADING';
+  await execute('UPDATE receipt_batches SET status=:status,error_count=:errors,last_error=:error,updated_at=:updated WHERE batch_id=:id',{id:batchId,status,errors:counts.retry,error:clean(lastError,500),updated:nowSql()});
+  return receiptBatchSnapshot(batchId);
+}
+
+export async function processReceiptBatchAI(payload={}) {
+  if(!config.receiptGeminiApiKey)throw apiError('RECEIPT_AI_NOT_CONFIGURED','ยังไม่ได้ตั้งค่า Gemini API สำหรับเอกสารใบรับเงิน',503);
+  const batchId=clean(payload.batch_id,64),requestedIds=(Array.isArray(payload.registration_ids)?payload.registration_ids:[]).map(value=>clean(value,64)).filter(Boolean).slice(0,config.receiptAiImagesPerRequest);
+  const batch=await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id:batchId});if(!batch)throw apiError('BATCH_NOT_FOUND','ไม่พบชุดอัปโหลด');
+  const params={batch:batchId};let idCondition='';
+  if(requestedIds.length){idCondition=` AND registration_id IN (${requestedIds.map((id,index)=>{params[`id${index}`]=id;return`:id${index}`;}).join(',')})`;}
+  const allowedStatus=bool(payload.include_retry)?"('AI_QUEUED','AI_RETRY')":"('AI_QUEUED')";
+  const rows=await transaction(async connection=>{
+    const[selected]=await connection.execute(`SELECT * FROM receipt_registrations WHERE batch_id=:batch AND status IN ${allowedStatus}${idCondition} ORDER BY created_at,registration_id LIMIT ${config.receiptAiImagesPerRequest} FOR UPDATE`,params);
+    for(const row of selected)await connection.execute("UPDATE receipt_registrations SET status='AI_PROCESSING',updated_at=? WHERE registration_id=?",[nowSql(),row.registration_id]);
+    return selected;
+  });
+  if(!rows.length)return{processed:0,waiting:false,...await refreshReceiptBatchState(batchId)};
+  try {
+    const cards=await Promise.all(rows.map(async row=>({...row,buffer:await readBuffer(row.card_path)})));
+    const results=await analyzeReceiptCards(cards,batchId);
+    for(let index=0;index<rows.length;index+=1){
+      const row=rows[index],raw=results.find(item=>number(item.image_index)===index+1);
+      if(!raw){await execute("UPDATE receipt_registrations SET status='AI_RETRY',ai_attempts=ai_attempts+1,ai_last_error='AI ไม่ส่งข้อมูลของรูปนี้',updated_at=:updated WHERE registration_id=:id",{id:row.registration_id,updated:nowSql()});continue;}
+      const normalized=normalizeReceiptAiResult(raw),duplicate=await findDuplicate(normalized.national,row.card_sha256,row.registration_id),timestamp=nowSql();
+      await execute(`UPDATE receipt_registrations SET full_name=:fullName,first_name=:firstName,last_name=:lastName,national_id=:national,address=:address,ocr_confidence=:confidence,ocr_warnings=:warnings,duplicate_type=:duplicateType,duplicate_of=:duplicateOf,status='OCR_READY',ocr_provider='GEMINI',ai_model=:model,ai_attempts=ai_attempts+1,ai_last_error='',ai_processed_at=:processed,updated_at=:updated WHERE registration_id=:id`,{id:row.registration_id,fullName:normalized.fullName,firstName:normalized.firstName,lastName:normalized.lastName,national:normalized.national,address:normalized.address,confidence:normalized.confidence,warnings:JSON.stringify(normalized.warnings),duplicateType:duplicate?.duplicate_type||'',duplicateOf:duplicate?.registration_id||'',model:config.receiptGeminiModel,processed:timestamp,updated:timestamp});
+    }
+    return{processed:rows.length,waiting:false,...await refreshReceiptBatchState(batchId)};
+  } catch(error) {
+    const retryable=[408,429,500,502,503,504].includes(number(error.httpStatus))||/timeout|fetch|traffic|capacity|overloaded|quota|rate/i.test(error.message);
+    const message=retryable?'Gemini กำลังมีผู้ใช้งานหนาแน่น รูปถูกเก็บบน NAS แล้ว กดทำต่อภายหลังได้':`Gemini อ่านข้อมูลไม่สำเร็จ: ${clean(error.message,300)}`;
+    for(const row of rows)await execute("UPDATE receipt_registrations SET status='AI_RETRY',ai_attempts=ai_attempts+1,ai_last_error=:error,updated_at=:updated WHERE registration_id=:id",{id:row.registration_id,error:message,updated:nowSql()});
+    return{processed:0,waiting:true,retryable,retryAfterSeconds:number(error.retryAfterSeconds)||30,error:message,...await refreshReceiptBatchState(batchId,message)};
+  }
+}
+
+export async function recoverReceiptAiJobs() {
+  const timestamp=nowSql();
+  const result=await execute("UPDATE receipt_registrations SET status='AI_RETRY',ai_last_error='งาน AI ถูกขัดจังหวะ สามารถกดทำต่อได้',updated_at=:updated WHERE status='AI_PROCESSING' AND updated_at<DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 10 MINUTE)",{updated:timestamp});
+  if(result.affectedRows)await execute("UPDATE receipt_batches b SET b.status='AI_WAITING',b.last_error='งาน AI ถูกขัดจังหวะ สามารถกดทำต่อได้',b.updated_at=:updated WHERE EXISTS (SELECT 1 FROM receipt_registrations r WHERE r.batch_id=b.batch_id AND r.status='AI_RETRY')",{updated:timestamp});
+  return result.affectedRows;
+}
 
 export async function saveReceiptCardDraft(payload={}){const batch=await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id:clean(payload.batch_id,64)});if(!batch)throw apiError('BATCH_NOT_FOUND','ไม่พบชุดอัปโหลด');let stored;try{stored=await storeCompressedImage('receipt-cards',payload.file_name||'id-card.jpg',payload.data_url,{maxLongEdge:1600,quality:78});const input=payload.ocr&&typeof payload.ocr==='object'?payload.ocr:{};const names=splitName(input.full_name);const national=normalizeNationalId(input.national_id);const address=clean(input.address,1000).replace(/\s+/g,' ');const warnings=(Array.isArray(input.warnings)?input.warnings:[]).map(item=>clean(item,180)).filter(Boolean);if(national&&!validNationalId(national))warnings.push('เลขบัตรไม่ผ่าน checksum กรุณาตรวจสอบ');if(!names.fullName||!national||!address)warnings.push('OCR อ่านข้อมูลไม่ครบ กรุณาตรวจสอบและแก้ไขก่อนบันทึก');const duplicate=await findDuplicate(national,stored.sha256);const id=uuid(),timestamp=nowSql();await execute('INSERT INTO receipt_registrations (registration_id,batch_id,worker_id,template_id,group_id,full_name,first_name,last_name,national_id,address,card_path,card_file_name,card_sha256,card_size_bytes,ocr_confidence,ocr_warnings,duplicate_type,duplicate_of,status,created_at,updated_at) VALUES (:id,:batch,\'\',:template,:groupId,:fullName,:firstName,:lastName,:national,:address,:path,:fileName,:sha,:size,:confidence,:warnings,:duplicateType,:duplicateOf,\'OCR_READY\',:created,:updated)',{id,batch:batch.batch_id,template:batch.template_id,groupId:batch.group_id,...names,national,address,path:stored.relative,fileName:stored.relative.split('/').pop(),sha:stored.sha256,size:stored.size,confidence:Math.max(0,Math.min(100,number(input.confidence))),warnings:JSON.stringify([...new Set(warnings)]),duplicateType:duplicate?.duplicate_type||'',duplicateOf:duplicate?.registration_id||'',created:timestamp,updated:timestamp});await execute('UPDATE receipt_batches SET processed_count=processed_count+1,updated_at=:updated WHERE batch_id=:id',{id:batch.batch_id,updated:timestamp});return registrationForClient(await one('SELECT * FROM receipt_registrations WHERE registration_id=:id',{id}),true);}catch(error){if(stored)await removeFile(stored.relative);await execute('UPDATE receipt_batches SET error_count=error_count+1,updated_at=:updated WHERE batch_id=:id',{id:batch.batch_id,updated:nowSql()});throw error;}}
 
