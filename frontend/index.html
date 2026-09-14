@@ -10,17 +10,22 @@
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icons/app-icon-192.png">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./workhub-modules.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script defer src="./vendor/sweetalert2.all.min.js"></script>
   <script defer src="./vendor/chart.umd.js"></script>
+  <script defer src="./vendor/jszip.min.js"></script>
   <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script defer src="./config.js"></script>
   <script defer src="./api.js"></script>
   <script defer src="./image-optimizer.js"></script>
   <script defer src="./protected-access.js"></script>
   <script defer src="./receipts.js"></script>
+  <script defer src="./workhub-core.js"></script>
+  <script defer src="./tasks.js"></script>
+  <script defer src="./payroll.js"></script>
   <script defer src="./app.js"></script>
   <script defer src="./pwa.js"></script>
 </head>
@@ -53,7 +58,7 @@
         <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
         <button class="nav-btn" data-view="system">สถานะระบบ</button>
       </nav>
-      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.4.0 NAS · WorkHub · Gemini ID OCR</div>
+      <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.5.0 Local Preview · ยังไม่ส่ง NAS</div>
     </aside>
 
     <main class="app-main w-full lg:ml-72">
@@ -355,11 +360,11 @@
         </section>
 
         <section id="view-payroll" class="app-view hidden">
-          <article class="coming-soon-card"><span>03</span><div><p class="eyebrow">PAYROLL</p><h3>สรุปค่าแรง</h3><p>ส่วนนี้จะเชื่อมการเช็กชื่อและเวลาทำงานกับ <code>worker_id</code> จากทะเบียนแรงงาน</p></div></article>
+          <div id="payroll-root" aria-live="polite"></div>
         </section>
 
         <section id="view-tasks" class="app-view hidden">
-          <article class="coming-soon-card"><span>04</span><div><p class="eyebrow">TASK MANAGER</p><h3>Task manager</h3><p>พื้นที่จัดการงาน ผู้รับผิดชอบ กำหนดส่ง และสถานะของแต่ละไซต์งาน</p></div></article>
+          <div id="task-manager-root" aria-live="polite"></div>
         </section>
 
         <section id="view-system" class="app-view hidden">

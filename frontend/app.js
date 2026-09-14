@@ -50,6 +50,8 @@
     if (view === 'bills') loadAllBills(1);
     if (view === 'upload') refreshBillOwners().catch(() => {});
     if (view === 'receipts' && window.ReceiptModule) window.ReceiptModule.activate();
+    if (view === 'payroll' && window.PayrollModule) window.PayrollModule.activate();
+    if (view === 'tasks' && window.TaskManagerModule) window.TaskManagerModule.activate();
   }
 
   let billOwnerRefreshPromise = null;
@@ -1059,6 +1061,8 @@
       await bootstrap();
       if (!document.getElementById('view-bills').classList.contains('hidden')) await loadAllBills(state.billList.page || 1);
       if (!document.getElementById('view-receipts').classList.contains('hidden') && window.ReceiptModule) await window.ReceiptModule.activate(true);
+      if (!document.getElementById('view-payroll').classList.contains('hidden') && window.PayrollModule) window.PayrollModule.activate(true);
+      if (!document.getElementById('view-tasks').classList.contains('hidden') && window.TaskManagerModule) window.TaskManagerModule.activate(true);
     } catch (error) { showFatal(error); }
   });
   function showFatal(error) { document.getElementById('loading-screen').classList.add('hidden'); Swal.fire({ icon:'error', title:'ระบบไม่พร้อม', text:error.message }); }

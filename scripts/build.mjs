@@ -17,12 +17,12 @@ for (const file of ['index.html', 'manifest.webmanifest']) {
   await cp(path.join(frontend, file), path.join(dist, file));
 }
 
-const versionedAssets = ['styles.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','app.js','pwa.js'];
+const versionedAssets = ['styles.css','workhub-modules.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','workhub-core.js','tasks.js','payroll.js','app.js','pwa.js'];
 let builtIndex = await readFile(path.join(dist, 'index.html'), 'utf8');
 for (const asset of versionedAssets) builtIndex = builtIndex.replaceAll(`./${asset}`, `./${asset}?v=${packageJson.version}`);
 await writeFile(path.join(dist, 'index.html'), builtIndex);
 
-for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'app.js', 'pwa.js']) {
+for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'workhub-core.js', 'tasks.js', 'payroll.js', 'app.js', 'pwa.js']) {
   await build({
     entryPoints: [path.join(frontend, file)],
     outfile: path.join(dist, file),
@@ -39,6 +39,7 @@ const builtConfig = configuredEndpoint
   ? configSource.replace(/apiEndpoint:\s*['"][^'"]*['"],/, `apiEndpoint: ${JSON.stringify(configuredEndpoint)},`)
   : configSource;
 await writeFile(path.join(dist, 'config.js'), builtConfig);
+await cp(path.join(frontend, 'workhub-modules.css'), path.join(dist, 'workhub-modules.css'));
 
 let serviceWorker = await readFile(path.join(frontend, 'service-worker.js'), 'utf8');
 serviceWorker = serviceWorker.replace(/workhub-shell-[^']+/, 'workhub-shell-' + packageJson.version + '-' + Date.now().toString(36));
@@ -55,5 +56,6 @@ try { await cp(path.join(frontend, 'icons'), path.join(dist, 'icons'), { recursi
 await Promise.all([
   cp(path.join(root, 'node_modules', 'sweetalert2', 'dist', 'sweetalert2.all.min.js'), path.join(dist, 'vendor', 'sweetalert2.all.min.js')),
   cp(path.join(root, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), path.join(dist, 'vendor', 'chart.umd.js')),
+  cp(path.join(root, 'node_modules', 'jszip', 'dist', 'jszip.min.js'), path.join(dist, 'vendor', 'jszip.min.js')),
 ]);
 console.log(`Built ${packageJson.name} ${packageJson.version} → ${dist}`);
