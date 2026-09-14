@@ -81,6 +81,7 @@ async function mockAction(action, args = []) {
   if (action === 'listPendingReviewBills') return [];
   if (action === 'getQuickSettings' || action === 'saveQuickSettings' || action === 'clearQuickSettings') return mockData.quickSettings;
   if (action === 'getSystemStatus') return { spreadsheet:'Local mock', folder:'Local mock', geminiConfigured:false, lineConfigured:false, model:'gemini-3.5-flash-lite', version:'3.1.0', lineDiagnostics:{ warnings:['Local preview'] }, geminiDiagnostics:{ message:'Local preview', valid:false } };
+  if (action === 'verifyDatabaseAccess') return { url:'http://nasgfe1.synology.me/phpmyadmin/index.php?route=/', provider:'MariaDB 10', message:'Local preview' };
   if (action === 'getReceiptWorkspace') return mockData.receiptWorkspace;
   if (action === 'listReceiptRegistrations') return mockData.receiptWorkspace.registrations;
   if (action === 'previewReceiptExport') return { total:1, groups:[{ group_id:'G1', group_name:'แรงงานประจำ', site_name:'', people:[{ registration_id:'R1', full_name:'สมชาย ตัวอย่าง', national_id_masked:'1-XXXX-XXXXX-12' }] }] };

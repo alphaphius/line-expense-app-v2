@@ -143,7 +143,7 @@ test('protected work areas require a server-issued session while expenses stay o
   assert.match(api, /openProtectedSession/);
   assert.match(api, /localStorage\.setItem\(keys\.protectedSession/);
   assert.match(api, /result && result\.error && result\.error\.message/);
-  assert.match(app, /protectedViews = \['receipts','payroll','tasks'\]/);
+  assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports'\]/);
   assert.match(backend, /function requireProtectedSession_/);
   assert.match(backend, /PROTECTED_MAX_ATTEMPTS/);
   assert.match(backend, /'verifyDatabaseAccess'/);

@@ -10,8 +10,6 @@
   .app-sidebar { background: linear-gradient(180deg,#2d211c 0%,#211713 100%) !important; box-shadow: 12px 0 40px rgba(55,35,26,.12); }
   .app-header { border-color: rgba(198,154,91,.25) !important; background: rgba(255,253,249,.88) !important; }
   .app-header-actions { display:flex; align-items:center; gap:8px; }
-  .database-access-btn { min-height:40px; border:1px solid #d6c4b3; border-radius:12px; background:#fbf5ec; padding:8px 13px; color:#754631; font-size:13px; font-weight:600; transition:.2s; }
-  .database-access-btn:hover, .database-access-btn:focus-visible { border-color:#a8785b; background:#f4e7da; }
   .app-footer { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:5px; margin:0 auto; max-width:80rem; padding:4px 20px calc(18px + env(safe-area-inset-bottom)); color:#9a887c; font-size:10px; font-weight:400; line-height:1.6; letter-spacing:.01em; text-align:center; }
   .app-footer a { color:inherit; text-decoration:none; transition:color .2s ease; }
   .app-footer a:hover, .app-footer a:focus-visible { color:var(--copper-dark); text-decoration:underline; text-underline-offset:2px; }
@@ -294,9 +292,17 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .product-nav__button:hover { border-color:#bd9477; background:rgba(198,154,91,.14); }
 .product-nav__button.active { border-color:#c48963; background:#9a5f40; color:#fff9ef; box-shadow:0 7px 18px rgba(0,0,0,.16); }
 .product-nav__button.active small { color:#fff3e9; }
+.resource-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin:0; padding:0 12px 16px; }
+.resource-nav__button { display:flex; min-width:0; min-height:52px; flex-direction:column; align-items:center; justify-content:center; border:1px solid rgba(234,223,213,.24); border-radius:11px; background:rgba(255,253,249,.045); padding:7px 5px; color:#f3e9e2; text-align:center; transition:border-color .18s,background .18s,box-shadow .18s; }
+.resource-nav__button span { font-size:12px; font-weight:650; line-height:1.3; }
+.resource-nav__button small { display:block; width:100%; margin-top:2px; overflow:hidden; color:#bfaea4; font-size:9px; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
+.resource-nav__button:hover { border-color:#bd9477; background:rgba(198,154,91,.14); }
+.resource-nav__button.active { border-color:#c48963; background:#754631; color:#fff9ef; box-shadow:0 7px 18px rgba(0,0,0,.14); }
+.resource-nav__button.active small { color:#f4dfd0; }
 @media (min-width:1024px) {
   .product-nav { display:grid; grid-template-columns:1fr; padding-bottom:18px; }
   .product-nav__button { width:100%; min-width:0; }
+  .resource-nav { padding-bottom:18px; }
 }
 @media (max-width:1023px) {
   .app-sidebar { position:relative; z-index:20; }
@@ -393,6 +399,10 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   .product-nav__button { width:100%; min-width:0; min-height:68px; align-items:center; padding:6px 3px; text-align:center; }
   .product-nav__button span { font-size:11px; line-height:1.3; white-space:normal; }
   .product-nav__button small { display:block; width:100%; overflow:hidden; font-size:11px; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
+  .resource-nav { width:100%; gap:5px; padding:0 6px 15px; }
+  .resource-nav__button { min-height:58px; padding:6px 3px; }
+  .resource-nav__button span { font-size:11px; }
+  .resource-nav__button small { font-size:10px; }
   .receipt-hero { align-items:flex-start; flex-direction:column; padding:21px; }
   .receipt-hero h3 { font-size:21px; }
   .receipt-hero__stats { width:100%; flex-direction:row; justify-content:space-between; }

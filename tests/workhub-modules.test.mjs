@@ -103,3 +103,17 @@ test('bill owner checkbox selection drives both list filters and exports', async
   assert.match(preview, /function filterMockBills/);
   assert.match(preview, /filters\.owner_ids\.includes\(row\.source_user_id\)/);
 });
+
+test('secondary navigation exposes protected App, Database, and Reports access', async () => {
+  const [html, app, css, preview] = await Promise.all([
+    read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'), read('scripts/dev-server.mjs'),
+  ]);
+  assert.match(html, /class="resource-nav"/);
+  assert.match(html, /data-external-url="https:\/\/app\.nasgfe1\.synology\.me\/"/);
+  assert.match(html, /data-database-url="http:\/\/nasgfe1\.synology\.me\/phpmyadmin\/index\.php\?route=\/"/);
+  assert.match(html, /id="view-reports"/);
+  assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports'\]/);
+  assert.match(app, /ProtectedAccess\.ensure\(\)/);
+  assert.match(css, /\.resource-nav\s*\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(preview, /action === 'verifyDatabaseAccess'/);
+});

@@ -1,7 +1,7 @@
   const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
-  const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', system: 'สถานะระบบ' };
+  const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
-  const protectedViews = ['receipts','payroll','tasks'];
+  const protectedViews = ['receipts','payroll','tasks','reports'];
 
   function gas(method, ...args) {
     return window.V2Api.call(method, ...args);
@@ -45,6 +45,7 @@
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.toggle('active', el.dataset.view === view));
     const product = expenseViews.indexOf(view) >= 0 ? 'expenses' : view;
     document.querySelectorAll('.product-nav__button').forEach(el => el.classList.toggle('active', el.dataset.product === product));
+    document.querySelectorAll('.resource-nav__button[data-resource]').forEach(el => el.classList.toggle('active', el.dataset.resource === view));
     document.getElementById('view-title').textContent = viewTitles[view];
     if (view === 'system') loadSystemStatus();
     if (view === 'bills') {
@@ -814,13 +815,15 @@
     if (!await window.ProtectedAccess.ensure()) return;
     showActivityToast('กำลังตรวจฐานข้อมูล…', 'กำลังตรวจสอบ MariaDB บน NAS');
     try {
+      const fallbackUrl = document.getElementById('open-database-btn').dataset.databaseUrl || '';
       const access = await gas('verifyDatabaseAccess');
-      const url = escapeHtml(access.url);
+      const targetUrl = access.url || fallbackUrl;
+      const url = escapeHtml(targetUrl);
       hideActivityToast();
       await Swal.fire({
-        icon: access.url && access.url !== '#' ? 'success' : 'info',
-        title: access.url && access.url !== '#' ? 'ฐานข้อมูลพร้อมเปิด' : 'MariaDB ทำงานอยู่',
-        html: access.url && access.url !== '#' ? `<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิด phpMyAdmin ในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด phpMyAdmin</a>` : `<p class="text-sm text-slate-500">${escapeHtml(access.message || 'ปิดการเปิดฐานข้อมูลจากหน้าแอปเพื่อความปลอดภัย')}</p>`,
+        icon: targetUrl && targetUrl !== '#' ? 'success' : 'info',
+        title: targetUrl && targetUrl !== '#' ? 'ฐานข้อมูลพร้อมเปิด' : 'MariaDB ทำงานอยู่',
+        html: targetUrl && targetUrl !== '#' ? `<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิด phpMyAdmin ในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด phpMyAdmin</a>` : `<p class="text-sm text-slate-500">${escapeHtml(access.message || 'ปิดการเปิดฐานข้อมูลจากหน้าแอปเพื่อความปลอดภัย')}</p>`,
         showConfirmButton:false,
         showCloseButton:true,
       });
@@ -828,6 +831,19 @@
       hideActivityToast();
       throw error;
     }
+  }
+
+  async function openWorkHubApp() {
+    if (!await window.ProtectedAccess.ensure()) return;
+    const button = document.getElementById('open-app-btn');
+    const url = escapeHtml(button.dataset.externalUrl || '');
+    await Swal.fire({
+      icon:'info',
+      title:'เปิด App บน NAS',
+      html:`<p class="mb-4 text-sm text-slate-500">ระบบจะเปิด App ในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด App</a>`,
+      showConfirmButton:false,
+      showCloseButton:true,
+    });
   }
 
   function createExportFileUrl(result) {
@@ -1077,6 +1093,7 @@
   ['bill-status','bill-project-filter','bill-company-filter','bill-category-filter','bill-date-from','bill-date-to','bill-sort'].forEach(id => document.getElementById(id).addEventListener('change', () => loadAllBills(1)));
   document.getElementById('export-monthly-btn').addEventListener('click', () => exportMonthlyFile('word'));
   document.getElementById('export-excel-btn').addEventListener('click', () => exportMonthlyFile('excel'));
+  document.getElementById('open-app-btn').addEventListener('click', () => openWorkHubApp().catch(showFatal));
   document.getElementById('open-database-btn').addEventListener('click', () => openDatabase().catch(showFatal));
   document.getElementById('open-review-queue').addEventListener('click', () => startPendingReviewWorkflow('').catch(showFatal));
   document.getElementById('dashboard-prev-month').addEventListener('click', () => refreshDashboard({ period:shiftDashboardPeriod(state.dashboardFilters.period, -1), owners:null }));

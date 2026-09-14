@@ -50,6 +50,12 @@
         <button class="product-nav__button" data-view="payroll" data-product="payroll"><span>สรุปค่าแรง</span><small>Payroll</small></button>
         <button class="product-nav__button" data-view="tasks" data-product="tasks"><span>Task manager</span><small>Tasks</small></button>
       </nav>
+      <p class="sidebar-section-label">ระบบและรายงาน</p>
+      <nav class="resource-nav" aria-label="ระบบและรายงาน">
+        <button id="open-app-btn" class="resource-nav__button" type="button" data-external-url="https://app.nasgfe1.synology.me/" aria-label="เปิด App บน NAS"><span>App</span><small>NAS App</small></button>
+        <button id="open-database-btn" class="resource-nav__button" type="button" data-database-url="http://nasgfe1.synology.me/phpmyadmin/index.php?route=/" aria-label="เปิดฐานข้อมูล MariaDB"><span>Database</span><small>MariaDB</small></button>
+        <button class="resource-nav__button" type="button" data-view="reports" data-resource="reports"><span>รายงาน</span><small>Reports</small></button>
+      </nav>
       <p class="sidebar-section-label">เมนูค่าใช้จ่าย</p>
       <nav class="expense-nav flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2" aria-label="เมนูค่าใช้จ่าย">
         <button class="nav-btn active" data-view="dashboard">ภาพรวม</button>
@@ -67,7 +73,6 @@
           <div class="flex items-center justify-between gap-3">
             <div class="app-header-copy"><p class="text-sm text-slate-500">WorkHub</p><h2 id="view-title" class="text-xl font-semibold">ภาพรวมค่าใช้จ่าย</h2></div>
             <div class="app-header-actions">
-              <button id="open-database-btn" class="database-access-btn" type="button" aria-label="ตรวจสอบฐานข้อมูล MariaDB">ฐานข้อมูล</button>
               <button id="refresh-btn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50">รีเฟรช</button>
             </div>
           </div>
@@ -372,6 +377,13 @@
 
         <section id="view-tasks" class="app-view hidden">
           <div id="task-manager-root" aria-live="polite"></div>
+        </section>
+
+        <section id="view-reports" class="app-view hidden">
+          <article class="coming-soon-card">
+            <span aria-hidden="true">R</span>
+            <div><p class="eyebrow">REPORTS</p><h3>รายงาน</h3><p>พื้นที่รวมรายงานของ WorkHub เตรียมไว้แล้ว โดยจะกำหนดรายการ ตัวกรอง และรูปแบบไฟล์ในขั้นตอนถัดไป</p></div>
+          </article>
         </section>
 
         <section id="view-system" class="app-view hidden">
