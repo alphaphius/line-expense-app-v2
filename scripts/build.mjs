@@ -34,10 +34,14 @@ for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'rece
 }
 
 const configuredEndpoint = String(process.env.V2_API_ENDPOINT || '').trim();
+const googleMapsApiKey = String(process.env.GOOGLE_MAPS_API_KEY || '').trim();
+const googleMapsMapId = String(process.env.GOOGLE_MAPS_MAP_ID || '').trim();
 const configSource = await readFile(path.join(frontend, 'config.js'), 'utf8');
-const builtConfig = configuredEndpoint
+let builtConfig = configuredEndpoint
   ? configSource.replace(/apiEndpoint:\s*['"][^'"]*['"],/, `apiEndpoint: ${JSON.stringify(configuredEndpoint)},`)
   : configSource;
+if (googleMapsApiKey) builtConfig = builtConfig.replace(/googleMapsApiKey:\s*['"][^'"]*['"],/, `googleMapsApiKey: ${JSON.stringify(googleMapsApiKey)},`);
+if (googleMapsMapId) builtConfig = builtConfig.replace(/googleMapsMapId:\s*['"][^'"]*['"],/, `googleMapsMapId: ${JSON.stringify(googleMapsMapId)},`);
 await writeFile(path.join(dist, 'config.js'), builtConfig);
 await cp(path.join(frontend, 'workhub-modules.css'), path.join(dist, 'workhub-modules.css'));
 
@@ -57,5 +61,6 @@ await Promise.all([
   cp(path.join(root, 'node_modules', 'sweetalert2', 'dist', 'sweetalert2.all.min.js'), path.join(dist, 'vendor', 'sweetalert2.all.min.js')),
   cp(path.join(root, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), path.join(dist, 'vendor', 'chart.umd.js')),
   cp(path.join(root, 'node_modules', 'jszip', 'dist', 'jszip.min.js'), path.join(dist, 'vendor', 'jszip.min.js')),
+  cp(path.join(root, 'node_modules', '@googlemaps', 'markerclusterer', 'dist', 'index.umd.js'), path.join(dist, 'vendor', 'markerclusterer.umd.js')),
 ]);
 console.log(`Built ${packageJson.name} ${packageJson.version} → ${dist}`);

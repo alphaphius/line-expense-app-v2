@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -102,7 +103,7 @@ createServer(async (request, response) => {
     }
     if (request.method === 'GET' && pathname === '/config.js') {
       response.writeHead(200, { 'Content-Type':'text/javascript; charset=utf-8', 'Cache-Control':'no-store' });
-      response.end(`window.LINE_EXPENSE_CONFIG=Object.freeze({apiVersion:'2.0',apiEndpoint:location.origin+'/__mock_api__',requestTimeoutMs:90000,longRequestTimeoutMs:330000});`);
+      response.end(`window.LINE_EXPENSE_CONFIG=Object.freeze({apiVersion:'2.0',apiEndpoint:location.origin+'/__mock_api__',googleMapsApiKey:${JSON.stringify(String(process.env.GOOGLE_MAPS_API_KEY||''))},googleMapsMapId:${JSON.stringify(String(process.env.GOOGLE_MAPS_MAP_ID||''))},requestTimeoutMs:90000,longRequestTimeoutMs:330000});`);
       return;
     }
     let file = path.join(root, pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, ''));

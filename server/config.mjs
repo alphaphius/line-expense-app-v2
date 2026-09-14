@@ -45,5 +45,7 @@ export const config = Object.freeze({
   lineSessionHours: int('LINE_SESSION_HOURS', 6),
   lineMaxImageBytes: int('LINE_MAX_IMAGE_BYTES', 15 * 1024 * 1024),
   databaseAdminUrl: process.env.DATABASE_ADMIN_URL || '',
+  googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
+  googleMapsMapId: process.env.GOOGLE_MAPS_MAP_ID || '',
   trustProxy: process.env.TRUST_PROXY !== 'false',
 });

@@ -90,6 +90,8 @@ test('build and offline shell include all local-test modules', async () => {
     assert.match(worker, new RegExp(asset.replace('.', '\\.')));
   }
   assert.match(build, /jszip\.min\.js/);
+  assert.match(build, /markerclusterer\.umd\.js/);
+  assert.match(worker, /markerclusterer\.umd\.js/);
 });
 
 test('bill owner checkbox selection drives both list filters and exports', async () => {
@@ -156,17 +158,57 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /report-sites-toolbar/);
   assert.doesNotMatch(reports, /class="report-flow"/);
   assert.doesNotMatch(reports, /จัดการ Template กลุ่มงาน ไซต์ และอุปกรณ์หลายตัว พร้อมติดตามความครบถ้วนก่อน Export/);
-  assert.match(reports, /แสดงอุปกรณ์ทั้งหมดโดยไม่ต้องเลือก Filter/);
+  assert.match(reports, /siteMapPanel\(site,equipment\)/);
+  assert.match(reports, /report-group-overall/);
+  assert.match(reports, /report-province-progress/);
+  assert.match(reports, /data-template-delete/);
+  assert.match(reports, /data-group-delete/);
+  assert.match(reports, /data-site-delete/);
+  assert.match(reports, /data-equipment-delete/);
+  assert.match(reports, /ProtectedAccess\?\.reauthenticate/);
+  assert.match(reports, /GOOGLE_MAPS_API_KEY/);
+  assert.match(reports, /AdvancedMarkerElement/);
+  assert.match(reports, /markerClusterer\?\.MarkerClusterer/);
+  assert.match(reports, /data-province-filter/);
+  assert.match(reports, /data-provinces-none/);
+  assert.match(reports, /provinceFilterExplicit:false/);
+  assert.match(reports, /provinceFilterOpen=true/);
+  assert.match(reports, /data-hide-completed-sites/);
+  assert.match(reports, /report-group-sites-map/);
+  assert.match(reports, /function browserLocation/);
+  assert.match(reports, /ระบบจะเริ่มที่ My Location/);
+  assert.match(reports, /row\.latitude\|\|row\.lat\|\|row\.n/);
   assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
   assert.match(reports, /IndexedDB|indexedDB/);
   assert.match(reports, /policy==='blank'/);
   assert.match(reports, /policy==='overwrite'/);
   assert.match(styles, /\.report-tabs::-webkit-scrollbar\{display:block/);
-  assert.match(styles, /\.report-shell \[data-csv-import\]\{width:40px!important/);
+  assert.match(styles, /\.report-shell \[data-csv-import\]\{display:grid!important;width:36px!important/);
+  assert.match(styles, /border:0!important;border-radius:0!important;background:transparent!important/);
   assert.match(styles, /\.report-province:not\(\[open\]\)/);
   assert.match(styles, /\.report-shell\{grid-template-columns:minmax\(0,1fr\)/);
   assert.match(styles, /\.report-journey-site>\.report-favorite-button\{position:absolute;top:-11px/);
+});
+
+test('destructive report actions always re-enter the protected password', async () => {
+  const [access, reports] = await Promise.all([read('frontend/protected-access.js'), read('frontend/reports.js')]);
+  assert.match(access, /async function reauthenticate/);
+  assert.match(access, /unlockProtected\(password\)/);
+  assert.match(access, /confirmButtonText: destructive \? 'ยืนยันลบ'/);
+  assert.match(reports, /authorizeDelete/);
+  assert.match(reports, /deleteEquipmentRecords/);
+});
+
+test('report coordinates accept N/E and lat/long decimal columns', async () => {
+  const reports = await loadReportsCore();
+  const ne = reports.coordinatesFromRow({ n:'13.7563', e:'100.5018' });
+  const latLong = reports.coordinatesFromRow({ lat:'13.7', long:'100.4' });
+  assert.equal(ne.latitude, 13.7563);
+  assert.equal(ne.longitude, 100.5018);
+  assert.equal(latLong.latitude, 13.7);
+  assert.equal(latLong.longitude, 100.4);
+  assert.equal(reports.normalizeCoordinate('181', 'lng'), '');
 });
 
 test('reports replace split DOCX and XLSX text placeholders without changing the file layout nodes', async () => {
