@@ -58,14 +58,16 @@
         <button id="open-database-btn" class="resource-nav__button" type="button" data-database-url="http://nasgfe1.synology.me/phpmyadmin/index.php?route=/" aria-label="เปิดฐานข้อมูล MariaDB"><span>Database</span><small>MariaDB</small></button>
         <button class="resource-nav__button" type="button" data-view="reports" data-resource="reports"><span>รายงาน</span><small>Reports</small></button>
       </nav>
-      <p class="sidebar-section-label">เมนูค่าใช้จ่าย</p>
-      <nav class="expense-nav flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2" aria-label="เมนูค่าใช้จ่าย">
-        <button class="nav-btn active" data-view="dashboard">ภาพรวม</button>
-        <button class="nav-btn" data-view="bills">บิลทั้งหมด</button>
-        <button class="nav-btn" data-view="upload">เพิ่มบิล</button>
-        <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
-        <button class="nav-btn" data-view="system">สถานะระบบ</button>
-      </nav>
+      <div id="expense-subnav">
+        <p class="sidebar-section-label">เมนูค่าใช้จ่าย</p>
+        <nav class="expense-nav flex gap-2 overflow-x-auto px-3 pb-4 lg:block lg:space-y-2" aria-label="เมนูค่าใช้จ่าย">
+          <button class="nav-btn active" data-view="dashboard">ภาพรวม</button>
+          <button class="nav-btn" data-view="bills">บิลทั้งหมด</button>
+          <button class="nav-btn" data-view="upload">เพิ่มบิล</button>
+          <button class="nav-btn" data-view="masters">ตั้งค่าข้อมูล</button>
+          <button class="nav-btn" data-view="system">สถานะระบบ</button>
+        </nav>
+      </div>
       <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.5.0 Local Preview · ยังไม่ส่ง NAS</div>
     </aside>
 

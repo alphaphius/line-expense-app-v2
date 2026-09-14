@@ -46,6 +46,7 @@
     const product = expenseViews.indexOf(view) >= 0 ? 'expenses' : view;
     document.querySelectorAll('.product-nav__button').forEach(el => el.classList.toggle('active', el.dataset.product === product));
     document.querySelectorAll('.resource-nav__button[data-resource]').forEach(el => el.classList.toggle('active', el.dataset.resource === view));
+    document.getElementById('expense-subnav').classList.toggle('hidden', expenseViews.indexOf(view) < 0);
     document.getElementById('view-title').textContent = viewTitles[view];
     if (view === 'system') loadSystemStatus();
     if (view === 'bills') {

@@ -120,9 +120,11 @@ test('secondary navigation exposes protected Main App, Stock App, Database, and 
   assert.match(html, /data-database-url="http:\/\/nasgfe1\.synology\.me\/phpmyadmin\/index\.php\?route=\/"/);
   assert.match(html, /id="view-reports"/);
   assert.match(html, /id="report-manager-root"/);
+  assert.match(html, /id="expense-subnav"/);
   assert.match(html, /id="external-link-sheet"/);
   assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports'\]/);
   assert.match(app, /ProtectedAccess\.ensure\(\)/);
+  assert.match(app, /expense-subnav.*expenseViews\.indexOf\(view\) < 0/);
   assert.match(css, /\.resource-nav\s*\{[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(preview, /action === 'verifyDatabaseAccess'/);
 });
@@ -139,6 +141,13 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /data-report-site-check/);
   assert.match(reports, /data-report-type-site/);
   assert.match(reports, /data-report-template-select/);
+  assert.match(reports, /active:'reports'/);
+  assert.match(reports, /reportStep:'groups'/);
+  assert.match(reports, /data-report-group-open/);
+  assert.match(reports, /data-report-site-open/);
+  assert.match(reports, /report-province/);
+  assert.match(reports, /แสดงอุปกรณ์ทั้งหมดโดยไม่ต้องเลือก Filter/);
+  assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
   assert.match(reports, /IndexedDB|indexedDB/);
   assert.match(reports, /policy==='blank'/);
