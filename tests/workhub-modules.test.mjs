@@ -177,6 +177,12 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /report-group-sites-map/);
   assert.match(reports, /function browserLocation/);
   assert.match(reports, /ระบบจะเริ่มที่ My Location/);
+  assert.match(reports, /mapTypeId:'satellite'/);
+  assert.match(reports, /function addMyLocationControl/);
+  assert.match(reports, /ตำแหน่งฉัน/);
+  assert.match(reports, /google\.com\/maps\/dir\/\?api=1&destination=/);
+  assert.match(reports, /travelmode=driving/);
+  assert.match(reports, /นำทางด้วย Google Maps/);
   assert.match(reports, /row\.latitude\|\|row\.lat\|\|row\.n/);
   assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
@@ -187,6 +193,8 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(styles, /\.report-shell \[data-csv-import\]\{display:grid!important;width:36px!important/);
   assert.match(styles, /border:0!important;border-radius:0!important;background:transparent!important/);
   assert.match(styles, /\.report-province:not\(\[open\]\)/);
+  assert.match(styles, /\.workhub-map-location\{/);
+  assert.match(styles, /\.workhub-map-info a\{/);
   assert.match(styles, /\.report-shell\{grid-template-columns:minmax\(0,1fr\)/);
   assert.match(styles, /\.report-journey-site>\.report-favorite-button\{position:absolute;top:-11px/);
 });
