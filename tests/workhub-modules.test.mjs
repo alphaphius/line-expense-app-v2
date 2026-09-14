@@ -153,6 +153,9 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /<details class="report-province/);
   assert.match(reports, /report-province--favorites/);
   assert.match(reports, /state\.reportStep='sites'/);
+  assert.match(reports, /report-sites-toolbar/);
+  assert.doesNotMatch(reports, /class="report-flow"/);
+  assert.doesNotMatch(reports, /จัดการ Template กลุ่มงาน ไซต์ และอุปกรณ์หลายตัว พร้อมติดตามความครบถ้วนก่อน Export/);
   assert.match(reports, /แสดงอุปกรณ์ทั้งหมดโดยไม่ต้องเลือก Filter/);
   assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
@@ -162,6 +165,8 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(styles, /\.report-tabs::-webkit-scrollbar\{display:block/);
   assert.match(styles, /\.report-shell \[data-csv-import\]\{width:40px!important/);
   assert.match(styles, /\.report-province:not\(\[open\]\)/);
+  assert.match(styles, /\.report-shell\{grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(styles, /\.report-journey-site>\.report-favorite-button\{position:absolute;top:-11px/);
 });
 
 test('reports replace split DOCX and XLSX text placeholders without changing the file layout nodes', async () => {
