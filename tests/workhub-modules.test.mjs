@@ -129,8 +129,8 @@ test('secondary navigation exposes protected Main App, Stock App, Database, and 
   assert.match(preview, /action === 'verifyDatabaseAccess'/);
 });
 
-test('reports support reusable templates, site-scoped equipment IDs, CSV imports, and hierarchical export selection', async () => {
-  const reports = await read('frontend/reports.js');
+test('reports support reusable templates, site-scoped equipment IDs, CSV imports, favorites, and hierarchical export selection', async () => {
+  const [reports, styles] = await Promise.all([read('frontend/reports.js'), read('frontend/workhub-modules.css')]);
   assert.match(reports, /workhub-installation-reports-v2/);
   assert.match(reports, /async function scanTemplate/);
   assert.match(reports, /fieldKey\.startsWith\('img_'\)/);
@@ -145,13 +145,23 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /reportStep:'groups'/);
   assert.match(reports, /data-report-group-open/);
   assert.match(reports, /data-report-site-open/);
-  assert.match(reports, /report-province/);
+  assert.match(reports, /favorites:\{groupId:'',siteIds:\[\]\}/);
+  assert.match(reports, /data-favorite-group/);
+  assert.match(reports, /data-favorite-site/);
+  assert.match(reports, /function updateReportTabCue/);
+  assert.match(reports, /report-tabs-scroll-cue/);
+  assert.match(reports, /<details class="report-province/);
+  assert.match(reports, /report-province--favorites/);
+  assert.match(reports, /state\.reportStep='sites'/);
   assert.match(reports, /แสดงอุปกรณ์ทั้งหมดโดยไม่ต้องเลือก Filter/);
   assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
   assert.match(reports, /IndexedDB|indexedDB/);
   assert.match(reports, /policy==='blank'/);
   assert.match(reports, /policy==='overwrite'/);
+  assert.match(styles, /\.report-tabs::-webkit-scrollbar\{display:block/);
+  assert.match(styles, /\.report-shell \[data-csv-import\]\{width:40px!important/);
+  assert.match(styles, /\.report-province:not\(\[open\]\)/);
 });
 
 test('reports replace split DOCX and XLSX text placeholders without changing the file layout nodes', async () => {
