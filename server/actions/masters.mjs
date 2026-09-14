@@ -124,6 +124,14 @@ export async function listBills(filters = {}) {
   if (filters.status) { where.push('b.status = :status'); params.status = clean(filters.status, 32); } else where.push("b.status <> 'REJECTED'");
   if (filters.date_from) { where.push('COALESCE(b.document_date, DATE(b.created_at)) >= :fromDate'); params.fromDate = clean(filters.date_from, 10); }
   if (filters.date_to) { where.push('COALESCE(b.document_date, DATE(b.created_at)) <= :toDate'); params.toDate = clean(filters.date_to, 10); }
+  if (Array.isArray(filters.owner_ids)) {
+    const ownerIds = [...new Set(filters.owner_ids.map(value => clean(value, 160)).filter(Boolean))].slice(0, 200);
+    if (!ownerIds.length) where.push('1 = 0');
+    else {
+      const placeholders = ownerIds.map((value, index) => { params[`owner${index}`] = value; return `:owner${index}`; });
+      where.push(`b.source_user_id IN (${placeholders.join(',')})`);
+    }
+  }
   if (filters.year) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%Y') = :year"); params.year = clean(filters.year, 4); }
   if (filters.month) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%m') = :month"); params.month = clean(filters.month, 2).padStart(2, '0'); }
   if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, b.source_user_name, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }

@@ -85,3 +85,21 @@ test('build and offline shell include both local-test modules', async () => {
   }
   assert.match(build, /jszip\.min\.js/);
 });
+
+test('bill owner checkbox selection drives both list filters and exports', async () => {
+  const [html, app, masters, bills, preview] = await Promise.all([
+    read('frontend/index.html'), read('frontend/app.js'), read('server/actions/masters.mjs'),
+    read('server/actions/bills.mjs'), read('scripts/dev-server.mjs'),
+  ]);
+  assert.match(html, /id="bill-owner-filter-options"/);
+  assert.match(html, /id="bill-owner-select-all"/);
+  assert.match(html, /id="bill-owner-clear"/);
+  assert.match(app, /owner_ids:\s*selectedBillOwnerIds\(\)/);
+  assert.match(app, /function exportSelection\(\)/);
+  assert.match(app, /เจ้าของบิล:/);
+  assert.match(app, /ไม่มีบิลสำหรับ Export/);
+  assert.match(masters, /Array\.isArray\(filters\.owner_ids\)/);
+  assert.match(bills, /Array\.isArray\(selection\.owner_ids\)/);
+  assert.match(preview, /function filterMockBills/);
+  assert.match(preview, /filters\.owner_ids\.includes\(row\.source_user_id\)/);
+});

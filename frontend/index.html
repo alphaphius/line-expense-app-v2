@@ -194,6 +194,13 @@
               <select id="bill-project-filter" class="field"><option value="">ทุกโครงการ</option></select>
               <select id="bill-company-filter" class="field"><option value="">ทุกบริษัท</option></select>
               <select id="bill-category-filter" class="field"><option value="">ทุกหมวด</option></select>
+              <details id="bill-owner-filter" class="bill-owner-filter xl:col-span-2">
+                <summary><span>เจ้าของบิล</span><strong id="bill-owner-filter-label">ทุกคน</strong></summary>
+                <div class="bill-owner-filter__panel">
+                  <div class="bill-owner-filter__head"><span>เลือกเจ้าของบิลที่ต้องการแสดง</span><div><button id="bill-owner-select-all" type="button">เลือกทั้งหมด</button><button id="bill-owner-clear" type="button">ล้างการเลือก</button></div></div>
+                  <div id="bill-owner-filter-options" class="bill-owner-filter__options" aria-live="polite"></div>
+                </div>
+              </details>
               <label class="text-xs text-slate-500">ตั้งแต่วันที่<input id="bill-date-from" type="date" class="field mt-1 w-full"></label>
               <label class="text-xs text-slate-500">ถึงวันที่<input id="bill-date-to" type="date" class="field mt-1 w-full"></label>
               <select id="bill-sort" class="field"><option value="document_date:desc">วันที่ในบิลใหม่สุด</option><option value="document_date:asc">วันที่ในบิลเก่าสุด</option><option value="created_at:desc">วันที่อัปโหลดใหม่สุด</option><option value="grand_total:desc">ยอดมากไปน้อย</option><option value="grand_total:asc">ยอดน้อยไปมาก</option><option value="vendor_name:asc">ชื่อร้านค้า ก-ฮ</option></select>

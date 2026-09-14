@@ -1,4 +1,4 @@
-  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
+  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
   const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
   const protectedViews = ['receipts','payroll','tasks'];
@@ -47,7 +47,11 @@
     document.querySelectorAll('.product-nav__button').forEach(el => el.classList.toggle('active', el.dataset.product === product));
     document.getElementById('view-title').textContent = viewTitles[view];
     if (view === 'system') loadSystemStatus();
-    if (view === 'bills') loadAllBills(1);
+    if (view === 'bills') {
+      renderBillOwnerFilter();
+      loadAllBills(1);
+      refreshBillOwners().then(() => { renderBillOwnerFilter(); return loadAllBills(1); }).catch(() => {});
+    }
     if (view === 'upload') refreshBillOwners().catch(() => {});
     if (view === 'receipts' && window.ReceiptModule) window.ReceiptModule.activate();
     if (view === 'payroll' && window.PayrollModule) window.PayrollModule.activate();
@@ -69,6 +73,7 @@
       helper.textContent = state.masters.billOwners.length
         ? `พบ ${state.masters.billOwners.length.toLocaleString('th-TH')} รายชื่อจาก LINE · อัปเดตล่าสุดแล้ว`
         : 'ยังไม่มีรายชื่อ กรุณาส่งบิลผ่าน LINE อย่างน้อยหนึ่งครั้ง แล้วกลับมาเปิดหน้านี้ใหม่';
+      renderBillOwnerFilter();
       return state.masters.billOwners;
     }).catch(error => {
       helper.textContent = `อัปเดตรายชื่อไม่สำเร็จ: ${error.message}`;
@@ -376,7 +381,35 @@
       category_id: document.getElementById('bill-category-filter').value,
       date_from: document.getElementById('bill-date-from').value,
       date_to: document.getElementById('bill-date-to').value,
+      owner_ids: selectedBillOwnerIds(),
     };
+  }
+
+  function selectedBillOwnerIds() {
+    const owners=state.masters.billOwners||[];
+    if(state.billOwnerIds===null)return null;
+    return state.billOwnerIds.filter(id=>owners.some(owner=>String(owner.user_id)===String(id)));
+  }
+
+  function renderBillOwnerFilter() {
+    const container=document.getElementById('bill-owner-filter-options');
+    if(!container)return;
+    const owners=state.masters.billOwners||[];
+    const selected=state.billOwnerIds===null?owners.map(owner=>String(owner.user_id)):selectedBillOwnerIds().map(String);
+    container.innerHTML=owners.length?owners.map(owner=>`<label><input type="checkbox" data-bill-owner-id="${escapeHtml(owner.user_id)}" ${selected.includes(String(owner.user_id))?'checked':''}><span>${escapeHtml(owner.display_name||owner.user_id)}</span></label>`).join(''):'<p>ยังไม่มีรายชื่อเจ้าของบิลจาก LINE</p>';
+    const label=document.getElementById('bill-owner-filter-label');
+    if(!owners.length)label.textContent='ยังไม่มีรายชื่อ';
+    else if(selected.length===owners.length)label.textContent=`ทุกคน (${owners.length})`;
+    else if(!selected.length)label.textContent='ยังไม่ได้เลือก';
+    else label.textContent=`เลือก ${selected.length} จาก ${owners.length} คน`;
+  }
+
+  function applyBillOwnerCheckboxes() {
+    const owners=state.masters.billOwners||[];
+    const checked=[...document.querySelectorAll('[data-bill-owner-id]:checked')].map(input=>input.dataset.billOwnerId);
+    state.billOwnerIds=checked.length===owners.length?null:checked;
+    renderBillOwnerFilter();
+    loadAllBills(1);
   }
 
   function renderAllBills() {
@@ -706,6 +739,10 @@
     if(filters.project_id)conditions.push(`โครงการ: ${selectedLabel('bill-project-filter')}`);
     if(filters.company_id)conditions.push(`บริษัท: ${selectedLabel('bill-company-filter')}`);
     if(filters.category_id)conditions.push(`หมวด: ${selectedLabel('bill-category-filter')}`);
+    if(Array.isArray(filters.owner_ids)){
+      const ownerNames=(state.masters.billOwners||[]).filter(owner=>filters.owner_ids.includes(String(owner.user_id))).map(owner=>owner.display_name||owner.user_id);
+      conditions.push(ownerNames.length?`เจ้าของบิล: ${ownerNames.join(', ')}`:'เจ้าของบิล: ไม่ได้เลือก');
+    }
     if(filters.date_from)conditions.push(`ตั้งแต่วันที่: ${thaiDate(filters.date_from)}`);
     if(filters.date_to)conditions.push(`ถึงวันที่: ${thaiDate(filters.date_to)}`);
     if(!conditions.length){const now=new Date(),month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;return{selection:{month},conditions:[`เดือนปัจจุบัน: ${thaiMonthPeriod(month)}`]};}
@@ -718,6 +755,7 @@
     const exportPlan=exportSelection();
     let preview;
     try{preview=await gas('listBills',{...exportPlan.selection,page:1,page_size:10});}catch(error){return Swal.fire('ตรวจสอบรายการ Export ไม่สำเร็จ',error.message,'error');}
+    if(!Number(preview.total||0))return Swal.fire({icon:'info',title:'ไม่มีบิลสำหรับ Export',text:'กรุณาเลือกเจ้าของบิลหรือปรับตัวกรองใหม่'});
     const confirmation=await Swal.fire({icon:'question',title:`ยืนยัน Export ${spec.label}`,html:`<div class="export-confirmation"><p>ระบบจะส่งออกตามเงื่อนไขต่อไปนี้</p><ul>${exportPlan.conditions.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul><strong>${Number(preview.total||0).toLocaleString('th-TH')} บิล</strong></div>`,showCancelButton:true,confirmButtonText:`สร้าง ${spec.label}`,cancelButtonText:'กลับไปตรวจตัวกรอง',confirmButtonColor:'#8f5f42'});
     if(!confirmation.isConfirmed)return;
     const button = document.getElementById(spec.buttonId);
@@ -1033,6 +1071,9 @@
   });
   document.getElementById('search-bills-btn').addEventListener('click', () => loadAllBills(1));
   document.getElementById('bill-search').addEventListener('keydown', event => { if (event.key === 'Enter') loadAllBills(1); });
+  document.getElementById('bill-owner-filter-options').addEventListener('change', event => { if(event.target.matches('[data-bill-owner-id]'))applyBillOwnerCheckboxes(); });
+  document.getElementById('bill-owner-select-all').addEventListener('click', () => { state.billOwnerIds=null;renderBillOwnerFilter();loadAllBills(1); });
+  document.getElementById('bill-owner-clear').addEventListener('click', () => { state.billOwnerIds=[];renderBillOwnerFilter();loadAllBills(1); });
   ['bill-status','bill-project-filter','bill-company-filter','bill-category-filter','bill-date-from','bill-date-to','bill-sort'].forEach(id => document.getElementById(id).addEventListener('change', () => loadAllBills(1)));
   document.getElementById('export-monthly-btn').addEventListener('click', () => exportMonthlyFile('word'));
   document.getElementById('export-excel-btn').addEventListener('click', () => exportMonthlyFile('excel'));
