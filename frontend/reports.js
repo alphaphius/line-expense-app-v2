@@ -1,0 +1,374 @@
+(function () {
+  'use strict';
+
+  const STORAGE_KEY = 'workhub-installation-reports-v2';
+  const DB_NAME = 'workhub-report-template-files';
+  const DB_STORE = 'templates';
+  const root = () => document.getElementById('report-manager-root');
+  const state = {
+    active:'overview', structureMode:'sites', data:null, bound:false,
+    selectedGroup:'wg-2569', selectedSite:'site-a', selectedTemplate:'tpl-soil',
+    selectedEquipment:'eq-a-sm1', selectedReports:new Set(), search:'',
+    uploadDraft:null,imageCache:new Map(),
+  };
+
+  function uid(prefix) { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
+  function esc(value) { return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char])); }
+  function nowText() { return new Intl.DateTimeFormat('th-TH',{dateStyle:'medium',timeStyle:'short'}).format(new Date()); }
+  function key(groupId,type) { return `${groupId}::${type}`; }
+  function slug(value) { return String(value||'').trim().toLowerCase().replace(/[^a-z0-9ก-๙]+/g,'_').replace(/^_+|_+$/g,''); }
+
+  function seed() {
+    return {
+      schemaVersion:2,
+      templates:[
+        {id:'tpl-soil',name:'Soil Moisture Installation Report',equipmentType:'Soil Moisture Sensor',format:'DOCX',version:2,fileName:'soil-moisture-installation-v2.docx',fileStored:false,status:'ACTIVE',updatedAt:nowText(),fields:[
+          {key:'site_name',label:'ชื่อไซต์งาน',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'equipment_id',label:'รหัสอุปกรณ์',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'serial_number',label:'หมายเลข Serial',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'installation_date',label:'วันที่ติดตั้ง',type:'date',required:true,source:'placeholder',occurrences:1},
+          {key:'img_nameplate',label:'รูปป้ายชื่ออุปกรณ์',type:'image',required:true,source:'placeholder',occurrences:1,fit:'contain'},
+          {key:'img_installation',label:'รูปการติดตั้ง',type:'image',required:true,source:'placeholder',occurrences:1,fit:'contain'},
+          {key:'inspector',label:'ผู้ตรวจสอบ',type:'text',required:false,source:'custom',occurrences:0},
+          {key:'internal_note',label:'หมายเหตุภายใน',type:'textarea',required:false,source:'custom',occurrences:0},
+        ]},
+        {id:'tpl-omnia',name:'Omnia Installation Report',equipmentType:'Omnia Datalogger',format:'DOCX',version:3,fileName:'omnia-installation-v3.docx',fileStored:false,status:'ACTIVE',updatedAt:nowText(),fields:[
+          {key:'site_name',label:'ชื่อไซต์งาน',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'equipment_id',label:'รหัสอุปกรณ์',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'serial_number',label:'หมายเลข Serial',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'ip_address',label:'IP Address',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'img_nameplate',label:'รูปป้ายชื่อ',type:'image',required:true,source:'placeholder',occurrences:1,fit:'contain'},
+          {key:'img_wiring',label:'รูปการเดินสาย',type:'image',required:true,source:'placeholder',occurrences:1,fit:'contain'},
+        ]},
+        {id:'tpl-checklist',name:'Commissioning Checklist',equipmentType:'Flow Meter',format:'XLSX',version:1,fileName:'commissioning-checklist-v1.xlsx',fileStored:false,status:'ACTIVE',updatedAt:nowText(),fields:[
+          {key:'site_name',label:'ชื่อไซต์งาน',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'equipment_id',label:'รหัสอุปกรณ์',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'serial_number',label:'หมายเลข Serial',type:'text',required:true,source:'placeholder',occurrences:1},
+          {key:'test_result',label:'ผลทดสอบ',type:'select',required:true,source:'placeholder',occurrences:1,options:['ผ่าน','ไม่ผ่าน']},
+          {key:'img_installation',label:'รูปการติดตั้ง',type:'image',required:true,source:'placeholder',occurrences:1,fit:'contain'},
+        ]},
+      ],
+      groups:[
+        {id:'wg-2569',code:'FY2569',name:'ปีงบประมาณ 2569',fiscalYear:'2569'},
+        {id:'wg-2568',code:'FY2568',name:'ปีงบประมาณ 2568',fiscalYear:'2568'},
+      ],
+      sites:[
+        {uid:'site-a',id:'SITE-A',groupId:'wg-2569',name:'ไซต์ A โรงไฟฟ้าบางปะกง',customer:'บริษัทตัวอย่าง A',address:'จังหวัดฉะเชิงเทรา'},
+        {uid:'site-b',id:'SITE-B',groupId:'wg-2569',name:'ไซต์ B คลังน้ำมันศรีราชา',customer:'บริษัทตัวอย่าง B',address:'จังหวัดชลบุรี'},
+        {uid:'site-c',id:'SITE-C',groupId:'wg-2569',name:'ไซต์ C โรงงานอาหารสมุทรสาคร',customer:'บริษัทตัวอย่าง C',address:'จังหวัดสมุทรสาคร'},
+      ],
+      equipment:[
+        {uid:'eq-a-sm1',id:'SM1',groupId:'wg-2569',siteId:'site-a',type:'Soil Moisture Sensor',name:'Soil Moisture Sensor',model:'SM-100',serial:'SMS-2026-001',location:'Zone A'},
+        {uid:'eq-a-sm2',id:'SM2',groupId:'wg-2569',siteId:'site-a',type:'Soil Moisture Sensor',name:'Soil Moisture Sensor',model:'SM-100',serial:'SMS-2026-002',location:'Zone B'},
+        {uid:'eq-a-sm3',id:'SM3',groupId:'wg-2569',siteId:'site-a',type:'Soil Moisture Sensor',name:'Soil Moisture Sensor',model:'SM-200',serial:'SMS-2026-003',location:'Zone C'},
+        {uid:'eq-a-dl1',id:'DL1',groupId:'wg-2569',siteId:'site-a',type:'Omnia Datalogger',name:'Omnia Datalogger',model:'Omnia 3',serial:'ODL-001',location:'Control Room'},
+        {uid:'eq-b-sm1',id:'SM1',groupId:'wg-2569',siteId:'site-b',type:'Soil Moisture Sensor',name:'Soil Moisture Sensor',model:'SM-100',serial:'SMS-2026-021',location:'Tank A'},
+        {uid:'eq-b-fm1',id:'FM1',groupId:'wg-2569',siteId:'site-b',type:'Flow Meter',name:'Flow Meter',model:'OPTIFLUX 4300',serial:'FM-2-45876',location:'Line 2'},
+        {uid:'eq-c-dl1',id:'DL1',groupId:'wg-2569',siteId:'site-c',type:'Omnia Datalogger',name:'Omnia Datalogger',model:'Omnia 3',serial:'ODL-031',location:'Building A'},
+      ],
+      assignments:{
+        'wg-2569::Soil Moisture Sensor':'tpl-soil',
+        'wg-2569::Omnia Datalogger':'tpl-omnia',
+        'wg-2569::Flow Meter':'tpl-checklist',
+      },
+      overrides:{},
+      reports:{
+        'eq-a-sm1':{values:{site_name:'ไซต์ A โรงไฟฟ้าบางปะกง',equipment_id:'SM1',serial_number:'SMS-2026-001',installation_date:'2026-09-12',inspector:'สมชาย ใจดี'},images:{img_nameplate:{name:'SM1-nameplate.jpg',dataUrl:''}},updatedAt:nowText()},
+        'eq-a-sm2':{values:{site_name:'ไซต์ A โรงไฟฟ้าบางปะกง',equipment_id:'SM2',serial_number:'SMS-2026-002'},images:{},updatedAt:nowText()},
+      },
+    };
+  }
+
+  function load() {
+    try { state.data=JSON.parse(localStorage.getItem(STORAGE_KEY))||seed(); }
+    catch (_) { state.data=seed(); }
+    if (!state.data.schemaVersion || state.data.schemaVersion < 2) state.data=seed();
+    save();
+  }
+  function save() { localStorage.setItem(STORAGE_KEY,JSON.stringify(state.data)); }
+  function persist(message) { save(); render(); notify(message||'บันทึกในเครื่องแล้ว'); }
+  function notify(message) { const node=document.getElementById('report-save-state');if(!node)return;node.innerHTML=`<span></span>${esc(message)}`;node.classList.add('flash');setTimeout(()=>node.classList.remove('flash'),900); }
+  function selectedGroup() { return state.data.groups.find(row=>row.id===state.selectedGroup)||state.data.groups[0]; }
+  function selectedSite() { return state.data.sites.find(row=>row.uid===state.selectedSite)||state.data.sites.find(row=>row.groupId===state.selectedGroup); }
+  function selectedTemplate() { return state.data.templates.find(row=>row.id===state.selectedTemplate)||state.data.templates[0]; }
+  function templateForEquipment(equipment) {
+    const templateId=state.data.overrides[equipment.uid]||state.data.assignments[key(equipment.groupId,equipment.type)];
+    return state.data.templates.find(row=>row.id===templateId)||null;
+  }
+  function ensureReport(equipment) {
+    if (!state.data.reports[equipment.uid]) state.data.reports[equipment.uid]={values:{},images:{},updatedAt:nowText()};
+    const report=state.data.reports[equipment.uid]; const site=state.data.sites.find(row=>row.uid===equipment.siteId);
+    report.values.site_name=report.values.site_name||site?.name||'';
+    report.values.equipment_id=report.values.equipment_id||equipment.id;
+    report.values.serial_number=report.values.serial_number||equipment.serial||'';
+    return report;
+  }
+  function progress(equipment) {
+    const template=templateForEquipment(equipment); if(!template)return {done:0,total:0,percent:0,status:'NO_TEMPLATE'};
+    const report=ensureReport(equipment); const required=template.fields.filter(field=>field.required);
+    const done=required.filter(field=>field.type==='image'?(report.images[field.key]?.stored||report.images[field.key]?.dataUrl):String(report.values[field.key]||'').trim()).length;
+    const percent=required.length?Math.round(done/required.length*100):100;
+    return {done,total:required.length,percent,status:percent===100?'READY':done?'IN_PROGRESS':'NOT_STARTED'};
+  }
+  function statusPill(value) {
+    const labels={READY:'พร้อม Export',IN_PROGRESS:'กำลังกรอก',NOT_STARTED:'ยังไม่เริ่ม',NO_TEMPLATE:'ยังไม่กำหนด Template'};
+    return `<span class="report-status report-status--${String(value).toLowerCase()}">${esc(labels[value]||value)}</span>`;
+  }
+  function optionRows(rows,value,label,selected,placeholder) {
+    return `${placeholder?`<option value="">${esc(placeholder)}</option>`:''}${rows.map(row=>`<option value="${esc(row[value])}" ${String(row[value])===String(selected)?'selected':''}>${esc(row[label])}</option>`).join('')}`;
+  }
+
+  function shell() {
+    root().innerHTML=`<div class="module-shell report-shell">
+      <div class="module-heading"><div><p class="module-kicker">WORKHUB · INSTALLATION REPORTS</p><h3>ระบบจัดทำรายงานติดตั้ง</h3><p>จัดการ Template กลุ่มงาน ไซต์ และอุปกรณ์หลายตัว พร้อมติดตามความครบถ้วนก่อน Export</p></div><div class="module-save-state" id="report-save-state"><span></span>บันทึกในเครื่องแล้ว</div></div>
+      <nav class="module-tabs report-tabs" aria-label="เมนูรายงาน">
+        <button data-report-tab="overview">ภาพรวม</button><button data-report-tab="templates">Templates</button><button data-report-tab="structure">กลุ่มงานและไซต์</button><button data-report-tab="assignments">อุปกรณ์และ Template</button><button data-report-tab="reports">กรอกข้อมูลและ Export</button>
+      </nav><div id="report-content"></div><div id="report-dialog-host"></div></div>`;
+    bind(); render();
+  }
+  function render() {
+    if(!root())return;
+    root().querySelectorAll('[data-report-tab]').forEach(button=>button.classList.toggle('active',button.dataset.reportTab===state.active));
+    if(state.active==='overview')renderOverview();
+    if(state.active==='templates')renderTemplates();
+    if(state.active==='structure')renderStructure();
+    if(state.active==='assignments')renderAssignments();
+    if(state.active==='reports')renderReports();
+  }
+
+  function renderOverview() {
+    const equipment=state.data.equipment; const stats=equipment.map(item=>progress(item));
+    const ready=stats.filter(item=>item.status==='READY').length; const active=stats.filter(item=>item.status==='IN_PROGRESS').length; const waiting=stats.filter(item=>['NOT_STARTED','NO_TEMPLATE'].includes(item.status)).length;
+    document.getElementById('report-content').innerHTML=`<section class="report-overview">
+      <div class="report-flow" aria-label="ลำดับการทำงาน"><span>1</span><strong>Template</strong><i>→</i><span>2</span><strong>กลุ่มงาน</strong><i>→</i><span>3</span><strong>ไซต์</strong><i>→</i><span>4</span><strong>อุปกรณ์แต่ละตัว</strong><i>→</i><span>5</span><strong>รายงาน</strong></div>
+      <div class="report-metrics"><article><span>Templates</span><strong>${state.data.templates.length}</strong><small>DOCX และ XLSX</small></article><article><span>กลุ่มงาน</span><strong>${state.data.groups.length}</strong><small>นำเข้า CSV ได้</small></article><article><span>ไซต์งาน</span><strong>${state.data.sites.length}</strong><small>อยู่ภายในกลุ่มงาน</small></article><article><span>อุปกรณ์</span><strong>${equipment.length}</strong><small>นับแยกทุก ID</small></article><article class="success"><span>พร้อม Export</span><strong>${ready}</strong><small>ข้อมูลและรูปครบ</small></article></div>
+      <div class="report-overview-grid"><article class="module-panel"><div class="module-toolbar"><div><h4>ความพร้อมของรายงาน</h4><p>นับตามอุปกรณ์แต่ละตัว ไม่รวมยอดตามประเภท</p></div><button class="module-primary" data-report-go="reports">เปิดรายการรายงาน</button></div><div class="report-readiness"><div><span>พร้อม Export</span><strong>${ready}</strong><meter min="0" max="${Math.max(1,equipment.length)}" value="${ready}"></meter></div><div><span>กำลังกรอก</span><strong>${active}</strong><meter min="0" max="${Math.max(1,equipment.length)}" value="${active}"></meter></div><div><span>ยังไม่เริ่ม/ยังไม่มี Template</span><strong>${waiting}</strong><meter min="0" max="${Math.max(1,equipment.length)}" value="${waiting}"></meter></div></div></article>
+      <aside class="module-panel report-quick"><h4>เริ่มทำงาน</h4><button data-report-go="templates"><span>01</span><div><strong>อัปโหลด Template</strong><small>สแกน Placeholder และกำหนดประเภทเครื่องมือ</small></div></button><button data-report-go="structure"><span>02</span><div><strong>สร้างกลุ่ม ไซต์ และอุปกรณ์</strong><small>เพิ่มเองหรือ CSV จำนวนมาก</small></div></button><button data-report-go="assignments"><span>03</span><div><strong>กำหนด Template</strong><small>ใช้กับอุปกรณ์ประเภทเดียวกันทั้งกลุ่มงาน</small></div></button></aside></div>
+    </section>`;
+  }
+
+  function renderTemplates() {
+    const selected=selectedTemplate();
+    document.getElementById('report-content').innerHTML=`<section class="module-panel"><div class="module-toolbar"><div><h4>คลัง Template รายงาน</h4><p>อัปโหลด DOCX หรือ XLSX แล้วตรวจ Placeholder ก่อนตั้งชื่อและประเภทเครื่องมือ</p></div><button class="module-primary" data-template-upload>＋ อัปโหลด Template</button></div>
+      <div class="template-workspace"><div class="report-list-pane"><label class="module-search"><span>⌕</span><input data-report-search type="search" value="${esc(state.search)}" placeholder="ค้นหา Template หรือประเภทเครื่องมือ"></label><div class="report-template-list">${state.data.templates.filter(item=>!state.search||`${item.name} ${item.equipmentType}`.toLowerCase().includes(state.search.toLowerCase())).map(item=>`<button class="report-template-card ${item.id===selected.id?'active':''}" data-template-select="${esc(item.id)}"><span class="file-badge file-badge--${item.format.toLowerCase()}">${esc(item.format)}</span><span><strong>${esc(item.name)}</strong><small>${esc(item.equipmentType)} · v${item.version}</small><small>${item.fields.length} Fields · ${item.fields.filter(f=>f.type==='image').length} รูป</small></span><em>${item.fileStored?'มีไฟล์':'ตัวอย่าง Local'}</em></button>`).join('')}</div></div>
+      <div class="template-detail"><header><div><span class="file-badge file-badge--${selected.format.toLowerCase()}">${selected.format}</span><div><h4>${esc(selected.name)}</h4><p>${esc(selected.equipmentType)} · เวอร์ชัน ${selected.version} · ${esc(selected.fileName)}</p></div></div><div class="toolbar-actions"><button class="module-secondary" data-template-fields>ตั้งค่า Fields</button><button class="module-secondary" data-template-download ${selected.fileStored?'':'disabled'}>ดาวน์โหลดต้นฉบับ</button></div></header>
+      <div class="template-scan-summary"><div><span>Placeholder</span><strong>${selected.fields.filter(f=>f.source==='placeholder').length}</strong></div><div><span>Image Text Box</span><strong>${selected.fields.filter(f=>f.type==='image').length}</strong></div><div><span>Field เพิ่มเติม</span><strong>${selected.fields.filter(f=>f.source==='custom').length}</strong></div><p><strong>1 Text Box = 1 รูป</strong> ระบบใช้ตำแหน่งและขนาดจาก Text Box ทั้ง DOCX และ Excel</p></div>
+      <div class="field-table"><div class="field-row field-row--head"><span>Placeholder / Field key</span><span>ชื่อที่แสดง</span><span>ชนิด</span><span>แหล่งข้อมูล</span><span>บังคับ</span></div>${selected.fields.map(field=>`<div class="field-row"><code>{${esc(field.key)}}</code><span>${esc(field.label)}</span><span>${field.type==='image'?'รูปภาพ':esc(field.type)}</span><span>${field.source==='custom'?'Field เพิ่มเติม':'Template'}</span><strong>${field.required?'ต้องกรอก':'ไม่บังคับ'}</strong></div>`).join('')}</div></div></div></section>`;
+  }
+
+  function renderStructure() {
+    const group=selectedGroup(); const sites=state.data.sites.filter(item=>item.groupId===group.id); if(!sites.some(item=>item.uid===state.selectedSite))state.selectedSite=sites[0]?.uid||'';
+    document.getElementById('report-content').innerHTML=`<section class="module-panel"><div class="module-toolbar"><div><h4>กลุ่มงาน ไซต์ และอุปกรณ์</h4><p>อุปกรณ์ ID เดียวกันใช้ซ้ำต่างไซต์ได้ ระบบอ้างอิงด้วย Site ID + Equipment ID</p></div><div class="toolbar-actions"><button class="module-secondary" data-csv-import="groups">นำเข้า CSV</button><button class="module-primary" data-group-add>＋ สร้างกลุ่มงาน</button></div></div>
+      <div class="structure-toolbar"><label>กลุ่มงาน<select data-group-select>${optionRows(state.data.groups,'id','name',group.id)}</select></label><div class="segmented"><button data-structure-mode="sites" class="${state.structureMode==='sites'?'active':''}">ไซต์งาน</button><button data-structure-mode="equipment" class="${state.structureMode==='equipment'?'active':''}">อุปกรณ์</button></div><button class="module-secondary" data-csv-import="${state.structureMode}">นำเข้า ${state.structureMode==='sites'?'ไซต์':'อุปกรณ์'} CSV</button><button class="module-primary" data-${state.structureMode==='sites'?'site':'equipment'}-add>＋ เพิ่ม${state.structureMode==='sites'?'ไซต์':'อุปกรณ์'}</button></div>
+      ${state.structureMode==='sites'?siteCards(group,sites):equipmentTable(group,sites)}
+    </section>`;
+  }
+  function siteCards(group,sites) {
+    return `<div class="site-grid">${sites.map(site=>{const eq=state.data.equipment.filter(item=>item.siteId===site.uid);const ready=eq.filter(item=>progress(item).status==='READY').length;return `<article class="site-card"><header><span>⌖</span><div><h5>${esc(site.name)}</h5><p>${esc(site.id)} · ${esc(site.customer||'-')}</p></div><button data-site-open="${esc(site.uid)}">ดูอุปกรณ์ →</button></header><div class="site-stats"><span><strong>${eq.length}</strong> อุปกรณ์</span><span><strong>${new Set(eq.map(item=>item.type)).size}</strong> ประเภท</span><span><strong>${ready}</strong> พร้อม Export</span></div><div class="progress-track"><i style="width:${eq.length?Math.round(ready/eq.length*100):0}%"></i></div></article>`;}).join('')||'<div class="module-empty"><strong>ยังไม่มีไซต์ในกลุ่มนี้</strong><p>เพิ่มไซต์เองหรือนำเข้าจาก CSV</p></div>'}</div>`;
+  }
+  function equipmentTable(group,sites) {
+    const site=state.data.sites.find(row=>row.uid===state.selectedSite)||null;const rows=state.data.equipment.filter(item=>item.groupId===group.id&&(!site||item.siteId===site.uid));
+    const groups=Object.groupBy?Object.groupBy(rows,item=>item.type):rows.reduce((out,item)=>((out[item.type]||(out[item.type]=[])).push(item),out),{});
+    return `<div class="equipment-filter"><label>ไซต์งาน<select data-site-select><option value="">ทุกไซต์</option>${optionRows(sites,'uid','name',site?.uid||'')}</select></label></div><div class="equipment-groups">${Object.entries(groups).map(([type,items])=>`<details open><summary><span>${esc(type)}</span><strong>${items.length} ตัว</strong></summary><div class="equipment-rows">${items.map(item=>{const tpl=templateForEquipment(item),p=progress(item),siteRow=state.data.sites.find(s=>s.uid===item.siteId);return `<button data-equipment-open="${esc(item.uid)}"><span class="report-check-id">${esc(item.id)}</span><span><strong>${esc(item.name)}</strong><small>${esc(siteRow?.id)} · S/N ${esc(item.serial||'-')} · ${esc(item.location||'-')}</small></span><span>${esc(tpl?.name||'ยังไม่กำหนด Template')}</span><span><i style="width:${p.percent}%"></i>${p.percent}%</span>${statusPill(p.status)}</button>`;}).join('')}</div></details>`).join('')||'<div class="module-empty"><strong>ยังไม่มีอุปกรณ์</strong><p>เพิ่มอุปกรณ์เองหรือนำเข้าจาก CSV</p></div>'}</div>`;
+  }
+
+  function renderAssignments() {
+    const group=selectedGroup();const equipment=state.data.equipment.filter(item=>item.groupId===group.id);const types=[...new Set(equipment.map(item=>item.type))].sort();
+    document.getElementById('report-content').innerHTML=`<section class="module-panel"><div class="module-toolbar"><div><h4>กำหนด Template ให้อุปกรณ์</h4><p>กฎระดับกลุ่มงานจะใช้กับอุปกรณ์ประเภทเดียวกันทุกตัวในทุกไซต์</p></div><label class="compact-select">กลุ่มงาน<select data-group-select>${optionRows(state.data.groups,'id','name',group.id)}</select></label></div><div class="assignment-help"><span>กลุ่มงาน</span><i>→</i><span>ประเภทอุปกรณ์</span><i>→</i><span>Template เริ่มต้น</span><i>→</i><span>Report แยกราย ID</span></div><div class="assignment-table"><div class="assignment-row assignment-row--head"><span>ประเภทอุปกรณ์</span><span>จำนวน</span><span>ไซต์</span><span>Template เริ่มต้น</span><span>ความพร้อม</span></div>${types.map(type=>{const items=equipment.filter(item=>item.type===type);const templateId=state.data.assignments[key(group.id,type)]||'';const ready=items.filter(item=>progress(item).status==='READY').length;return `<div class="assignment-row"><span><strong>${esc(type)}</strong><small>${items.map(item=>item.id).slice(0,4).join(', ')}${items.length>4?'…':''}</small></span><strong>${items.length} ตัว</strong><span>${new Set(items.map(item=>item.siteId)).size} ไซต์</span><select data-assignment-type="${esc(type)}"><option value="">ยังไม่กำหนด</option>${state.data.templates.filter(t=>t.status==='ACTIVE').map(t=>`<option value="${esc(t.id)}" ${t.id===templateId?'selected':''}>${esc(t.name)} · ${t.format}</option>`).join('')}</select><span>${ready}/${items.length} พร้อม</span></div>`;}).join('')}</div><div class="assignment-note"><strong>ตัวอย่าง:</strong> Soil Moisture Sensor ใน Site A มี SM1, SM2, SM3 ทั้งสามตัวรับ Template เดียวกัน แต่ระบบสร้างข้อมูลและไฟล์รายงานแยกตาม ID</div></section>`;
+  }
+
+  function renderReports() {
+    const group=selectedGroup();const sites=state.data.sites.filter(item=>item.groupId===group.id);const site=state.data.sites.find(row=>row.uid===state.selectedSite)||null;const template=selectedTemplate();const equipment=state.data.equipment.filter(item=>item.groupId===group.id&&(!site||item.siteId===site.uid)&&templateForEquipment(item)?.id===template.id);if(!equipment.some(item=>item.uid===state.selectedEquipment))state.selectedEquipment=equipment[0]?.uid||'';const selected=state.data.equipment.find(item=>item.uid===state.selectedEquipment);const visibleIds=new Set(equipment.map(item=>item.uid));const selectedCount=[...state.selectedReports].filter(id=>visibleIds.has(id)).length;
+    document.getElementById('report-content').innerHTML=`<section class="module-panel report-records"><div class="module-toolbar"><div><h4>กรอกข้อมูลและ Export</h4><p>เลือก Template แล้วติ๊กไซต์ ประเภทอุปกรณ์ หรือ ID เพื่อทำหลายรายงานพร้อมกัน</p></div><div class="toolbar-actions"><button class="module-secondary" data-report-csv>CSV ข้อมูลรายงาน</button><button class="module-primary" data-export-selected ${selectedCount?'':'disabled'}>Export ที่เลือก (${selectedCount})</button></div></div><div class="report-filters"><label>กลุ่มงาน<select data-group-select>${optionRows(state.data.groups,'id','name',group.id)}</select></label><label>Template<select data-report-template-select>${optionRows(state.data.templates,'id','name',template.id)}</select></label><label>ไซต์งาน<select data-site-select><option value="">ทุกไซต์</option>${optionRows(sites,'uid','name',site?.uid||'')}</select></label><button class="module-secondary" data-select-ready>เลือกทั้งหมดที่พร้อม</button><button class="module-secondary" data-clear-report-selection>ล้างการเลือก</button></div><div class="report-record-layout"><div class="report-record-list">${reportEquipmentGroups(equipment)}</div>${selected?reportEditor(selected):'<div class="module-empty"><strong>ไม่พบอุปกรณ์ของ Template นี้</strong><p>ตรวจการกำหนด Template ตามกลุ่มงานและประเภทอุปกรณ์</p></div>'}</div></section>`;
+    if(selected)hydrateEquipmentImages(selected).then(loaded=>{if(loaded&&state.active==='reports'&&state.selectedEquipment===selected.uid)renderReports();}).catch(error=>console.warn('โหลดรูป Report ไม่สำเร็จ',error));
+  }
+  function reportEquipmentGroups(equipment) {
+    const bySite=equipment.reduce((out,item)=>((out[item.siteId]||(out[item.siteId]=[])).push(item),out),{});
+    return Object.entries(bySite).map(([siteUid,siteItems])=>{const site=state.data.sites.find(row=>row.uid===siteUid);const byType=siteItems.reduce((out,item)=>((out[item.type]||(out[item.type]=[])).push(item),out),{});return `<details class="report-site-group" open><summary><label><input type="checkbox" data-report-site-check="${esc(siteUid)}" ${siteItems.every(item=>state.selectedReports.has(item.uid))?'checked':''}> ${esc(site?.id)} · ${esc(site?.name)}</label><strong>${siteItems.length} ตัว</strong></summary><div class="report-type-groups">${Object.entries(byType).map(([type,items])=>`<details open><summary><label><input type="checkbox" data-report-type="${esc(type)}" data-report-type-site="${esc(siteUid)}" ${items.every(item=>state.selectedReports.has(item.uid))?'checked':''}> ${esc(type)}</label><strong>${items.length} ตัว</strong></summary>${items.map(item=>{const p=progress(item);return `<div class="report-record-row ${item.uid===state.selectedEquipment?'active':''}"><input type="checkbox" data-report-check="${esc(item.uid)}" ${state.selectedReports.has(item.uid)?'checked':''}><button data-report-open="${esc(item.uid)}"><strong>${esc(item.id)} · ${esc(item.name)}</strong><small>S/N ${esc(item.serial||'-')} · ${p.done}/${p.total} ช่อง · ${p.percent}%</small></button><div class="mini-progress"><i style="width:${p.percent}%"></i></div>${statusPill(p.status)}</div>`;}).join('')}</details>`).join('')}</div></details>`;}).join('')||'<div class="module-empty"><strong>ไม่พบอุปกรณ์</strong><p>เพิ่มอุปกรณ์และกำหนด Template ก่อนเริ่มกรอกข้อมูล</p></div>';
+  }
+  function reportEditor(equipment) {
+    const template=templateForEquipment(equipment);if(!template)return `<aside class="report-editor module-empty"><strong>${esc(equipment.id)} ยังไม่มี Template</strong><p>ไปที่แท็บอุปกรณ์และ Template เพื่อกำหนดค่าเริ่มต้น</p><button class="module-primary" data-report-go="assignments">กำหนด Template</button></aside>`;
+    const report=ensureReport(equipment),p=progress(equipment),site=state.data.sites.find(item=>item.uid===equipment.siteId);
+    return `<aside class="report-editor"><header><div><span>${esc(site?.id)}</span><h4>${esc(equipment.id)} · ${esc(equipment.name)}</h4><p>${esc(template.name)} · ${template.format}</p></div>${statusPill(p.status)}</header><div class="editor-progress"><strong>${p.percent}%</strong><div><span>กรอกแล้ว ${p.done} จาก ${p.total} ช่องบังคับ</span><i><b style="width:${p.percent}%"></b></i></div></div><form data-report-data-form data-equipment="${esc(equipment.uid)}"><div class="report-field-list">${template.fields.map(field=>reportField(field,report,equipment)).join('')}</div><div class="wh-form__actions"><button type="submit" class="module-primary">บันทึกข้อมูล</button></div></form></aside>`;
+  }
+  function reportField(field,report,equipment) {
+    const value=report.values[field.key]||'';if(field.type==='image'){const image=reportImage(equipment,field.key),stored=report.images[field.key]?.stored||image?.dataUrl;return `<label class="report-image-field"><span><code>{${esc(field.key)}}</code><strong>${esc(field.label)}${field.required?' *':''}</strong></span><div class="report-image-slot ${stored?'has-image':''}">${image?.dataUrl?`<img src="${image.dataUrl}" alt="${esc(field.label)}">`:`<span>${stored?'กำลังโหลดรูป…':'▧'}</span>`}<input type="file" accept="image/jpeg,image/png,image/webp" data-report-image="${esc(field.key)}"><button type="button">${stored?'เปลี่ยนรูป':'อัปโหลดรูป'}</button><small>1 Text Box = 1 รูป · ใช้ขนาดและตำแหน่งจาก Template</small></div></label>`;}
+    if(field.type==='textarea')return `<label>${esc(field.label)}${field.required?' *':''}<textarea name="${esc(field.key)}" rows="3" ${field.required?'required':''}>${esc(value)}</textarea><small>{${esc(field.key)}} · ${field.source==='custom'?'เก็บเพิ่มในระบบ':'จาก Template'}</small></label>`;
+    if(field.type==='select')return `<label>${esc(field.label)}${field.required?' *':''}<select name="${esc(field.key)}" ${field.required?'required':''}><option value="">เลือก</option>${(field.options||[]).map(option=>`<option ${option===value?'selected':''}>${esc(option)}</option>`).join('')}</select></label>`;
+    return `<label>${esc(field.label)}${field.required?' *':''}<input name="${esc(field.key)}" type="${field.type==='date'?'date':'text'}" value="${esc(value)}" ${field.required?'required':''}><small>{${esc(field.key)}} · ${field.source==='custom'?'Field เพิ่มเติม':'จาก Template'}</small></label>`;
+  }
+
+  function showDialog(html,className) {
+    const host=document.getElementById('report-dialog-host');host.innerHTML=`<dialog class="wh-dialog ${className||''}">${html}</dialog>`;const dialog=host.querySelector('dialog');
+    dialog.querySelectorAll('button[value="cancel"]').forEach(button=>{button.type='button';button.addEventListener('click',()=>dialog.close());});dialog.addEventListener('close',()=>{host.innerHTML='';state.uploadDraft=null;});dialog.showModal();return dialog;
+  }
+  function closeDialog(){document.querySelector('#report-dialog-host dialog')?.close();}
+
+  function templateWizard() {
+    state.uploadDraft={step:1,file:null,fields:[],format:'',custom:[]};
+    renderTemplateWizard();
+  }
+  function renderTemplateWizard() {
+    const draft=state.uploadDraft;if(!draft)return;
+    const step=draft.step;
+    const html=`<div class="wh-form template-wizard"><div class="wh-dialog__head"><div><span>TEMPLATE SETUP · ขั้นตอน ${step}/3</span><h4>${step===1?'อัปโหลด Template':step===2?'ตรวจสอบ Placeholder และ Fields':'ตั้งชื่อและประเภทเครื่องมือ'}</h4></div><button value="cancel">×</button></div><div class="wizard-steps"><i class="${step>=1?'active':''}">1 อัปโหลด</i><i class="${step>=2?'active':''}">2 Fields</i><i class="${step>=3?'active':''}">3 บันทึก</i></div>${step===1?`<label class="report-dropzone">ไฟล์ DOCX หรือ XLSX<input data-template-file type="file" accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><span>ลากไฟล์มาวาง หรือคลิกเลือกไฟล์</span><small>ระบบจะอ่าน Placeholder รวมถึงข้อความที่อยู่ใน Text Box</small></label><div class="wh-form__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><button class="module-primary" type="button" data-template-scan ${draft.file?'':'disabled'}>ตรวจสอบ Placeholder</button></div>`:step===2?`<div class="scan-result"><strong>พบ ${draft.fields.length} Fields</strong><span>${draft.fields.filter(f=>f.type==='image').length} Image Text Box · 1 Text Box = 1 รูป</span></div><div class="wizard-field-list">${draft.fields.map((field,index)=>`<div><code>{${esc(field.key)}}</code><input data-draft-label="${index}" value="${esc(field.label)}"><select data-draft-type="${index}"><option value="text" ${field.type==='text'?'selected':''}>ข้อความ</option><option value="date" ${field.type==='date'?'selected':''}>วันที่</option><option value="number" ${field.type==='number'?'selected':''}>ตัวเลข</option><option value="image" ${field.type==='image'?'selected':''}>รูปภาพ</option></select><label><input type="checkbox" data-draft-required="${index}" ${field.required?'checked':''}> บังคับ</label></div>`).join('')||'<p>ไม่พบ Placeholder คุณยังเพิ่ม Field สำหรับเก็บข้อมูลเองได้</p>'}</div><div class="add-custom-inline"><input data-custom-key placeholder="field_key"><input data-custom-label placeholder="ชื่อที่แสดง"><button type="button" class="module-secondary" data-custom-add>＋ เพิ่ม Field</button></div><div class="wh-form__actions"><button type="button" class="module-secondary" data-template-back>ย้อนกลับ</button><button type="button" class="module-primary" data-template-next>ถัดไป</button></div>`:`<form data-template-final><label>ชื่อ Template<input name="name" required placeholder="เช่น Soil Moisture Installation Report"></label><label>Template นี้ใช้กับเครื่องมือประเภทใด<input name="equipmentType" required list="report-equipment-types" placeholder="เช่น Soil Moisture Sensor"></label><div class="form-grid"><label>เวอร์ชัน<input name="version" type="number" min="1" value="1" required></label><label>ชนิดไฟล์<input value="${esc(draft.format)}" disabled></label></div><p class="form-note">เมื่อบันทึกแล้ว Template จะอยู่ในคลังกลาง จากนั้นจึงกำหนดให้ประเภทอุปกรณ์ภายในแต่ละกลุ่มงาน</p><div class="wh-form__actions"><button type="button" class="module-secondary" data-template-back>ย้อนกลับ</button><button type="submit" class="module-primary">บันทึก Template</button></div></form>`}</div><datalist id="report-equipment-types">${[...new Set(state.data.equipment.map(item=>item.type))].map(type=>`<option value="${esc(type)}">`).join('')}</datalist>`;
+    const existing=document.querySelector('#report-dialog-host dialog');if(existing){const host=document.getElementById('report-dialog-host');host.innerHTML=`<dialog class="wh-dialog report-wizard-dialog">${html}</dialog>`;const dialog=host.querySelector('dialog');dialog.querySelectorAll('button[value="cancel"]').forEach(button=>{button.type='button';button.addEventListener('click',()=>dialog.close());});dialog.addEventListener('close',()=>{host.innerHTML='';state.uploadDraft=null;});dialog.showModal();}else showDialog(html,'report-wizard-dialog');
+  }
+
+  async function scanTemplate(file) {
+    const extension=file.name.split('.').pop().toLowerCase();if(!['docx','xlsx'].includes(extension))throw new Error('รองรับเฉพาะ DOCX และ XLSX');
+    const zip=await JSZip.loadAsync(file);const paths=Object.keys(zip.files).filter(path=>extension==='docx'?/^word\/(document|header\d*|footer\d*)\.xml$/.test(path):/^xl\/(drawings\/drawing\d+|worksheets\/sheet\d+|sharedStrings)\.xml$/.test(path));
+    const found=new Map();
+    for(const path of paths){const xml=await zip.file(path).async('string');let text='';try{text=new DOMParser().parseFromString(xml,'application/xml').documentElement.textContent||'';}catch(_){text=xml.replace(/<[^>]+>/g,'');}for(const match of text.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)){const fieldKey=match[1].toLowerCase();const current=found.get(fieldKey)||{key:fieldKey,label:fieldKey.replace(/^img_/,'รูป ').replaceAll('_',' '),type:fieldKey.startsWith('img_')?'image':'text',required:true,source:'placeholder',occurrences:0,fit:'contain'};current.occurrences+=1;found.set(fieldKey,current);}}
+    return {format:extension.toUpperCase(),fields:[...found.values()]};
+  }
+
+  function openTemplateDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,1);request.onupgradeneeded=()=>request.result.createObjectStore(DB_STORE,{keyPath:'id'});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
+  async function storeTemplateFile(id,file){const db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({id,file,name:file.name,type:file.type});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();}
+  async function getTemplateFile(id){const db=await openTemplateDb();const row=await new Promise((resolve,reject)=>{const request=db.transaction(DB_STORE).objectStore(DB_STORE).get(id);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error);});db.close();return row;}
+  function imageStorageId(equipmentUid,fieldKey){return `image::${equipmentUid}::${fieldKey}`;}
+  function reportImage(equipment,fieldKey){return state.imageCache.get(imageStorageId(equipment.uid,fieldKey))||ensureReport(equipment).images[fieldKey]||null;}
+  async function storeReportImage(equipmentUid,fieldKey,image){const id=imageStorageId(equipmentUid,fieldKey),db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({id,kind:'report-image',...image});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();state.imageCache.set(id,image);}
+  async function hydrateEquipmentImages(equipment){const report=ensureReport(equipment);let loaded=false;for(const [fieldKey,metadata] of Object.entries(report.images||{})){const id=imageStorageId(equipment.uid,fieldKey);if(metadata?.dataUrl){state.imageCache.set(id,metadata);continue;}if(!metadata?.stored||state.imageCache.has(id))continue;const record=await getTemplateFile(id);if(record?.dataUrl){state.imageCache.set(id,record);loaded=true;}}return loaded;}
+
+  function simpleEntityDialog(entity) {
+    const group=selectedGroup(),site=selectedSite();const specs={group:['สร้างกลุ่มงาน','ชื่อกลุ่มงาน','เช่น ปีงบประมาณ 2570'],site:['เพิ่มไซต์งาน','ชื่อไซต์งาน','เช่น Site D โรงงานระยอง'],equipment:['เพิ่มอุปกรณ์','ชื่ออุปกรณ์','เช่น Soil Moisture Sensor']};const spec=specs[entity];
+    showDialog(`<form data-entity-form="${entity}" class="wh-form"><div class="wh-dialog__head"><div><span>INSTALLATION REPORTS</span><h4>${spec[0]}</h4></div><button value="cancel">×</button></div>${entity!=='group'?`<label>กลุ่มงาน<select name="groupId" required>${optionRows(state.data.groups,'id','name',group.id)}</select></label>`:''}${entity==='equipment'?`<label>ไซต์งาน<select name="siteId" required>${optionRows(state.data.sites.filter(item=>item.groupId===group.id),'uid','name',site?.uid)}</select></label>`:''}<label>${entity==='group'?'รหัสกลุ่มงาน':entity==='site'?'Site ID':'Equipment ID'}<input name="code" required placeholder="${entity==='group'?'FY2570':entity==='site'?'SITE-D':'SM1'}"></label><label>${spec[1]}<input name="name" required placeholder="${spec[2]}"></label>${entity==='group'?`<label>ปีงบประมาณ<input name="fiscalYear" placeholder="2570"></label>`:''}${entity==='site'?`<label>ลูกค้า<input name="customer"></label><label>ที่อยู่<textarea name="address" rows="2"></textarea></label>`:''}${entity==='equipment'?`<div class="form-grid"><label>ประเภทอุปกรณ์<input name="type" required placeholder="Soil Moisture Sensor"></label><label>Model<input name="model"></label></div><div class="form-grid"><label>S/N<input name="serial"></label><label>ตำแหน่งติดตั้ง<input name="location"></label></div>`:''}<div class="wh-form__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><button type="submit" class="module-primary">บันทึก</button></div></form>`);
+  }
+
+  const csvSpecs={
+    groups:{label:'กลุ่มงาน',headers:['work_group_id','work_group_name','fiscal_year'],sample:[['FY2570','ปีงบประมาณ 2570','2570']]},
+    sites:{label:'ไซต์งาน',headers:['work_group_id','site_id','site_name','customer','address'],sample:[['FY2569','SITE-D','ไซต์ D โรงงานระยอง','บริษัทตัวอย่าง','จังหวัดระยอง']]},
+    equipment:{label:'อุปกรณ์',headers:['work_group_id','site_id','equipment_id','equipment_type','equipment_name','model','serial_number','location'],sample:[['FY2569','SITE-A','SM4','Soil Moisture Sensor','Soil Moisture Sensor','SM-100','SMS-2026-004','Zone D']]},
+  };
+  function csvDialog(entity) { const spec=csvSpecs[entity];showDialog(`<form data-csv-form="${entity}" class="wh-form"><div class="wh-dialog__head"><div><span>BULK IMPORT</span><h4>นำเข้า${spec.label}จาก CSV</h4></div><button value="cancel">×</button></div><div class="csv-header-list">${spec.headers.map(item=>`<code>${item}</code>`).join('')}</div><button type="button" class="module-secondary" data-csv-download="${entity}">ดาวน์โหลด CSV Template</button><label class="report-dropzone">ไฟล์ CSV<input name="file" type="file" accept=".csv,text/csv" required><span>เลือกไฟล์ CSV ที่ต้องการนำเข้า</span><small>รองรับ UTF-8 และตรวจข้อมูลซ้ำก่อนบันทึก</small></label><fieldset class="csv-policy"><legend>เมื่อพบข้อมูลเดิม</legend><label><input type="radio" name="policy" value="blank" checked> กรอกเฉพาะช่องว่าง</label><label><input type="radio" name="policy" value="overwrite"> ทับข้อมูลเดิม</label><label><input type="radio" name="policy" value="skip"> ข้ามรายการ</label></fieldset><div class="wh-form__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><button type="submit" class="module-primary">ตรวจสอบและนำเข้า</button></div></form>`,'report-csv-dialog'); }
+
+  function parseCsv(text) {const rows=[];let row=[],cell='',quote=false;for(let i=0;i<text.length;i++){const char=text[i],next=text[i+1];if(char==='"'&&quote&&next==='"'){cell+='"';i++;}else if(char==='"')quote=!quote;else if(char===','&&!quote){row.push(cell);cell='';}else if((char==='\n'||char==='\r')&&!quote){if(char==='\r'&&next==='\n')i++;row.push(cell);if(row.some(value=>value.trim()))rows.push(row);row=[];cell='';}else cell+=char;}row.push(cell);if(row.some(value=>value.trim()))rows.push(row);if(!rows.length)return[];const headers=rows.shift().map(item=>item.trim().replace(/^\uFEFF/,''));return rows.map(values=>Object.fromEntries(headers.map((header,index)=>[header,(values[index]||'').trim()])));}
+  function csvText(headers,rows){const quote=value=>`"${String(value??'').replaceAll('"','""')}"`;return [headers.map(quote).join(','),...rows.map(row=>row.map(quote).join(','))].join('\r\n');}
+  function download(name,blob){const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+
+  async function importCsv(entity,file,policy) {
+    const rows=parseCsv(await file.text());if(!rows.length)throw new Error('ไม่พบข้อมูลใน CSV');let created=0,updated=0,conflicts=[];
+    const merge=(target,source,fields)=>{fields.forEach(field=>{const incoming=source[field];if(incoming==='')return;if(target[field]&&String(target[field])!==incoming)conflicts.push(field);if(policy==='overwrite'||!target[field])target[field]=incoming;});};
+    if(entity==='groups')for(const row of rows){let item=state.data.groups.find(g=>g.code===row.work_group_id);if(!item){item={id:uid('wg'),code:row.work_group_id,name:row.work_group_name,fiscalYear:row.fiscal_year};state.data.groups.push(item);created++;}else if(policy!=='skip'){merge(item,{name:row.work_group_name,fiscalYear:row.fiscal_year},['name','fiscalYear']);updated++;}}
+    if(entity==='sites')for(const row of rows){const group=state.data.groups.find(g=>g.code===row.work_group_id);if(!group){conflicts.push(`ไม่พบกลุ่ม ${row.work_group_id}`);continue;}let item=state.data.sites.find(s=>s.groupId===group.id&&s.id===row.site_id);if(!item){state.data.sites.push({uid:uid('site'),id:row.site_id,groupId:group.id,name:row.site_name,customer:row.customer,address:row.address});created++;}else if(policy!=='skip'){merge(item,{name:row.site_name,customer:row.customer,address:row.address},['name','customer','address']);updated++;}}
+    if(entity==='equipment')for(const row of rows){const group=state.data.groups.find(g=>g.code===row.work_group_id),site=state.data.sites.find(s=>s.groupId===group?.id&&s.id===row.site_id);if(!group||!site){conflicts.push(`ไม่พบ ${row.work_group_id}/${row.site_id}`);continue;}let item=state.data.equipment.find(e=>e.siteId===site.uid&&e.id===row.equipment_id);if(!item){state.data.equipment.push({uid:uid('eq'),id:row.equipment_id,groupId:group.id,siteId:site.uid,type:row.equipment_type,name:row.equipment_name||row.equipment_type,model:row.model,serial:row.serial_number,location:row.location});created++;}else if(policy!=='skip'){merge(item,{type:row.equipment_type,name:row.equipment_name,model:row.model,serial:row.serial_number,location:row.location},['type','name','model','serial','location']);updated++;}}
+    save();return {created,updated,conflicts};
+  }
+
+  function templateFieldsDialog() {const template=selectedTemplate();showDialog(`<form data-template-fields-form="${esc(template.id)}" class="wh-form"><div class="wh-dialog__head"><div><span>${esc(template.name)}</span><h4>ตั้งค่า Fields</h4></div><button value="cancel">×</button></div><div class="wizard-field-list">${template.fields.map((field,index)=>`<div><code>{${esc(field.key)}}</code><input name="label_${index}" value="${esc(field.label)}"><select name="type_${index}"><option value="text" ${field.type==='text'?'selected':''}>ข้อความ</option><option value="textarea" ${field.type==='textarea'?'selected':''}>ข้อความยาว</option><option value="date" ${field.type==='date'?'selected':''}>วันที่</option><option value="number" ${field.type==='number'?'selected':''}>ตัวเลข</option><option value="image" ${field.type==='image'?'selected':''}>รูปภาพ</option></select><label><input name="required_${index}" type="checkbox" ${field.required?'checked':''}> บังคับ</label></div>`).join('')}</div><div class="add-custom-inline"><input name="newKey" placeholder="field_key"><input name="newLabel" placeholder="ชื่อ Field เพิ่มเติม"></div><p class="form-note">Field เพิ่มเติมจะเก็บในระบบ แม้ไม่มี Placeholder ใน Template</p><div class="wh-form__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><button type="submit" class="module-primary">บันทึก Fields</button></div></form>`,'report-fields-dialog');}
+
+  function reportCsvDialog() {
+    const template=selectedTemplate();const fields=template.fields.filter(field=>field.type!=='image');const headers=['site_id','equipment_id',...fields.map(field=>field.key)];showDialog(`<form data-report-csv-form="${esc(template.id)}" class="wh-form"><div class="wh-dialog__head"><div><span>CSV · ${esc(template.name)}</span><h4>กรอกข้อมูลรายงานหลายรายการ</h4></div><button value="cancel">×</button></div><p class="form-note">CSV นี้ใช้กับ Template ที่เลือกเท่านั้น รูปภาพต้องอัปโหลดผ่านช่อง Text Box ของแต่ละอุปกรณ์</p><div class="csv-header-list">${headers.map(item=>`<code>${esc(item)}</code>`).join('')}</div><button type="button" class="module-secondary" data-report-csv-download="${esc(template.id)}">ดาวน์โหลด CSV Template</button><label class="report-dropzone">ไฟล์ CSV<input name="file" type="file" accept=".csv,text/csv" required><span>เลือก CSV ที่กรอกข้อมูลแล้ว</span></label><fieldset class="csv-policy"><legend>ถ้าช่องนั้นมีข้อมูลอยู่แล้ว</legend><label><input type="radio" name="policy" value="blank" checked> กรอกเฉพาะช่องว่าง</label><label><input type="radio" name="policy" value="overwrite"> ทับด้วยข้อมูล CSV</label><label><input type="radio" name="policy" value="skip"> ข้ามรายการที่มีข้อมูล</label></fieldset><div class="wh-form__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><button type="submit" class="module-primary">ตรวจสอบและนำเข้า</button></div></form>`,'report-csv-dialog');
+  }
+  async function importReportCsv(templateId,file,policy) {const template=state.data.templates.find(t=>t.id===templateId);const rows=parseCsv(await file.text());let updated=0,conflicts=[];for(const row of rows){const site=state.data.sites.find(s=>s.id===row.site_id),equipment=state.data.equipment.find(e=>e.siteId===site?.uid&&e.id===row.equipment_id);if(!equipment||templateForEquipment(equipment)?.id!==template.id){conflicts.push(`${row.site_id}/${row.equipment_id}: ไม่พบอุปกรณ์หรือใช้ Template อื่น`);continue;}const report=ensureReport(equipment);for(const field of template.fields.filter(f=>f.type!=='image')){const incoming=row[field.key];if(incoming==null||incoming==='')continue;if(report.values[field.key]&&report.values[field.key]!==incoming){conflicts.push(`${row.site_id}/${row.equipment_id} · ${field.key}`);if(policy==='skip')continue;}if(policy==='blank'&&report.values[field.key])continue;report.values[field.key]=incoming;}report.updatedAt=nowText();updated++;}save();return{updated,conflicts};}
+
+  function xmlDecode(value) { return String(value).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&'); }
+  function xmlEncode(value) { return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+  function replaceXmlPlaceholder(xml,placeholder,replacement,format) {
+    const pattern=format==='DOCX'?/<(w:t)(\s[^>]*)?>([\s\S]*?)<\/\1>/g:/<((?:a:)?t)(\s[^>]*)?>([\s\S]*?)<\/\1>/g;
+    const nodes=[];let match;
+    while((match=pattern.exec(xml)))nodes.push({start:match.index,end:pattern.lastIndex,tag:match[1],attrs:match[2]||'',text:xmlDecode(match[3])});
+    const plain=nodes.map(node=>node.text).join('');const startOffset=plain.indexOf(placeholder);if(startOffset<0)return xml;const endOffset=startOffset+placeholder.length;
+    let cursor=0,startNode=-1,endNode=-1,offsetStart=0,offsetEnd=0;
+    nodes.forEach((node,index)=>{const from=cursor,to=cursor+node.text.length;if(startNode<0&&startOffset>=from&&startOffset<to){startNode=index;offsetStart=startOffset-from;}if(endNode<0&&endOffset>from&&endOffset<=to){endNode=index;offsetEnd=endOffset-from;}cursor=to;});
+    if(startNode<0||endNode<0)return xml;
+    if(startNode===endNode)nodes[startNode].text=nodes[startNode].text.slice(0,offsetStart)+replacement+nodes[startNode].text.slice(offsetEnd);else{nodes[startNode].text=nodes[startNode].text.slice(0,offsetStart)+replacement;for(let index=startNode+1;index<endNode;index+=1)nodes[index].text='';nodes[endNode].text=nodes[endNode].text.slice(offsetEnd);}
+    let output='',last=0;nodes.forEach(node=>{output+=xml.slice(last,node.start)+`<${node.tag}${node.attrs}>${xmlEncode(node.text)}</${node.tag}>`;last=node.end;});return output+xml.slice(last);
+  }
+  function xmlPlainText(xml,format) {const pattern=format==='DOCX'?/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g:/<(?:a:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:a:)?t>/g;return [...String(xml).matchAll(pattern)].map(match=>xmlDecode(match[1])).join('');}
+  function replaceXmlPlaceholders(xml,replacements,format) {let output=xml;for(const [placeholder,replacement] of Object.entries(replacements)){for(let safety=0;safety<100&&xmlPlainText(output,format).includes(placeholder);safety+=1)output=replaceXmlPlaceholder(output,placeholder,String(replacement??''),format);}return output;}
+  function relationshipPath(partPath) {const slash=partPath.lastIndexOf('/'),directory=partPath.slice(0,slash),name=partPath.slice(slash+1);return `${directory}/_rels/${name}.rels`;}
+  function nextRelationshipId(xml) {const ids=[...String(xml).matchAll(/\bId=["']rId(\d+)["']/g)].map(match=>Number(match[1]));return `rId${Math.max(0,...ids)+1}`;}
+  function addRelationship(xml,id,target) {const entry=`<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${xmlEncode(target)}"/>`;return xml.replace('</Relationships>',`${entry}</Relationships>`);}
+  function ensureJpegContentType(zip) {const part=zip.file('[Content_Types].xml');if(!part)return Promise.resolve();return part.async('string').then(xml=>{if(!/Extension=["'](?:jpg|jpeg)["']/i.test(xml))zip.file('[Content_Types].xml',xml.replace('</Types>','<Default Extension="jpg" ContentType="image/jpeg"/></Types>'));});}
+  function dataUrlBase64(dataUrl) {return String(dataUrl||'').split(',')[1]||'';}
+  function parseXml(xml) {const doc=new DOMParser().parseFromString(xml,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('โครงสร้าง XML ภายใน Template ไม่ถูกต้อง');return doc;}
+  function elementsByLocalName(parent,name) {return [...parent.getElementsByTagName('*')].filter(node=>node.localName===name);}
+  function ancestorByLocalName(node,names) {let current=node;while(current){if(names.includes(current.localName))return current;current=current.parentNode;}return null;}
+  function importXmlElement(owner,xml) {const parsed=parseXml(`<root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">${xml}</root>`).documentElement.firstElementChild;return owner.importNode(parsed,true);}
+  function replaceDocxImageBox(doc,placeholder,relationshipId,imageName) {
+    const holder=elementsByLocalName(doc,'txbxContent').find(node=>(node.textContent||'').includes(placeholder));if(!holder)return false;
+    const drawing=ancestorByLocalName(holder,['drawing']);if(drawing){const frame=elementsByLocalName(drawing,'anchor')[0]||elementsByLocalName(drawing,'inline')[0];const extent=frame&&elementsByLocalName(frame,'extent')[0];const cx=extent?.getAttribute('cx')||'5486400',cy=extent?.getAttribute('cy')||'3200400';const graphic=elementsByLocalName(drawing,'graphic')[0];if(!graphic)return false;const id=Math.floor(Date.now()%100000000)+Math.floor(Math.random()*10000);const picture=`<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="${xmlEncode(imageName)}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>`;graphic.parentNode.replaceChild(importXmlElement(doc,picture),graphic);return true;}
+    const shape=ancestorByLocalName(holder,['shape']);if(shape){while(shape.firstChild)shape.removeChild(shape.firstChild);shape.appendChild(importXmlElement(doc,`<v:imagedata r:id="${relationshipId}" o:title="${xmlEncode(imageName)}"/>`));return true;}return false;
+  }
+  function replaceXlsxImageBox(doc,placeholder,relationshipId,imageName) {
+    const shape=elementsByLocalName(doc,'sp').find(node=>(node.textContent||'').includes(placeholder));if(!shape)return false;const id=Math.floor(Date.now()%100000000)+Math.floor(Math.random()*10000);const picture=`<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="${xmlEncode(imageName)}"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic>`;shape.parentNode.replaceChild(importXmlElement(doc,picture),shape);return true;
+  }
+  async function renderTemplateFile(template,equipment) {
+    const stored=await getTemplateFile(template.id);if(!stored)return {blob:null,warnings:[`${template.name}: ยังไม่ได้อัปโหลดไฟล์ต้นฉบับ`]};
+    await hydrateEquipmentImages(equipment);const zip=await JSZip.loadAsync(stored.file);const report=ensureReport(equipment);const textFields=template.fields.filter(field=>field.type!=='image'&&field.source==='placeholder');const imageFields=template.fields.filter(field=>field.type==='image'&&field.source==='placeholder');const replacements=Object.fromEntries(textFields.map(field=>[`{${field.key}}`,report.values[field.key]||'']));const warnings=[],insertedImages=new Set();
+    const paths=Object.keys(zip.files).filter(path=>template.format==='DOCX'?/^word\/(document|header\d*|footer\d*)\.xml$/.test(path):/^xl\/(drawings\/drawing\d+|worksheets\/sheet\d+|sharedStrings)\.xml$/.test(path));
+    for(const partPath of paths){let xml=await zip.file(partPath).async('string');let changed=false;for(const field of imageFields){const image=reportImage(equipment,field.key);if(!image?.dataUrl)continue;const doc=parseXml(xml),relsPath=relationshipPath(partPath),existing=zip.file(relsPath),empty='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';let rels=existing?await existing.async('string'):empty;const relId=nextRelationshipId(rels);const imageName=`workhub-${slug(equipment.uid)}-${slug(field.key)}.jpg`;const replaced=template.format==='DOCX'?replaceDocxImageBox(doc,`{${field.key}}`,relId,imageName):replaceXlsxImageBox(doc,`{${field.key}}`,relId,imageName);if(replaced){xml=new XMLSerializer().serializeToString(doc);const target=template.format==='DOCX'?`media/${imageName}`:`../media/${imageName}`;rels=addRelationship(rels,relId,target);zip.file(relsPath,rels);zip.file(`${template.format==='DOCX'?'word':'xl'}/media/${imageName}`,dataUrlBase64(image.dataUrl),{base64:true});changed=true;insertedImages.add(field.key);}}
+      xml=replaceXmlPlaceholders(xml,replacements,template.format);zip.file(partPath,xml);if(changed)await ensureJpegContentType(zip);
+    }
+    for(const field of imageFields){if(reportImage(equipment,field.key)?.dataUrl&&!insertedImages.has(field.key))warnings.push(`ไม่พบ Text Box สำหรับ {${field.key}}`);}
+    const mime=template.format==='DOCX'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return {blob:await zip.generateAsync({type:'blob',mimeType:mime,compression:'DEFLATE',compressionOptions:{level:6}}),warnings};
+  }
+
+  async function exportSelected() {
+    const equipment=state.data.equipment.filter(item=>state.selectedReports.has(item.uid)&&item.groupId===state.selectedGroup&&templateForEquipment(item)?.id===state.selectedTemplate);if(!equipment.length)return;
+    const manifest=equipment.map(item=>{const site=state.data.sites.find(s=>s.uid===item.siteId),template=templateForEquipment(item),report=ensureReport(item),p=progress(item);return {work_group:selectedGroup()?.name,site_id:site?.id,site_name:site?.name,equipment_id:item.id,equipment_type:item.type,equipment_name:item.name,serial_number:item.serial,template:template?.name,status:p.status,progress_percent:p.percent,...report.values};});
+    const headers=[...new Set(manifest.flatMap(row=>Object.keys(row)))];const rows=manifest.map(row=>headers.map(header=>row[header]??''));const zip=new JSZip();zip.file('report-summary.csv',csvText(headers,rows));const warnings=[];
+    for(const item of equipment){const report=ensureReport(item),site=state.data.sites.find(s=>s.uid===item.siteId),template=templateForEquipment(item),folder=`${site.id}/${item.id}`;await hydrateEquipmentImages(item);const rendered=await renderTemplateFile(template,item);warnings.push(...rendered.warnings.map(message=>`${site.id}/${item.id}: ${message}`));if(rendered.blob)zip.file(`${folder}/${item.id}-${slug(template.name)}.${template.format.toLowerCase()}`,rendered.blob);for(const field of Object.keys(report.images||{})){const image=reportImage(item,field);if(image?.dataUrl)zip.file(`${folder}/images/${field}.jpg`,dataUrlBase64(image.dataUrl),{base64:true});}}
+    zip.file('README.txt',['WorkHub Installation Reports','หนึ่งรายงานต่อ Site ID + Equipment ID','ไฟล์รูปต้นฉบับที่บีบอัดแล้วอยู่ในโฟลเดอร์ images',warnings.length?'คำเตือน:\n'+warnings.join('\n'):'สร้างเอกสารจาก Template สำเร็จทุกไฟล์'].join('\n'));
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});download(`WorkHub_Installation_Reports_${new Date().toISOString().slice(0,10)}.zip`,blob);notify(warnings.length?`Export แล้ว · มีคำเตือน ${warnings.length} รายการ`:'สร้างรายงานจาก Template แล้ว');
+  }
+
+  function bind() {
+    if(state.bound)return;state.bound=true;
+    root().addEventListener('input',event=>{if(event.target.matches('[data-report-search]')){state.search=event.target.value;renderTemplates();}});
+    root().addEventListener('change',async event=>{
+      if(event.target.matches('[data-group-select]')){state.selectedGroup=event.target.value;state.selectedSite=state.data.sites.find(s=>s.groupId===state.selectedGroup)?.uid||'';render();return;}
+      if(event.target.matches('[data-site-select]')){state.selectedSite=event.target.value;render();return;}
+      if(event.target.matches('[data-report-template-select]')){state.selectedTemplate=event.target.value;state.selectedEquipment='';state.selectedReports.clear();renderReports();return;}
+      if(event.target.matches('[data-assignment-type]')){state.data.assignments[key(state.selectedGroup,event.target.dataset.assignmentType)]=event.target.value;persist('กำหนด Template แล้ว');return;}
+      if(event.target.matches('[data-report-check]')){event.target.checked?state.selectedReports.add(event.target.dataset.reportCheck):state.selectedReports.delete(event.target.dataset.reportCheck);renderReports();return;}
+      if(event.target.matches('[data-report-site-check]')){const items=state.data.equipment.filter(item=>item.siteId===event.target.dataset.reportSiteCheck&&templateForEquipment(item)?.id===state.selectedTemplate);items.forEach(item=>event.target.checked?state.selectedReports.add(item.uid):state.selectedReports.delete(item.uid));renderReports();return;}
+      if(event.target.matches('[data-report-type]')){const items=state.data.equipment.filter(item=>item.groupId===state.selectedGroup&&item.siteId===event.target.dataset.reportTypeSite&&item.type===event.target.dataset.reportType&&templateForEquipment(item)?.id===state.selectedTemplate);items.forEach(item=>event.target.checked?state.selectedReports.add(item.uid):state.selectedReports.delete(item.uid));renderReports();return;}
+      if(event.target.matches('[data-template-file]')){const file=event.target.files[0];if(file){state.uploadDraft.file=file;state.uploadDraft.format=file.name.split('.').pop().toUpperCase();renderTemplateWizard();}return;}
+      if(event.target.matches('[data-draft-label]'))state.uploadDraft.fields[Number(event.target.dataset.draftLabel)].label=event.target.value;
+      if(event.target.matches('[data-draft-type]'))state.uploadDraft.fields[Number(event.target.dataset.draftType)].type=event.target.value;
+      if(event.target.matches('[data-draft-required]'))state.uploadDraft.fields[Number(event.target.dataset.draftRequired)].required=event.target.checked;
+      if(event.target.matches('[data-report-image]')){const equipment=state.data.equipment.find(item=>item.uid===state.selectedEquipment),file=event.target.files[0];if(!equipment||!file)return;const field=event.target.dataset.reportImage;event.target.closest('.report-image-slot').classList.add('is-loading');try{const optimized=await window.ImageOptimizer.compressImage(file,{maxLongEdge:1800,targetBytes:900*1024,quality:.78});await storeReportImage(equipment.uid,field,optimized);ensureReport(equipment).images[field]={stored:true,name:optimized.name,optimizedSize:optimized.optimizedSize,width:optimized.width,height:optimized.height};ensureReport(equipment).updatedAt=nowText();persist('บีบอัดและบันทึกรูปแล้ว');}catch(error){alert(error.message);}return;}
+    });
+    root().addEventListener('click',async event=>{
+      const tab=event.target.closest('[data-report-tab]');if(tab){state.active=tab.dataset.reportTab;render();return;}
+      const go=event.target.closest('[data-report-go]');if(go){state.active=go.dataset.reportGo;render();return;}
+      if(event.target.closest('[data-template-upload]'))return templateWizard();
+      const templateSelect=event.target.closest('[data-template-select]');if(templateSelect){state.selectedTemplate=templateSelect.dataset.templateSelect;renderTemplates();return;}
+      if(event.target.closest('[data-template-fields]'))return templateFieldsDialog();
+      if(event.target.closest('[data-template-download]')){const record=await getTemplateFile(selectedTemplate().id);if(record)download(record.name,record.file);return;}
+      if(event.target.closest('[data-template-scan]')){try{const result=await scanTemplate(state.uploadDraft.file);state.uploadDraft.fields=result.fields;state.uploadDraft.format=result.format;state.uploadDraft.step=2;renderTemplateWizard();}catch(error){alert(error.message);}return;}
+      if(event.target.closest('[data-template-back]')){state.uploadDraft.step=Math.max(1,state.uploadDraft.step-1);renderTemplateWizard();return;}
+      if(event.target.closest('[data-template-next]')){state.uploadDraft.step=3;renderTemplateWizard();return;}
+      if(event.target.closest('[data-custom-add]')){const dialog=event.target.closest('dialog'),fieldKey=slug(dialog.querySelector('[data-custom-key]').value),label=dialog.querySelector('[data-custom-label]').value.trim();if(!fieldKey||!label)return alert('กรุณาระบุ Field key และชื่อที่แสดง');if(state.uploadDraft.fields.some(f=>f.key===fieldKey))return alert('Field key นี้มีอยู่แล้ว');state.uploadDraft.fields.push({key:fieldKey,label,type:'text',required:false,source:'custom',occurrences:0});renderTemplateWizard();return;}
+      if(event.target.closest('[data-group-add]'))return simpleEntityDialog('group');
+      if(event.target.closest('[data-site-add]'))return simpleEntityDialog('site');
+      if(event.target.closest('[data-equipment-add]'))return simpleEntityDialog('equipment');
+      const csv=event.target.closest('[data-csv-import]');if(csv)return csvDialog(csv.dataset.csvImport==='equipment'?'equipment':csv.dataset.csvImport);
+      const dl=event.target.closest('[data-csv-download]');if(dl){const spec=csvSpecs[dl.dataset.csvDownload];download(`workhub-${dl.dataset.csvDownload}-template.csv`,new Blob(['\uFEFF'+csvText(spec.headers,spec.sample)],{type:'text/csv;charset=utf-8'}));return;}
+      const siteOpen=event.target.closest('[data-site-open]');if(siteOpen){state.selectedSite=siteOpen.dataset.siteOpen;state.structureMode='equipment';renderStructure();return;}
+      const mode=event.target.closest('[data-structure-mode]');if(mode){state.structureMode=mode.dataset.structureMode;renderStructure();return;}
+      const equipmentOpen=event.target.closest('[data-equipment-open]');if(equipmentOpen){state.selectedEquipment=equipmentOpen.dataset.equipmentOpen;state.active='reports';render();return;}
+      const reportOpen=event.target.closest('[data-report-open]');if(reportOpen){state.selectedEquipment=reportOpen.dataset.reportOpen;renderReports();return;}
+      if(event.target.closest('[data-select-ready]')){state.data.equipment.filter(item=>item.groupId===state.selectedGroup&&(!state.selectedSite||item.siteId===state.selectedSite)&&templateForEquipment(item)?.id===state.selectedTemplate&&progress(item).status==='READY').forEach(item=>state.selectedReports.add(item.uid));renderReports();return;}
+      if(event.target.closest('[data-clear-report-selection]')){state.selectedReports.clear();renderReports();return;}
+      if(event.target.closest('[data-report-csv]'))return reportCsvDialog();
+      const reportDl=event.target.closest('[data-report-csv-download]');if(reportDl){const template=state.data.templates.find(t=>t.id===reportDl.dataset.reportCsvDownload),fields=template.fields.filter(f=>f.type!=='image'),headers=['site_id','equipment_id',...fields.map(f=>f.key)];download(`${slug(template.name)}-data-template.csv`,new Blob(['\uFEFF'+csvText(headers,[headers.map((_,index)=>index<2?(index===0?'SITE-A':'SM1'):'')])],{type:'text/csv;charset=utf-8'}));return;}
+      if(event.target.closest('[data-export-selected]'))return exportSelected();
+    });
+    root().addEventListener('submit',async event=>{
+      event.preventDefault();const form=event.target,values=Object.fromEntries(new FormData(form));
+      if(form.matches('[data-template-final]')){const draft=state.uploadDraft,id=uid('tpl');const item={id,name:values.name.trim(),equipmentType:values.equipmentType.trim(),format:draft.format,version:Number(values.version)||1,fileName:draft.file.name,fileStored:true,status:'ACTIVE',updatedAt:nowText(),fields:draft.fields};await storeTemplateFile(id,draft.file);state.data.templates.unshift(item);state.selectedTemplate=id;closeDialog();state.active='templates';persist('บันทึก Template แล้ว');return;}
+      if(form.matches('[data-template-fields-form]')){const template=state.data.templates.find(t=>t.id===form.dataset.templateFieldsForm);template.fields.forEach((field,index)=>{field.label=values[`label_${index}`].trim();field.type=values[`type_${index}`];field.required=!!form.elements[`required_${index}`].checked;});const newKey=slug(values.newKey),newLabel=String(values.newLabel||'').trim();if(newKey&&newLabel&&!template.fields.some(f=>f.key===newKey))template.fields.push({key:newKey,label:newLabel,type:'text',required:false,source:'custom',occurrences:0});closeDialog();persist('บันทึก Fields แล้ว');return;}
+      if(form.matches('[data-entity-form]')){const entity=form.dataset.entityForm;if(entity==='group'){if(state.data.groups.some(g=>g.code===values.code.trim()))return alert('รหัสกลุ่มงานนี้มีอยู่แล้ว');const item={id:uid('wg'),code:values.code.trim(),name:values.name.trim(),fiscalYear:values.fiscalYear.trim()};state.data.groups.push(item);state.selectedGroup=item.id;}if(entity==='site'){const groupId=values.groupId;if(state.data.sites.some(s=>s.groupId===groupId&&s.id===values.code.trim()))return alert('Site ID นี้มีอยู่แล้วในกลุ่มงาน');const item={uid:uid('site'),id:values.code.trim(),groupId,name:values.name.trim(),customer:values.customer.trim(),address:values.address.trim()};state.data.sites.push(item);state.selectedSite=item.uid;}if(entity==='equipment'){const siteId=values.siteId;if(state.data.equipment.some(e=>e.siteId===siteId&&e.id===values.code.trim()))return alert('Equipment ID นี้มีอยู่แล้วในไซต์');const item={uid:uid('eq'),id:values.code.trim(),groupId:values.groupId,siteId,type:values.type.trim(),name:values.name.trim(),model:values.model.trim(),serial:values.serial.trim(),location:values.location.trim()};state.data.equipment.push(item);state.selectedEquipment=item.uid;}closeDialog();persist('บันทึกข้อมูลแล้ว');return;}
+      if(form.matches('[data-csv-form]')){try{const result=await importCsv(form.dataset.csvForm,form.elements.file.files[0],values.policy);closeDialog();persist(`นำเข้าสำเร็จ ${result.created} ใหม่ · ${result.updated} อัปเดต`);if(result.conflicts.length)await Swal.fire({icon:'warning',title:'นำเข้าแล้ว แต่มีรายการต้องตรวจสอบ',html:`<p>${result.conflicts.length} จุด</p><div class="csv-conflict-preview">${result.conflicts.slice(0,10).map(item=>`<code>${esc(item)}</code>`).join('')}</div>`});}catch(error){alert(error.message);}return;}
+      if(form.matches('[data-report-csv-form]')){try{const result=await importReportCsv(form.dataset.reportCsvForm,form.elements.file.files[0],values.policy);closeDialog();persist(`นำเข้าข้อมูลรายงาน ${result.updated} รายการ`);if(result.conflicts.length)await Swal.fire({icon:'warning',title:'พบช่องที่มีข้อมูลเดิม',html:`<p>${result.conflicts.length} ช่องถูกจัดการตามเงื่อนไขที่เลือก</p><div class="csv-conflict-preview">${result.conflicts.slice(0,12).map(item=>`<code>${esc(item)}</code>`).join('')}</div>`});}catch(error){alert(error.message);}return;}
+      if(form.matches('[data-report-data-form]')){const equipment=state.data.equipment.find(item=>item.uid===form.dataset.equipment),report=ensureReport(equipment);Object.entries(values).forEach(([field,value])=>report.values[field]=String(value).trim());report.updatedAt=nowText();persist('บันทึกข้อมูลรายงานแล้ว');return;}
+    });
+  }
+
+  function activate(force){if(!state.data||force)load();if(!root().querySelector('.module-shell')||force)shell();else render();}
+  window.ReportManagerModule=Object.freeze({activate,scanTemplate,parseCsv,replaceXmlPlaceholders,resetLocal:()=>{localStorage.removeItem(STORAGE_KEY);state.data=null;activate(true);}});
+})();

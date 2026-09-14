@@ -10,7 +10,7 @@
   async function askForPassword() {
     const result = await Swal.fire({
       title: 'เข้าสู่ส่วนงานภายใน',
-      html: '<div class="protected-login"><label for="protected-password-input">รหัสผ่าน</label><div class="protected-password-field"><input id="protected-password-input" type="password" autocomplete="current-password" maxlength="128" aria-describedby="protected-password-help"><button id="protected-password-toggle" type="button" aria-label="แสดงรหัสผ่าน">แสดง</button></div><p id="protected-password-help">ใช้สำหรับเอกสารใบรับเงิน สรุปค่าแรง Task Manager และฐานข้อมูล</p><p class="protected-login__open-note">ส่วนค่าใช้จ่ายและบิลเข้าใช้งานได้โดยไม่ต้องใส่รหัส</p></div>',
+      html: '<div class="protected-login"><label for="protected-password-input">รหัสผ่าน</label><div class="protected-password-field"><input id="protected-password-input" type="password" autocomplete="current-password" maxlength="128" aria-describedby="protected-password-help"><button id="protected-password-toggle" type="button" aria-label="แสดงรหัสผ่าน">แสดง</button></div><p id="protected-password-help">ใช้สำหรับเอกสาร ค่าแรง Task Manager รายงาน และระบบภายใน</p><p class="protected-login__open-note">ส่วนค่าใช้จ่ายและบิลเข้าใช้งานได้โดยไม่ต้องใส่รหัส</p></div>',
       showCancelButton: true,
       confirmButtonText: 'เข้าสู่ระบบ',
       cancelButtonText: 'ยกเลิก',

@@ -17,12 +17,12 @@ for (const file of ['index.html', 'manifest.webmanifest']) {
   await cp(path.join(frontend, file), path.join(dist, file));
 }
 
-const versionedAssets = ['styles.css','workhub-modules.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','workhub-core.js','tasks.js','payroll.js','app.js','pwa.js'];
+const versionedAssets = ['styles.css','workhub-modules.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','workhub-core.js','tasks.js','payroll.js','reports.js','app.js','pwa.js'];
 let builtIndex = await readFile(path.join(dist, 'index.html'), 'utf8');
 for (const asset of versionedAssets) builtIndex = builtIndex.replaceAll(`./${asset}`, `./${asset}?v=${packageJson.version}`);
 await writeFile(path.join(dist, 'index.html'), builtIndex);
 
-for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'workhub-core.js', 'tasks.js', 'payroll.js', 'app.js', 'pwa.js']) {
+for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'workhub-core.js', 'tasks.js', 'payroll.js', 'reports.js', 'app.js', 'pwa.js']) {
   await build({
     entryPoints: [path.join(frontend, file)],
     outfile: path.join(dist, file),

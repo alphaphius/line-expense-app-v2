@@ -57,6 +57,7 @@
     if (view === 'receipts' && window.ReceiptModule) window.ReceiptModule.activate();
     if (view === 'payroll' && window.PayrollModule) window.PayrollModule.activate();
     if (view === 'tasks' && window.TaskManagerModule) window.TaskManagerModule.activate();
+    if (view === 'reports' && window.ReportManagerModule) window.ReportManagerModule.activate();
   }
 
   let billOwnerRefreshPromise = null;
@@ -818,32 +819,37 @@
       const fallbackUrl = document.getElementById('open-database-btn').dataset.databaseUrl || '';
       const access = await gas('verifyDatabaseAccess');
       const targetUrl = access.url || fallbackUrl;
-      const url = escapeHtml(targetUrl);
       hideActivityToast();
-      await Swal.fire({
-        icon: targetUrl && targetUrl !== '#' ? 'success' : 'info',
-        title: targetUrl && targetUrl !== '#' ? 'ฐานข้อมูลพร้อมเปิด' : 'MariaDB ทำงานอยู่',
-        html: targetUrl && targetUrl !== '#' ? `<p class="mb-4 text-sm text-slate-500">กดปุ่มด้านล่างเพื่อเปิด phpMyAdmin ในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด phpMyAdmin</a>` : `<p class="text-sm text-slate-500">${escapeHtml(access.message || 'ปิดการเปิดฐานข้อมูลจากหน้าแอปเพื่อความปลอดภัย')}</p>`,
-        showConfirmButton:false,
-        showCloseButton:true,
-      });
+      if (targetUrl && targetUrl !== '#') {
+        showExternalLinkSheet('เปิด Database ในแท็บใหม่', 'ระบบจะเปิด phpMyAdmin สำหรับจัดการ MariaDB ในแท็บใหม่', targetUrl, 'เปิด Database');
+      } else {
+        await Swal.fire({
+          icon:'info',
+          title:'MariaDB ทำงานอยู่',
+          text:access.message || 'ปิดการเปิดฐานข้อมูลจากหน้าแอปเพื่อความปลอดภัย',
+          confirmButtonText:'รับทราบ',
+        });
+      }
     } catch (error) {
       hideActivityToast();
       throw error;
     }
   }
 
-  async function openWorkHubApp() {
+  function showExternalLinkSheet(title, description, url, buttonLabel) {
+    const sheet = document.getElementById('external-link-sheet');
+    document.getElementById('external-link-title').textContent = title;
+    document.getElementById('external-link-description').textContent = description;
+    const confirm = document.getElementById('external-link-confirm');
+    confirm.href = url;
+    confirm.textContent = buttonLabel || `เปิด ${title}`;
+    if (!sheet.open) sheet.showModal();
+  }
+
+  async function openWorkHubApp(button) {
     if (!await window.ProtectedAccess.ensure()) return;
-    const button = document.getElementById('open-app-btn');
-    const url = escapeHtml(button.dataset.externalUrl || '');
-    await Swal.fire({
-      icon:'info',
-      title:'เปิด App บน NAS',
-      html:`<p class="mb-4 text-sm text-slate-500">ระบบจะเปิด App ในแท็บใหม่</p><a class="primary-btn inline-flex items-center justify-center no-underline" href="${url}" target="_blank" rel="noopener noreferrer">เปิด App</a>`,
-      showConfirmButton:false,
-      showCloseButton:true,
-    });
+    const title = button.dataset.externalTitle || 'Main App';
+    showExternalLinkSheet(`เปิด ${title} ในแท็บใหม่`, `ระบบจะเปิด ${title} ในแท็บใหม่`, button.dataset.externalUrl || '#', `เปิด ${title}`);
   }
 
   function createExportFileUrl(result) {
@@ -1093,8 +1099,13 @@
   ['bill-status','bill-project-filter','bill-company-filter','bill-category-filter','bill-date-from','bill-date-to','bill-sort'].forEach(id => document.getElementById(id).addEventListener('change', () => loadAllBills(1)));
   document.getElementById('export-monthly-btn').addEventListener('click', () => exportMonthlyFile('word'));
   document.getElementById('export-excel-btn').addEventListener('click', () => exportMonthlyFile('excel'));
-  document.getElementById('open-app-btn').addEventListener('click', () => openWorkHubApp().catch(showFatal));
+  document.getElementById('open-main-app-btn').addEventListener('click', event => openWorkHubApp(event.currentTarget).catch(showFatal));
+  document.getElementById('open-stock-app-btn').addEventListener('click', event => openWorkHubApp(event.currentTarget).catch(showFatal));
   document.getElementById('open-database-btn').addEventListener('click', () => openDatabase().catch(showFatal));
+  document.getElementById('external-link-confirm').addEventListener('click', () => {
+    const sheet = document.getElementById('external-link-sheet');
+    window.setTimeout(() => { if (sheet.open) sheet.close(); }, 0);
+  });
   document.getElementById('open-review-queue').addEventListener('click', () => startPendingReviewWorkflow('').catch(showFatal));
   document.getElementById('dashboard-prev-month').addEventListener('click', () => refreshDashboard({ period:shiftDashboardPeriod(state.dashboardFilters.period, -1), owners:null }));
   document.getElementById('dashboard-next-month').addEventListener('click', () => refreshDashboard({ period:shiftDashboardPeriod(state.dashboardFilters.period, 1), owners:null }));

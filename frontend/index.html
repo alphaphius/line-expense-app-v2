@@ -26,6 +26,7 @@
   <script defer src="./workhub-core.js"></script>
   <script defer src="./tasks.js"></script>
   <script defer src="./payroll.js"></script>
+  <script defer src="./reports.js"></script>
   <script defer src="./app.js"></script>
   <script defer src="./pwa.js"></script>
 </head>
@@ -52,7 +53,8 @@
       </nav>
       <p class="sidebar-section-label">ระบบและรายงาน</p>
       <nav class="resource-nav" aria-label="ระบบและรายงาน">
-        <button id="open-app-btn" class="resource-nav__button" type="button" data-external-url="https://app.nasgfe1.synology.me/" aria-label="เปิด App บน NAS"><span>App</span><small>NAS App</small></button>
+        <button id="open-main-app-btn" class="resource-nav__button" type="button" data-external-url="https://app.nasgfe1.synology.me/" data-external-title="Main App" aria-label="เปิด Main App"><span>Main App</span><small>Operations</small></button>
+        <button id="open-stock-app-btn" class="resource-nav__button" type="button" data-external-url="https://inv.nasgfe1.synology.me/login" data-external-title="Stock App" aria-label="เปิด Stock App"><span>Stock App</span><small>Inventory</small></button>
         <button id="open-database-btn" class="resource-nav__button" type="button" data-database-url="http://nasgfe1.synology.me/phpmyadmin/index.php?route=/" aria-label="เปิดฐานข้อมูล MariaDB"><span>Database</span><small>MariaDB</small></button>
         <button class="resource-nav__button" type="button" data-view="reports" data-resource="reports"><span>รายงาน</span><small>Reports</small></button>
       </nav>
@@ -380,10 +382,7 @@
         </section>
 
         <section id="view-reports" class="app-view hidden">
-          <article class="coming-soon-card">
-            <span aria-hidden="true">R</span>
-            <div><p class="eyebrow">REPORTS</p><h3>รายงาน</h3><p>พื้นที่รวมรายงานของ WorkHub เตรียมไว้แล้ว โดยจะกำหนดรายการ ตัวกรอง และรูปแบบไฟล์ในขั้นตอนถัดไป</p></div>
-          </article>
+          <div id="report-manager-root" aria-live="polite"></div>
         </section>
 
         <section id="view-system" class="app-view hidden">
@@ -401,6 +400,13 @@
     <span id="activity-toast-icon" class="activity-toast__spinner" aria-hidden="true"></span>
     <span class="min-w-0"><strong id="activity-toast-title" class="block text-sm">กำลังทำงาน…</strong><small id="activity-toast-detail" class="mt-0.5 block text-xs">คุณสามารถใช้งานส่วนอื่นต่อได้</small></span>
   </div>
+  <dialog id="external-link-sheet" class="external-link-sheet">
+    <form method="dialog" class="external-link-sheet__panel">
+      <span class="external-link-sheet__grab" aria-hidden="true"></span>
+      <div class="external-link-sheet__content"><span class="external-link-sheet__icon" aria-hidden="true">↗</span><div><h3 id="external-link-title">เปิดระบบในแท็บใหม่</h3><p id="external-link-description">ระบบจะเปิดปลายทางในแท็บใหม่</p></div></div>
+      <div class="external-link-sheet__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><a id="external-link-confirm" class="module-primary" href="#" target="_blank" rel="noopener noreferrer">เปิดระบบ</a></div>
+    </form>
+  </dialog>
   <datalist id="vendor-suggestions"></datalist>
 </body>
 </html>

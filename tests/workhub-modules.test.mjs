@@ -13,6 +13,12 @@ async function loadCore() {
   return context.window.WorkHubCore;
 }
 
+async function loadReportsCore() {
+  const context = vm.createContext({ window:{}, Date, Intl, Math, Number, String, Array, Object, RegExp, Map, Set });
+  new vm.Script(await read('frontend/reports.js'), { filename:'reports.js' }).runInContext(context);
+  return context.window.ReportManagerModule;
+}
+
 test('weekly payroll always runs Monday through Sunday and supports half-hour OT', async () => {
   const core = await loadCore();
   const dates = Array.from(core.weekDates('2026-09-17'));
@@ -69,17 +75,17 @@ test('payroll provides group bulk attendance, half-hour OT, weekly totals and se
 });
 
 test('all module dialog cancel controls bypass required-field validation', async () => {
-  const [tasks, payroll] = await Promise.all([read('frontend/tasks.js'), read('frontend/payroll.js')]);
-  for (const source of [tasks, payroll]) {
+  const [tasks, payroll, reports] = await Promise.all([read('frontend/tasks.js'), read('frontend/payroll.js'), read('frontend/reports.js')]);
+  for (const source of [tasks, payroll, reports]) {
     assert.match(source, /querySelectorAll\('button\[value="cancel"\]'\)/);
     assert.match(source, /button\.type='button'/);
     assert.match(source, /button\.addEventListener\('click',\(\)=>dialog\.close\(\)\)/);
   }
 });
 
-test('build and offline shell include both local-test modules', async () => {
+test('build and offline shell include all local-test modules', async () => {
   const [build, worker] = await Promise.all([read('scripts/build.mjs'), read('frontend/service-worker.js')]);
-  for (const asset of ['workhub-core.js','tasks.js','payroll.js','workhub-modules.css']) {
+  for (const asset of ['workhub-core.js','tasks.js','payroll.js','reports.js','workhub-modules.css']) {
     assert.match(build, new RegExp(asset.replace('.', '\\.')));
     assert.match(worker, new RegExp(asset.replace('.', '\\.')));
   }
@@ -104,16 +110,45 @@ test('bill owner checkbox selection drives both list filters and exports', async
   assert.match(preview, /filters\.owner_ids\.includes\(row\.source_user_id\)/);
 });
 
-test('secondary navigation exposes protected App, Database, and Reports access', async () => {
+test('secondary navigation exposes protected Main App, Stock App, Database, and Reports access', async () => {
   const [html, app, css, preview] = await Promise.all([
     read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'), read('scripts/dev-server.mjs'),
   ]);
   assert.match(html, /class="resource-nav"/);
   assert.match(html, /data-external-url="https:\/\/app\.nasgfe1\.synology\.me\/"/);
+  assert.match(html, /data-external-url="https:\/\/inv\.nasgfe1\.synology\.me\/login"/);
   assert.match(html, /data-database-url="http:\/\/nasgfe1\.synology\.me\/phpmyadmin\/index\.php\?route=\/"/);
   assert.match(html, /id="view-reports"/);
+  assert.match(html, /id="report-manager-root"/);
+  assert.match(html, /id="external-link-sheet"/);
   assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports'\]/);
   assert.match(app, /ProtectedAccess\.ensure\(\)/);
-  assert.match(css, /\.resource-nav\s*\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.resource-nav\s*\{[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(preview, /action === 'verifyDatabaseAccess'/);
+});
+
+test('reports support reusable templates, site-scoped equipment IDs, CSV imports, and hierarchical export selection', async () => {
+  const reports = await read('frontend/reports.js');
+  assert.match(reports, /workhub-installation-reports-v2/);
+  assert.match(reports, /async function scanTemplate/);
+  assert.match(reports, /fieldKey\.startsWith\('img_'\)/);
+  assert.match(reports, /'eq-a-sm1'.*id:'SM1'/s);
+  assert.match(reports, /'eq-a-sm2'.*id:'SM2'/s);
+  assert.match(reports, /'eq-a-sm3'.*id:'SM3'/s);
+  assert.match(reports, /e\.siteId===site\.uid&&e\.id===row\.equipment_id/);
+  assert.match(reports, /data-report-site-check/);
+  assert.match(reports, /data-report-type-site/);
+  assert.match(reports, /data-report-template-select/);
+  assert.match(reports, /1 Text Box = 1 รูป/);
+  assert.match(reports, /IndexedDB|indexedDB/);
+  assert.match(reports, /policy==='blank'/);
+  assert.match(reports, /policy==='overwrite'/);
+});
+
+test('reports replace split DOCX and XLSX text placeholders without changing the file layout nodes', async () => {
+  const reports = await loadReportsCore();
+  const docx = '<w:p><w:r><w:t>{site_</w:t></w:r><w:r><w:t>name}</w:t></w:r></w:p>';
+  const xlsx = '<xdr:sp><a:p><a:r><a:t>{equipment_</a:t></a:r><a:r><a:t>id}</a:t></a:r></a:p></xdr:sp>';
+  assert.match(reports.replaceXmlPlaceholders(docx, {'{site_name}':'ไซต์ A & B'}, 'DOCX'), /ไซต์ A &amp; B/);
+  assert.match(reports.replaceXmlPlaceholders(xlsx, {'{equipment_id}':'SM1'}, 'XLSX'), /SM1/);
 });
