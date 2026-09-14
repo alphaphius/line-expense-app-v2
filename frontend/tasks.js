@@ -179,7 +179,17 @@
   function taskDialog(task,siteId) { const today=core().todayIso();const item=task||{siteId:siteId||state.data.sites[0]?.id,name:'',assignee:'',planStart:today,planEnd:core().addDays(today,4),actualStart:'',actualEnd:'',progress:0,milestone:false};showDialog(`<form method="dialog" data-plan-task-form data-id="${esc(item.id||'')}" class="wh-form"><div class="wh-dialog__head"><div><span>แผนงาน</span><h4>${task?'แก้ไขงาน':'เพิ่มงาน'}</h4></div><button value="cancel">×</button></div><label>ไซต์งาน<select name="siteId" required>${state.data.sites.map(site=>`<option value="${esc(site.id)}" ${site.id===item.siteId?'selected':''}>${esc(site.name)}</option>`).join('')}</select></label><label>ชื่องาน<input name="name" required value="${esc(item.name)}"></label><label>ผู้รับผิดชอบ<input name="assignee" value="${esc(item.assignee)}"></label><div class="form-grid"><label>Plan เริ่ม<input name="planStart" type="date" required value="${item.planStart}"></label><label>Plan สิ้นสุด<input name="planEnd" type="date" required value="${item.planEnd}"></label><label>Actual เริ่ม<input name="actualStart" type="date" value="${item.actualStart||''}"></label><label>Actual สิ้นสุด<input name="actualEnd" type="date" value="${item.actualEnd||''}"></label></div><label>ความคืบหน้า (%)<input name="progress" type="number" min="0" max="100" value="${Number(item.progress)||0}"></label><label class="check-row"><input name="milestone" type="checkbox" ${item.milestone?'checked':''}> เป็น Milestone</label><div class="wh-form__actions">${task?`<button type="button" class="danger-link" data-task-delete="${esc(task.id)}">ลบงาน</button>`:''}<button value="cancel" class="module-secondary">ยกเลิก</button><button type="submit" class="module-primary">บันทึกงาน</button></div></form>`);}
   function siteDialog(){showDialog(`<form method="dialog" data-site-form class="wh-form"><div class="wh-dialog__head"><div><span>แผนงาน</span><h4>เพิ่มไซต์งาน</h4></div><button value="cancel">×</button></div><label>ชื่อไซต์งาน<input name="name" required placeholder="เช่น ไซต์ DMR"></label><div class="wh-form__actions"><button value="cancel" class="module-secondary">ยกเลิก</button><button type="submit" class="module-primary">เพิ่มไซต์</button></div></form>`);}
 
-  function showDialog(html) { const host=document.getElementById('task-dialog-host');host.innerHTML=`<dialog class="wh-dialog">${html}</dialog>`;const dialog=host.querySelector('dialog');dialog.addEventListener('close',()=>{host.innerHTML='';});dialog.showModal(); }
+  function showDialog(html) {
+    const host=document.getElementById('task-dialog-host');
+    host.innerHTML=`<dialog class="wh-dialog">${html}</dialog>`;
+    const dialog=host.querySelector('dialog');
+    dialog.querySelectorAll('button[value="cancel"]').forEach(button=>{
+      button.type='button';
+      button.addEventListener('click',()=>dialog.close());
+    });
+    dialog.addEventListener('close',()=>{host.innerHTML='';});
+    dialog.showModal();
+  }
   function closeDialog() { document.querySelector('#task-dialog-host dialog')?.close(); }
   function notify(message) { const status=document.getElementById('task-save-state');if(!status)return;status.innerHTML=`<span></span>${esc(message)}`;status.classList.add('flash');setTimeout(()=>status.classList.remove('flash'),1000); }
   function persist(message) { save(); render(); notify(message||'บันทึกในเครื่องแล้ว'); }

@@ -62,8 +62,19 @@ test('payroll provides group bulk attendance, half-hour OT, weekly totals and se
   assert.match(payroll, /core\(\)\.weekDates/);
   assert.match(payroll, /ดาวน์โหลด PDF/);
   assert.match(payroll, /ดาวน์โหลด Excel/);
+  assert.match(payroll, /@page\{size:A4 landscape/);
+  assert.match(payroll, /row\.days\.map/);
   assert.match(payroll, /sheetXml/);
   assert.doesNotMatch(payroll, /ปรับเพิ่ม\/ลด/);
+});
+
+test('all module dialog cancel controls bypass required-field validation', async () => {
+  const [tasks, payroll] = await Promise.all([read('frontend/tasks.js'), read('frontend/payroll.js')]);
+  for (const source of [tasks, payroll]) {
+    assert.match(source, /querySelectorAll\('button\[value="cancel"\]'\)/);
+    assert.match(source, /button\.type='button'/);
+    assert.match(source, /button\.addEventListener\('click',\(\)=>dialog\.close\(\)\)/);
+  }
 });
 
 test('build and offline shell include both local-test modules', async () => {
