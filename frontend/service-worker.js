@@ -1,5 +1,5 @@
 const CACHE_NAME = 'workhub-shell-3';
-const SHELL = ['./', './index.html', './styles.css', './workhub-modules.css', './config.js', './api.js', './image-optimizer.js', './protected-access.js', './receipts.js', './workhub-core.js', './tasks.js', './payroll.js', './reports.js', './app.js', './pwa.js', './manifest.webmanifest', './icons/app-icon-192.png', './vendor/sweetalert2.all.min.js', './vendor/chart.umd.js', './vendor/jszip.min.js', './vendor/markerclusterer.umd.js'];
+const SHELL = ['./', './index.html', './styles.css', './workhub-modules.css', './config.js', './api.js', './image-optimizer.js', './protected-access.js', './receipts.js', './workhub-core.js', './tasks.js', './payroll.js', './report-xlsx.js', './reports.js', './app.js', './pwa.js', './manifest.webmanifest', './icons/app-icon-192.png', './vendor/sweetalert2.all.min.js', './vendor/chart.umd.js', './vendor/jszip.min.js', './vendor/markerclusterer.umd.js'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

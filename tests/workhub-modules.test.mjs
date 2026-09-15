@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
+import JSZip from 'jszip';
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = file => fs.readFile(path.join(root, file), 'utf8');
@@ -85,7 +86,7 @@ test('all module dialog cancel controls bypass required-field validation', async
 
 test('build and offline shell include all local-test modules', async () => {
   const [build, worker] = await Promise.all([read('scripts/build.mjs'), read('frontend/service-worker.js')]);
-  for (const asset of ['workhub-core.js','tasks.js','payroll.js','reports.js','workhub-modules.css']) {
+  for (const asset of ['workhub-core.js','tasks.js','payroll.js','report-xlsx.js','reports.js','workhub-modules.css']) {
     assert.match(build, new RegExp(asset.replace('.', '\\.')));
     assert.match(worker, new RegExp(asset.replace('.', '\\.')));
   }
@@ -183,6 +184,14 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /google\.com\/maps\/dir\/\?api=1&destination=/);
   assert.match(reports, /travelmode=driving/);
   assert.match(reports, /นำทางด้วย Google Maps/);
+  assert.match(reports, /function fitMapToPositions/);
+  assert.match(reports, /report-map-list-layout--sites/);
+  assert.match(reports, /report-map-list-layout--equipment/);
+  assert.match(reports, /data-export-all-data/);
+  assert.match(reports, /function allDataSheets/);
+  assert.match(reports, /WorkHubReportXlsx\.createWorkbook/);
+  assert.match(reports, /data-field-drag/);
+  assert.match(reports, /data-field-move/);
   assert.match(reports, /row\.latitude\|\|row\.lat\|\|row\.n/);
   assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
@@ -195,8 +204,30 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(styles, /\.report-province:not\(\[open\]\)/);
   assert.match(styles, /\.workhub-map-location\{/);
   assert.match(styles, /\.workhub-map-info a\{/);
+  assert.match(styles, /\.report-map-list-layout\{display:grid/);
+  assert.match(styles, /height:clamp\(520px,calc\(100vh - 310px\),720px\)/);
+  assert.match(styles, /\.field-drag-handle\{/);
   assert.match(styles, /\.report-shell\{grid-template-columns:minmax\(0,1fr\)/);
   assert.match(styles, /\.report-journey-site>\.report-favorite-button\{position:absolute;top:-11px/);
+});
+
+test('report all-data XLSX creates readable sheets with frozen filtered headers', async () => {
+  const context = vm.createContext({ window:{ JSZip }, String, Number, Boolean, Math, Object, Array, Set, Map, Error });
+  new vm.Script(await read('frontend/report-xlsx.js'), { filename:'report-xlsx.js' }).runInContext(context);
+  const sheets = [
+    { name:'Soil Moisture Sensor', headers:['Site ID','Equipment ID','ชื่อไซต์','ค่าที่วัด {reading}'], rows:[['SITE-A','SM1','ไซต์ A',12.5],['SITE-A','SM2','ไซต์ A',14]] },
+    { name:'Omnia/Datalogger:*?', headers:['Site ID','Equipment ID'], rows:[['SITE-A','DL1']] },
+  ];
+  const buffer = await context.window.WorkHubReportXlsx.createWorkbook(sheets, { JSZip, outputType:'nodebuffer' });
+  const archive = await JSZip.loadAsync(buffer);
+  const workbook = await archive.file('xl/workbook.xml').async('string');
+  const firstSheet = await archive.file('xl/worksheets/sheet1.xml').async('string');
+  assert.match(workbook, /Soil Moisture Sensor/);
+  assert.match(workbook, /Omnia Datalogger/);
+  assert.match(firstSheet, /state="frozen"/);
+  assert.match(firstSheet, /<autoFilter ref="A1:D3"\/>/);
+  assert.match(firstSheet, /ค่าที่วัด \{reading\}/);
+  assert.match(firstSheet, /<c r="D2" s="2" t="n"><v>12\.5<\/v><\/c>/);
 });
 
 test('destructive report actions always re-enter the protected password', async () => {
