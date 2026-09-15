@@ -78,5 +78,66 @@
     return zip.generateAsync({ type:options?.outputType || 'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', compression:'DEFLATE', compressionOptions:{ level:6 } });
   }
 
-  window.WorkHubReportXlsx = Object.freeze({ createWorkbook, uniqueSheetNames, worksheetXml });
+  function decodeXml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+  }
+
+  function cellColumn(reference) {
+    const letters = String(reference || '').match(/^[A-Z]+/i)?.[0]?.toUpperCase() || 'A';
+    return [...letters].reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+  }
+
+  function parseWorksheet(xmlText, sharedStrings) {
+    const rows = [];
+    for (const rowMatch of String(xmlText).matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+      const row = [];
+      for (const cellMatch of rowMatch[1].matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
+        const attributes = cellMatch[1];
+        const body = cellMatch[2];
+        const reference = attributes.match(/\br=["']([^"']+)["']/)?.[1] || '';
+        const type = attributes.match(/\bt=["']([^"']+)["']/)?.[1] || '';
+        const raw = body.match(/<v>([\s\S]*?)<\/v>/)?.[1] ?? body.match(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/)?.[1] ?? '';
+        let value = decodeXml(raw);
+        if (type === 's') value = sharedStrings[Number(value)] ?? '';
+        else if (!type && value !== '' && Number.isFinite(Number(value))) value = Number(value);
+        row[cellColumn(reference)] = value;
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  async function parseWorkbook(file, options) {
+    const Zip = options?.JSZip || window.JSZip;
+    if (!Zip) throw new Error('ยังโหลดตัวอ่าน Excel ไม่สำเร็จ');
+    const zip = await Zip.loadAsync(file);
+    const workbookPart = zip.file('xl/workbook.xml');
+    const relationshipsPart = zip.file('xl/_rels/workbook.xml.rels');
+    if (!workbookPart || !relationshipsPart) throw new Error('ไฟล์นี้ไม่ใช่ XLSX ที่รองรับ');
+    const workbookXml = await workbookPart.async('string');
+    const relationshipsXml = await relationshipsPart.async('string');
+    const relationTargets = new Map([...relationshipsXml.matchAll(/<Relationship\b[^>]*\bId=["']([^"']+)["'][^>]*\bTarget=["']([^"']+)["'][^>]*\/?>(?:<\/Relationship>)?/g)].map(match => [match[1], match[2]]));
+    const sharedPart = zip.file('xl/sharedStrings.xml');
+    const sharedStrings = [];
+    if (sharedPart) {
+      const sharedXml = await sharedPart.async('string');
+      for (const match of sharedXml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)) sharedStrings.push([...match[1].matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map(item => decodeXml(item[1])).join(''));
+    }
+    const sheets = {};
+    for (const match of workbookXml.matchAll(/<sheet\b[^>]*\bname=["']([^"']+)["'][^>]*\br:id=["']([^"']+)["'][^>]*\/?>(?:<\/sheet>)?/g)) {
+      const target = relationTargets.get(match[2]);
+      if (!target) continue;
+      const normalized = target.startsWith('/') ? target.slice(1) : `xl/${target.replace(/^\.\//, '')}`;
+      const part = zip.file(normalized);
+      if (!part) continue;
+      const grid = parseWorksheet(await part.async('string'), sharedStrings);
+      const headers = (grid.shift() || []).map(value => String(value == null ? '' : value).trim().toLowerCase());
+      sheets[decodeXml(match[1])] = grid.filter(row => row.some(value => String(value ?? '').trim())).map(row => Object.fromEntries(headers.map((header, index) => [header, String(row[index] ?? '').trim()])));
+    }
+    return sheets;
+  }
+
+  window.WorkHubReportXlsx = Object.freeze({ createWorkbook, parseWorkbook, parseWorksheet, uniqueSheetNames, worksheetXml });
 })();

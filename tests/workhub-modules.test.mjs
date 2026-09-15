@@ -193,7 +193,7 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /data-field-drag/);
   assert.match(reports, /data-field-move/);
   assert.match(reports, /row\.latitude\|\|row\.lat\|\|row\.n/);
-  assert.match(reports, /headers:\['work_group_id','site_id','site_name','province'/);
+  assert.match(reports, /headers:\['work_group_id','site_id','site_name','description','map_pin_text'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
   assert.match(reports, /IndexedDB|indexedDB/);
   assert.match(reports, /policy==='blank'/);
@@ -230,6 +230,72 @@ test('report all-data XLSX creates readable sheets with frozen filtered headers'
   assert.match(firstSheet, /<c r="D2" s="2" t="n"><v>12\.5<\/v><\/c>/);
 });
 
+test('bulk XLSX reader round-trips Groups, Sites, and Equipment sheets', async () => {
+  const context = vm.createContext({ window:{ JSZip }, String, Number, Boolean, Math, Object, Array, Set, Map, Error });
+  new vm.Script(await read('frontend/report-xlsx.js'), { filename:'report-xlsx.js' }).runInContext(context);
+  const source = [
+    { name:'Groups', headers:['work_group_id','work_group_name'], rows:[['FY2569','ปีงบประมาณ 2569']] },
+    { name:'Sites', headers:['work_group_id','site_id','description'], rows:[['FY2569','SITE-A','งานติดตั้ง']] },
+    { name:'Equipment', headers:['work_group_id','site_id','equipment_id'], rows:[['FY2569','SITE-A','SM1']] },
+  ];
+  const buffer = await context.window.WorkHubReportXlsx.createWorkbook(source, { JSZip, outputType:'nodebuffer' });
+  const sheets = await context.window.WorkHubReportXlsx.parseWorkbook(buffer, { JSZip });
+  assert.equal(sheets.Groups[0].work_group_id, 'FY2569');
+  assert.equal(sheets.Sites[0].description, 'งานติดตั้ง');
+  assert.equal(sheets.Equipment[0].equipment_id, 'SM1');
+});
+
+test('Daily Report supports date and site entry, quantities, quick-edit details, template assignment, and XLSX export', async () => {
+  const [reports, styles] = await Promise.all([read('frontend/reports.js'), read('frontend/workhub-modules.css')]);
+  assert.match(reports, /data-report-tab="daily"/);
+  assert.match(reports, /function renderDailyReports/);
+  assert.match(reports, /dailyReports:\{\},dailyTemplates:\[\],dailyTemplateAssignments:\{\}/);
+  assert.match(reports, /\['engineer','วิศวกร'\]/);
+  assert.match(reports, /\['drillingRig','เครื่องเจาะดิน'\]/);
+  assert.match(reports, /08:00-17:00/);
+  assert.match(reports, /data-daily-detail-add/);
+  assert.match(reports, /data-daily-detail-row/);
+  assert.match(reports, /RemarkDescp/);
+  assert.match(reports, /QtyMachine/);
+  assert.match(reports, /daily-template::/);
+  assert.match(reports, /data-daily-site=/);
+  assert.match(reports, /data-daily-delete/);
+  assert.match(styles, /\.daily-calendar-strip/);
+  assert.match(styles, /\.daily-qty-grid/);
+  assert.match(styles, /\.daily-sticky-actions/);
+});
+
+test('Daily Report replacements preserve ordered items and blank every unused placeholder', async () => {
+  const reports = await loadReportsCore();
+  const replacements = reports.dailyReplacements({
+    date:'2026-09-15',
+    people:{ engineer:{ label:'วิศวกร', qty:2 }, civilTech:{ label:'ช่างโยธา', qty:0 }, labor:{ label:'แรงงาน', qty:5 }, geologist:{ label:'นักธรณี', qty:0 } },
+    machines:{ drillingRig:{ label:'เครื่องเจาะดิน', qty:1 }, crane:{ label:'รถเครน', qty:0 }, tenWheelTruck:{ label:'รถบรรทุกสิบล้อ', qty:0 }, excavator:{ label:'รถขุดดิน', qty:0 } },
+    details:[{ description:'ติดตั้ง Sensor', remark:'DONE', time:'08:00-12:00' }],
+  }, { id:'SITE-A', name:'ไซต์ A', description:'งานทดสอบ', mapPinText:'SITE-A Pin', moo:'4', village:'บ้านทดสอบ', subdistrict:'บางปะกง', district:'บางปะกง', province:'ฉะเชิงเทรา' });
+  assert.equal(replacements['{Person1}'], 'วิศวกร');
+  assert.equal(replacements['{Person2}'], 'แรงงาน');
+  assert.equal(replacements['{QtyMachine1}'], 1);
+  assert.equal(replacements['{Description1}'], 'ติดตั้ง Sensor');
+  assert.equal(replacements['{RemarkDescp1}'], 'ดำเนินการแล้วเสร็จ');
+  assert.equal(replacements['{Description10}'], '');
+  assert.equal(replacements['{Machine4}'], '');
+});
+
+test('report site records use Description, structured Thai address, map Pin text, and searchable views', async () => {
+  const reports = await read('frontend/reports.js');
+  assert.match(reports, /site\.description=site\.description\|\|site\.customer/);
+  assert.match(reports, /name="mapPinText"/);
+  assert.match(reports, /name="moo"/);
+  assert.match(reports, /name="village"/);
+  assert.match(reports, /name="subdistrict"/);
+  assert.match(reports, /name="district"/);
+  assert.match(reports, /data-report-global-search/);
+  assert.match(reports, /data-bulk-xlsx/);
+  assert.match(reports, /Groups.*Sites.*Equipment/s);
+  assert.match(reports, /site\.mapPinText\|\|site\.name/);
+});
+
 test('destructive report actions always re-enter the protected password', async () => {
   const [access, reports] = await Promise.all([read('frontend/protected-access.js'), read('frontend/reports.js')]);
   assert.match(access, /async function reauthenticate/);
@@ -256,4 +322,28 @@ test('reports replace split DOCX and XLSX text placeholders without changing the
   const xlsx = '<xdr:sp><a:p><a:r><a:t>{equipment_</a:t></a:r><a:r><a:t>id}</a:t></a:r></a:p></xdr:sp>';
   assert.match(reports.replaceXmlPlaceholders(docx, {'{site_name}':'ไซต์ A & B'}, 'DOCX'), /ไซต์ A &amp; B/);
   assert.match(reports.replaceXmlPlaceholders(xlsx, {'{equipment_id}':'SM1'}, 'XLSX'), /SM1/);
+});
+
+test('report templates support named pages without manual page-number entry', async () => {
+  const [reports, source, styles] = await Promise.all([loadReportsCore(), read('frontend/reports.js'), read('frontend/workhub-modules.css')]);
+  const template = { fields:[{ key:'site_name', type:'text' },{ key:'reading', type:'number', page:9 }] };
+  reports.normalizeTemplatePages(template);
+  assert.deepEqual(Array.from(template.pages, page => ({ number:page.number, title:page.title })), [{ number:1, title:'ข้อมูลทั่วไป' }]);
+  assert.deepEqual(Array.from(template.fields, field => field.page), [1,1]);
+  assert.match(source, /data-page-add/);
+  assert.match(source, /data-page-title/);
+  assert.match(source, /data-template-page/);
+  assert.match(source, /data-report-form-page/);
+  assert.match(source, /ระบบกำหนดเลขหน้าให้อัตโนมัติ/);
+  assert.match(styles, /\.template-page-manager\{/);
+  assert.match(styles, /\.report-page-tabs\{/);
+});
+
+test('safe report formulas support field clicks, arithmetic, text, and degree trigonometry', async () => {
+  const reports = await loadReportsCore();
+  assert.equal(reports.evaluateFormula('{width} * {height} + 2', { width:3, height:4 }).value, 14);
+  assert.equal(reports.evaluateFormula('CONCAT(UPPER({code}), "-", ROUND({reading}, 1))', { code:'sm', reading:12.34 }).value, 'SM-12.3');
+  assert.equal(reports.evaluateFormula('SIN(30) + COS(60) + TAN(45)', {}).value, 2);
+  assert.match(reports.evaluateFormula('{value} / 0', { value:10 }).error, /หารด้วยศูนย์/);
+  assert.match(reports.evaluateFormula('UNKNOWN(1)', {}).error, /ไม่รองรับคำสั่ง/);
 });
