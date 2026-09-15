@@ -159,3 +159,9 @@
   .formula-builder{margin-inline:-3px;padding:11px}.formula-builder-grid{grid-template-columns:1fr}.formula-token-list{max-height:140px}.formula-token-list button,.formula-operator-list button,.formula-function-group button{min-height:44px}
   .report-page-tabs{margin-inline:-3px}.report-page-heading{margin-top:5px}.report-page-actions{position:sticky;bottom:-14px;z-index:2;margin:14px -14px -14px;background:rgba(255,253,249,.96);padding:10px 14px calc(10px + env(safe-area-inset-bottom));backdrop-filter:blur(10px)}
 }
+
+.report-tabs>.report-more-menu>summary{
+  border-color:#c8b2a4;
+  background:#f8eee7;
+  color:#3b2922;
+}
