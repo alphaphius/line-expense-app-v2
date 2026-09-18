@@ -138,11 +138,18 @@ test('desktop sidebar can collapse, restore, and remember the user preference', 
   ]);
   assert.match(html, /id="sidebar-toggle"/);
   assert.match(html, /aria-controls="app-sidebar"/);
+  assert.match(html, /class="sidebar-brand-copy/);
+  assert.match(html, /class="header-gfe-logo"/);
   assert.match(app, /workhub\.desktopSidebarCollapsed/);
   assert.match(app, /function setDesktopSidebarCollapsed/);
   assert.match(app, /initializeDesktopSidebar\(\)/);
+  assert.match(app, /is-bouncing/);
   assert.match(css, /body\.sidebar-collapsed \.app-sidebar/);
   assert.match(css, /body\.sidebar-collapsed \.app-main/);
+  assert.match(css, /width:84px !important/);
+  assert.match(css, /transform:rotate\(-90deg\)/);
+  assert.match(css, /@keyframes sidebar-fluid/);
+  assert.match(css, /bottom:28px/);
   assert.match(css, /@media \(min-width:1024px\)/);
 });
 

@@ -23,7 +23,12 @@
     let collapsed = false;
     try { collapsed = localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1'; } catch (_) {}
     setDesktopSidebarCollapsed(collapsed, false);
-    document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+    document.getElementById('sidebar-toggle')?.addEventListener('click', event => {
+      const button = event.currentTarget;
+      button.classList.remove('is-bouncing');
+      void button.offsetWidth;
+      button.classList.add('is-bouncing');
+      window.setTimeout(() => button.classList.remove('is-bouncing'), 580);
       setDesktopSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
     });
   }
