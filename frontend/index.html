@@ -38,7 +38,7 @@
   </div>
 
   <div class="min-h-screen lg:flex">
-    <aside class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-72">
+    <aside id="app-sidebar" class="app-sidebar bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-72">
       <div class="sidebar-brand-row">
         <div class="flex min-w-0 items-center gap-3">
           <div class="brand-mark grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400 font-bold text-slate-950">WH</div>
@@ -72,6 +72,10 @@
       </div>
       <div class="hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.6.0 Local Preview · ยังไม่ส่ง NAS</div>
     </aside>
+
+    <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
+      <span class="sidebar-toggle__icon" aria-hidden="true">‹</span>
+    </button>
 
     <main class="app-main w-full lg:ml-72">
       <header class="app-header border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur lg:px-8">

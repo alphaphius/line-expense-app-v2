@@ -2,6 +2,31 @@
   const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
   const protectedViews = ['receipts','payroll','tasks','reports'];
+  const SIDEBAR_STORAGE_KEY = 'workhub.desktopSidebarCollapsed';
+
+  function setDesktopSidebarCollapsed(collapsed, persist = true) {
+    const isCollapsed = Boolean(collapsed);
+    document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+    const button = document.getElementById('sidebar-toggle');
+    if (button) {
+      const label = isCollapsed ? 'แสดงแถบเมนู' : 'ซ่อนแถบเมนู';
+      button.setAttribute('aria-expanded', String(!isCollapsed));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
+    if (persist) {
+      try { localStorage.setItem(SIDEBAR_STORAGE_KEY, isCollapsed ? '1' : '0'); } catch (_) {}
+    }
+  }
+
+  function initializeDesktopSidebar() {
+    let collapsed = false;
+    try { collapsed = localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1'; } catch (_) {}
+    setDesktopSidebarCollapsed(collapsed, false);
+    document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+      setDesktopSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+    });
+  }
 
   function gas(method, ...args) {
     return window.V2Api.call(method, ...args);
@@ -1160,4 +1185,5 @@
       }, 450);
     } catch (error) { showFatal(error); }
   }
+  initializeDesktopSidebar();
   startApp();

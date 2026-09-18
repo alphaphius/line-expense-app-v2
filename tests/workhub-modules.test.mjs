@@ -132,6 +132,20 @@ test('secondary navigation exposes protected Main App, Stock App, Database, and 
   assert.match(preview, /action === 'verifyDatabaseAccess'/);
 });
 
+test('desktop sidebar can collapse, restore, and remember the user preference', async () => {
+  const [html, app, css] = await Promise.all([
+    read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'),
+  ]);
+  assert.match(html, /id="sidebar-toggle"/);
+  assert.match(html, /aria-controls="app-sidebar"/);
+  assert.match(app, /workhub\.desktopSidebarCollapsed/);
+  assert.match(app, /function setDesktopSidebarCollapsed/);
+  assert.match(app, /initializeDesktopSidebar\(\)/);
+  assert.match(css, /body\.sidebar-collapsed \.app-sidebar/);
+  assert.match(css, /body\.sidebar-collapsed \.app-main/);
+  assert.match(css, /@media \(min-width:1024px\)/);
+});
+
 test('reports support reusable templates, site-scoped equipment IDs, CSV imports, favorites, and hierarchical export selection', async () => {
   const [reports, styles] = await Promise.all([read('frontend/reports.js'), read('frontend/workhub-modules.css')]);
   assert.match(reports, /workhub-installation-reports-v2/);
