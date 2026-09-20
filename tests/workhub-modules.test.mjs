@@ -237,6 +237,39 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(styles, /\.field-drag-handle\{/);
   assert.match(styles, /\.report-shell\{grid-template-columns:minmax\(0,1fr\)/);
   assert.match(styles, /\.report-journey-site>\.report-favorite-button\{position:absolute;top:-11px/);
+  assert.match(reports, /labeledMarkerContent\(pin,title\)/);
+  assert.match(reports, /labeledMarkerContent\(pin,item\.mapPinText\|\|item\.id\)/);
+  assert.match(styles, /\.workhub-map-marker>span\{/);
+  assert.match(styles, /\.report-device-row\.is-ready/);
+  assert.match(styles, /\.report-journey-site\.is-ready/);
+  assert.match(reports, /SITE ID:/);
+  assert.match(reports, /Equipment ID/);
+  assert.match(reports, /Group ID:/);
+});
+
+test('report CSV entry is scoped to assigned equipment and includes prefilled identity columns', async () => {
+  const reports = await read('frontend/reports.js');
+  assert.match(reports, /reportCsvSystemHeaders=\['site_id','equipment_id','equipment_type','equipment_name'\]/);
+  assert.match(reports, /function reportCsvScope/);
+  assert.match(reports, /function reportCsvRows/);
+  assert.match(reports, /data-report-csv-group/);
+  assert.match(reports, /data-report-csv-type/);
+  assert.match(reports, /กรอกเฉพาะช่องว่าง/);
+  assert.match(reports, /ทับข้อมูลเดิมด้วย CSV/);
+});
+
+test('exported XLSX images use Excel-safe package names and preserve the textbox transform', async () => {
+  const reports = await read('frontend/reports.js');
+  assert.match(reports, /function packageToken/);
+  assert.match(reports, /const imageName=`workhub-\$\{packageToken\(equipment\.uid\)\}-\$\{packageToken\(field\.key\)\}\.jpg`/);
+  assert.match(reports, /<a:xfrm><a:off x="\$\{x\}" y="\$\{y\}"\/><a:ext cx="\$\{cx\}" cy="\$\{cy\}"\/><\/a:xfrm>/);
+  assert.match(reports, /createFolders:false/);
+});
+
+test('desktop sidebar remains scrollable on short tablet screens', async () => {
+  const styles = await read('frontend/styles.css');
+  assert.match(styles, /\.app-sidebar \{ height:100dvh; overflow-x:hidden; overflow-y:auto/);
+  assert.match(styles, /body\.sidebar-collapsed \.sidebar-mode-nav \{[^}]*overflow-y:auto/);
 });
 
 test('report all-data XLSX creates readable sheets with frozen filtered headers', async () => {

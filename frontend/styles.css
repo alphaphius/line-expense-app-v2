@@ -327,7 +327,10 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   100% { transform:scale(1); }
 }
 @media (min-width:1024px) {
-  .app-sidebar { overflow:hidden; transition:width .48s cubic-bezier(.2,.9,.25,1.18),box-shadow .3s ease; }
+  .app-sidebar { height:100dvh; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-color:rgba(255,255,255,.28) transparent; scrollbar-width:thin; transition:width .48s cubic-bezier(.2,.9,.25,1.18),box-shadow .3s ease; }
+  .app-sidebar::-webkit-scrollbar { width:6px; }
+  .app-sidebar::-webkit-scrollbar-track { background:transparent; }
+  .app-sidebar::-webkit-scrollbar-thumb { border-radius:999px; background:rgba(255,255,255,.28); }
   .app-main { transition:margin-left .48s cubic-bezier(.2,.9,.25,1.08); }
   .sidebar-brand-row,.sidebar-brand-primary,.sidebar-brand-copy,.sidebar-mode-nav,.product-nav,.resource-nav,#expense-subnav,.sidebar-section-label,.sidebar-version { transition:opacity .2s ease,transform .42s cubic-bezier(.2,.9,.25,1.12),margin .42s ease; }
   .sidebar-toggle { position:fixed; z-index:35; bottom:28px; left:calc(18rem - 20px); display:grid; width:40px; height:44px; place-items:center; border:1px solid rgba(255,255,255,.16); border-radius:12px; background:#3a2922; color:#fff8f0; box-shadow:0 8px 22px rgba(45,29,22,.22); animation:sidebar-fluid 4.2s ease-in-out infinite; transition:left .48s cubic-bezier(.2,.9,.25,1.18),background .18s ease,box-shadow .18s ease; }
@@ -348,7 +351,8 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   body.sidebar-collapsed .sidebar-brand-copy h1 { font-size:15px; }
   body.sidebar-collapsed .sidebar-brand-copy p { margin-top:2px; font-size:10px; }
   body.sidebar-collapsed .header-gfe-logo { margin-top:0; transform:none; }
-  body.sidebar-collapsed .sidebar-mode-nav { position:absolute; inset:264px 0 78px; z-index:2; overflow:visible; padding:4px 12px; }
+  body.sidebar-collapsed .sidebar-mode-nav { position:absolute; inset:264px 0 78px; z-index:2; overflow-x:visible; overflow-y:auto; overscroll-behavior:contain; padding:4px 12px; scrollbar-width:none; }
+  body.sidebar-collapsed .sidebar-mode-nav::-webkit-scrollbar { display:none; }
   body.sidebar-collapsed .sidebar-mode-nav .sidebar-section-label { display:none; }
   body.sidebar-collapsed .product-nav,
   body.sidebar-collapsed .resource-nav { display:grid; grid-template-columns:1fr; gap:4px; overflow:visible; margin:0; padding:0 6px 4px; visibility:visible; opacity:1; pointer-events:auto; transform:none; }
