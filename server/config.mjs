@@ -11,7 +11,7 @@ export const config = Object.freeze({
   appName: 'WorkHub',
   appVersion: '4.6.0-nas',
   apiVersion: '2.0',
-  schemaVersion: 4,
+  schemaVersion: 5,
   host: process.env.HOST || '0.0.0.0',
   port: int('PORT', 8080),
   dataDir: path.resolve(process.env.DATA_DIR || './.workhub-data'),

@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'workhub-task-manager-approved-v1';
   const root = () => document.getElementById('task-manager-root');
   const core = () => window.WorkHubCore;
-  const state = { active:'notes', data:null, selectedAsset:'asset-omnia-18', noteQuery:'', assetQuery:'', planScale:'week', showActual:true, bound:false };
+  const state = { active:'notes', data:null, loading:null, selectedAsset:'asset-omnia-18', noteQuery:'', assetQuery:'', planScale:'week', showActual:true, bound:false };
 
   function id(prefix) { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`; }
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char])); }
@@ -36,12 +36,12 @@
       ],
     };
   }
-  function load() {
-    try { state.data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || seed(); }
-    catch (_) { state.data = seed(); }
-    save();
+  async function load() {
+    const result=await window.WorkHubModuleStore.load('tasks',STORAGE_KEY,seed());
+    state.data=result.data;
   }
-  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data)); }
+  function save() { window.WorkHubModuleStore.save('tasks',STORAGE_KEY,state.data,(status,error)=>syncStatus(status,error)); }
+  function syncStatus(status,error) { const node=document.getElementById('task-save-state');if(!node)return;const labels={saving:'กำลังบันทึกลงฐานข้อมูล…',saved:'บันทึกในฐานข้อมูลแล้ว',local:'บันทึกสำรองในเครื่องแล้ว',error:'บันทึกฐานข้อมูลไม่สำเร็จ'};node.innerHTML=`<span></span>${labels[status]||'บันทึกในฐานข้อมูลแล้ว'}`;node.title=error?.message||'';node.classList.toggle('sync-error',status==='error'); }
   function formatDate(value) { return new Intl.DateTimeFormat('th-TH',{day:'numeric',month:'short',year:'numeric'}).format(core().parseIso(value)); }
 
   function shell() {
@@ -49,7 +49,7 @@
       <div class="module-shell task-shell">
         <div class="module-heading">
           <div><p class="module-kicker">WORKHUB · TASK MANAGER</p><h3>ศูนย์จัดการงาน</h3><p>บันทึกสิ่งที่คุย ติดตามอุปกรณ์ และวางแผนงานในที่เดียว</p></div>
-          <div class="module-save-state" id="task-save-state"><span></span>บันทึกในเครื่องแล้ว</div>
+          <div class="module-save-state" id="task-save-state"><span></span>บันทึกในฐานข้อมูลแล้ว</div>
         </div>
         <nav class="module-tabs" aria-label="เมนู Task Manager">
           <button data-task-tab="notes">บันทึกการพูดคุย</button>
@@ -192,7 +192,7 @@
   }
   function closeDialog() { document.querySelector('#task-dialog-host dialog')?.close(); }
   function notify(message) { const status=document.getElementById('task-save-state');if(!status)return;status.innerHTML=`<span></span>${esc(message)}`;status.classList.add('flash');setTimeout(()=>status.classList.remove('flash'),1000); }
-  function persist(message) { save(); render(); notify(message||'บันทึกในเครื่องแล้ว'); }
+  function persist(message) { save(); render(); notify(message||'บันทึกในฐานข้อมูลแล้ว'); }
 
   function bind() {
     if (state.bound) return; state.bound=true;
@@ -237,6 +237,6 @@
     bar.addEventListener('pointermove',move);bar.addEventListener('pointerup',up);
   }
 
-  function activate(force) { if (!state.data||force) load(); if (!root().querySelector('.module-shell')||force) shell(); else render(); }
+  async function activate(force) { if (!state.data||force) { if(!state.loading)state.loading=load().finally(()=>{state.loading=null;});await state.loading; } if (!root().querySelector('.module-shell')||force) shell(); else render(); }
   window.TaskManagerModule=Object.freeze({activate,resetLocal:()=>{localStorage.removeItem(STORAGE_KEY);state.data=null;activate(true);}});
 })();

@@ -55,6 +55,26 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(line, /INSERT IGNORE INTO line_webhook_events/);
 });
 
+test('Task, payroll, reports, Daily Report, templates, and report images persist on NAS', async () => {
+  const [schema,actions,api,moduleStore,reports]=await Promise.all([
+    fs.readFile(path.join(root,'server/migrations/005_workhub_modules.sql'),'utf8'),
+    fs.readFile(path.join(root,'server/actions/modules.mjs'),'utf8'),
+    fs.readFile(path.join(root,'server/api.mjs'),'utf8'),
+    fs.readFile(path.join(root,'frontend/module-store.js'),'utf8'),
+    fs.readFile(path.join(root,'frontend/reports.js'),'utf8'),
+  ]);
+  assert.match(schema,/CREATE TABLE IF NOT EXISTS workhub_module_state/);
+  assert.match(schema,/CREATE TABLE IF NOT EXISTS workhub_module_files/);
+  assert.match(actions,/allowedModules = new Set\(\['tasks', 'payroll', 'reports'\]\)/);
+  assert.match(actions,/ON DUPLICATE KEY UPDATE state_json/);
+  assert.match(api,/getModuleState/);
+  assert.match(api,/saveModuleFile/);
+  assert.match(moduleStore,/initialState/);
+  assert.match(moduleStore,/saveModuleState/);
+  assert.match(reports,/saveModuleFile/);
+  assert.match(reports,/getModuleFile/);
+});
+
 test('Gemini Thai-ID batching maps each image and normalizes safe editable fields', () => {
   const request=buildReceiptAiRequest([{buffer:Buffer.from('one')},{buffer:Buffer.from('two')}]);
   assert.equal(request.contents[0].parts.filter(part=>part.inlineData).length,2);

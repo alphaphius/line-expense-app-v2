@@ -8,7 +8,7 @@
   function todayIso(){const date=new Date(),pad=value=>String(value).padStart(2,'0');return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;}
   const root = () => document.getElementById('report-manager-root');
   const state = {
-    active:'reports', structureMode:'sites', reportStep:'groups', data:null, bound:false,
+    active:'reports', structureMode:'sites', reportStep:'groups', data:null, loading:null, bound:false,
     selectedGroup:'wg-2569', selectedSite:'site-a', selectedTemplate:'tpl-soil',
     selectedEquipment:'eq-a-sm1', selectedReports:new Set(), search:'', selectedProvinces:new Set(), provinceFilterExplicit:false, provinceFilterOpen:false, hideCompletedSites:false,
     uploadDraft:null,imageCache:new Map(),draggedField:null,reportFormPages:{},formulaBuilder:null,globalSearch:'',
@@ -92,9 +92,9 @@
     };
   }
 
-  function load() {
-    try { state.data=JSON.parse(localStorage.getItem(STORAGE_KEY))||seed(); }
-    catch (_) { state.data=seed(); }
+  async function load() {
+    const result=await window.WorkHubModuleStore.load('reports',STORAGE_KEY,seed());
+    state.data=result.data;
     if (!state.data.schemaVersion || state.data.schemaVersion < 2) state.data=seed();
     if (!state.data.favorites || typeof state.data.favorites!=='object') state.data.favorites={groupId:'',siteIds:[]};
     if (!Array.isArray(state.data.favorites.siteIds)) state.data.favorites.siteIds=[];
@@ -105,10 +105,10 @@
     state.data.templates.forEach(normalizeTemplatePages);
     state.data.dailyReports=state.data.dailyReports||{};state.data.dailyTemplates=state.data.dailyTemplates||[];state.data.dailyTemplateAssignments=state.data.dailyTemplateAssignments||{};
     state.data.schemaVersion=4;
-    save();
   }
-  function save() { localStorage.setItem(STORAGE_KEY,JSON.stringify(state.data)); }
-  function persist(message) { save(); render(); notify(message||'บันทึกในเครื่องแล้ว'); }
+  function save() { window.WorkHubModuleStore.save('reports',STORAGE_KEY,state.data,(status,error)=>syncStatus(status,error)); }
+  function syncStatus(status,error) {const node=document.getElementById('report-save-state');if(!node)return;const labels={saving:'กำลังบันทึกลงฐานข้อมูล…',saved:'บันทึกในฐานข้อมูลแล้ว',local:'บันทึกสำรองในเครื่องแล้ว',error:'บันทึกฐานข้อมูลไม่สำเร็จ'};node.innerHTML=`<span></span>${labels[status]||'บันทึกในฐานข้อมูลแล้ว'}`;node.title=error?.message||'';node.classList.toggle('sync-error',status==='error');}
+  function persist(message) { save(); render(); notify(message||'บันทึกในฐานข้อมูลแล้ว'); }
   function notify(message) { const node=document.getElementById('report-save-state');if(!node)return;node.innerHTML=`<span></span>${esc(message)}`;node.classList.add('flash');setTimeout(()=>node.classList.remove('flash'),900); }
   function selectedGroup() { return state.data.groups.find(row=>row.id===state.selectedGroup)||state.data.groups[0]; }
   function selectedSite() { return state.data.sites.find(row=>row.uid===state.selectedSite)||state.data.sites.find(row=>row.groupId===state.selectedGroup); }
@@ -192,7 +192,7 @@
 
   function shell() {
     root().innerHTML=`<div class="module-shell report-shell">
-      <div class="module-heading"><div><p class="module-kicker">WORKHUB · INSTALLATION REPORTS</p><h3>ระบบจัดทำรายงานติดตั้ง</h3></div><div class="module-save-state" id="report-save-state"><span></span>บันทึกในเครื่องแล้ว</div></div>
+      <div class="module-heading"><div><p class="module-kicker">WORKHUB · INSTALLATION REPORTS</p><h3>ระบบจัดทำรายงานติดตั้ง</h3></div><div class="module-save-state" id="report-save-state"><span></span>บันทึกในฐานข้อมูลแล้ว</div></div>
       <div class="report-tabs-wrap"><nav class="module-tabs report-tabs" aria-label="เมนูรายงาน">
         <button data-report-tab="reports">กรอกข้อมูล</button><button data-report-tab="daily">Daily Report</button>
         <details class="report-more-menu"><summary aria-label="เมนูรายงานเพิ่มเติม" title="เมนูเพิ่มเติม">⋮</summary><div><button data-report-tab="templates">Templates</button><button data-report-tab="structure">กลุ่มงานและไซต์</button><button data-report-tab="assignments">อุปกรณ์และ Template</button><button data-report-tab="overview">ภาพรวม</button></div></details>
@@ -362,12 +362,13 @@
   }
 
   function openTemplateDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,1);request.onupgradeneeded=()=>request.result.createObjectStore(DB_STORE,{keyPath:'id'});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
-  async function storeTemplateFile(id,file){const db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({id,file,name:file.name,type:file.type});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();}
-  async function getTemplateFile(id){const db=await openTemplateDb();const row=await new Promise((resolve,reject)=>{const request=db.transaction(DB_STORE).objectStore(DB_STORE).get(id);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error);});db.close();return row;}
-  async function deleteStoredRecord(id){const db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();}
+  function blobBase64(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
+  async function storeTemplateFile(id,file){const db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({id,file,name:file.name,type:file.type});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();if(window.V2Api?.getEndpoint())await window.V2Api.call('saveModuleFile',{module:'reports',fileKey:id,fileName:file.name,mimeType:file.type||'application/octet-stream',base64:await blobBase64(file)});}
+  async function getTemplateFile(id){const db=await openTemplateDb();let row=await new Promise((resolve,reject)=>{const request=db.transaction(DB_STORE).objectStore(DB_STORE).get(id);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error);});db.close();if(row)return row;if(!window.V2Api?.getEndpoint())return null;const remote=await window.V2Api.call('getModuleFile',{module:'reports',fileKey:id});if(!remote)return null;const bytes=Uint8Array.from(atob(remote.base64),char=>char.charCodeAt(0)),file=new Blob([bytes],{type:remote.mimeType});row=id.startsWith('image::')?{id,kind:'report-image',name:remote.fileName,dataUrl:`data:${remote.mimeType};base64,${remote.base64}`}:{id,file,name:remote.fileName,type:remote.mimeType};const cache=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=cache.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put(row);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});cache.close();return row;}
+  async function deleteStoredRecord(id){const db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();if(window.V2Api?.getEndpoint())await window.V2Api.call('deleteModuleFile',{module:'reports',fileKey:id});}
   function imageStorageId(equipmentUid,fieldKey){return `image::${equipmentUid}::${fieldKey}`;}
   function reportImage(equipment,fieldKey){return state.imageCache.get(imageStorageId(equipment.uid,fieldKey))||ensureReport(equipment).images[fieldKey]||null;}
-  async function storeReportImage(equipmentUid,fieldKey,image){const id=imageStorageId(equipmentUid,fieldKey),db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({id,kind:'report-image',...image});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();state.imageCache.set(id,image);}
+  async function storeReportImage(equipmentUid,fieldKey,image){const id=imageStorageId(equipmentUid,fieldKey),db=await openTemplateDb();await new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({id,kind:'report-image',...image});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();if(window.V2Api?.getEndpoint())await window.V2Api.call('saveModuleFile',{module:'reports',fileKey:id,fileName:image.name||`${fieldKey}.jpg`,mimeType:String(image.dataUrl||'').match(/^data:([^;]+)/)?.[1]||'image/jpeg',base64:String(image.dataUrl||'').split(',')[1]||''});state.imageCache.set(id,image);}
   async function hydrateEquipmentImages(equipment){const report=ensureReport(equipment);let loaded=false;for(const [fieldKey,metadata] of Object.entries(report.images||{})){const id=imageStorageId(equipment.uid,fieldKey);if(metadata?.dataUrl){state.imageCache.set(id,metadata);continue;}if(!metadata?.stored||state.imageCache.has(id))continue;const record=await getTemplateFile(id);if(record?.dataUrl){state.imageCache.set(id,record);loaded=true;}}return loaded;}
   async function authorizeDelete(title,message){if(!window.ProtectedAccess?.reauthenticate)return false;return window.ProtectedAccess.reauthenticate({title,message});}
   async function deleteEquipmentRecords(items){for(const item of items){const report=state.data.reports[item.uid];for(const fieldKey of Object.keys(report?.images||{})){const id=imageStorageId(item.uid,fieldKey);await deleteStoredRecord(id).catch(()=>{});state.imageCache.delete(id);}delete state.data.reports[item.uid];delete state.data.overrides[item.uid];state.selectedReports.delete(item.uid);}const ids=new Set(items.map(item=>item.uid));state.data.equipment=state.data.equipment.filter(item=>!ids.has(item.uid));}
@@ -621,6 +622,6 @@
     });
   }
 
-  function activate(force){if(!state.data||force)load();state.active='reports';state.selectedProvinces.clear();state.provinceFilterExplicit=false;state.provinceFilterOpen=false;const favoriteGroup=state.data.groups.find(group=>group.id===state.data.favorites.groupId);if(favoriteGroup){state.selectedGroup=favoriteGroup.id;state.selectedSite='';state.selectedEquipment='';state.reportStep='sites';}else state.reportStep='groups';if(!root().querySelector('.module-shell')||force)shell();else render();}
+  async function activate(force){if(!state.data||force){if(!state.loading)state.loading=load().finally(()=>{state.loading=null;});await state.loading;}state.active='reports';state.selectedProvinces.clear();state.provinceFilterExplicit=false;state.provinceFilterOpen=false;const favoriteGroup=state.data.groups.find(group=>group.id===state.data.favorites.groupId);if(favoriteGroup){state.selectedGroup=favoriteGroup.id;state.selectedSite='';state.selectedEquipment='';state.reportStep='sites';}else state.reportStep='groups';if(!root().querySelector('.module-shell')||force)shell();else render();}
   window.ReportManagerModule=Object.freeze({activate,scanTemplate,parseCsv,replaceXmlPlaceholders,normalizeCoordinate,coordinatesFromRow,evaluateFormula,normalizeTemplatePages,siteAddress,dailyReplacements,resetLocal:()=>{localStorage.removeItem(STORAGE_KEY);state.data=null;activate(true);}});
 })();
