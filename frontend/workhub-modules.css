@@ -57,6 +57,9 @@
 .report-map-list-layout--equipment .report-equipment-summary{position:sticky;top:0;z-index:3;border-bottom:1px solid #eaded4}
 .report-map-list-layout .report-map-placeholder{min-height:250px}
 
+/* Site identity stays read-only until the explicit edit action is used. */
+.report-site-profile{border-bottom:1px solid #e7d9ce;background:#fffdfb;padding:14px 18px}.report-site-profile>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}.report-site-profile>header span{display:block;color:#9a6244;font-size:.58rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.report-site-profile>header h5{margin-top:2px;color:#35261f;font-size:.88rem}.report-site-profile>header button{min-height:36px}.report-site-profile__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.report-site-profile__item{min-width:0;border:1px solid #eadfd6;border-radius:10px;background:#faf6f2;padding:9px 10px}.report-site-profile__item.is-wide{grid-column:span 2}.report-site-profile__item span,.report-site-profile__item strong{display:block}.report-site-profile__item span{color:#927c70;font-size:.56rem}.report-site-profile__item strong{margin-top:3px;overflow-wrap:anywhere;color:#42322b;font-size:.67rem;line-height:1.45}
+
 /* Template field ordering controls mirror the two-column report editor. */
 .field-order-help{margin:0;border-radius:10px;background:#f4ede6;padding:9px 11px;color:#6f5b50;font-size:.65rem;line-height:1.45}
 .report-fields-dialog,.report-wizard-dialog{width:min(900px,calc(100% - 28px))}
@@ -71,6 +74,7 @@
 .field-order-actions .danger-link{border-color:#efc5c5;color:#b6383f}
 
 @media(max-width:900px){
+  .report-site-profile__grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .report-map-list-layout{display:block;height:auto;min-height:0}
   .report-map-list-layout>.report-site-map{height:auto;border-right:0;border-bottom:1px solid #e4d7cc;padding:12px}
   .report-map-list-layout>.report-site-map .report-site-map__canvas,.report-map-list-layout>.report-group-map .report-site-map__canvas{height:240px;min-height:240px;flex:none}
@@ -80,6 +84,7 @@
 }
 
 @media(max-width:700px){
+  .report-site-profile{padding:12px}.report-site-profile>header{align-items:flex-start}.report-site-profile>header button{padding:7px 9px;font-size:.61rem}.report-site-profile__grid{grid-template-columns:1fr 1fr}.report-site-profile__item.is-wide{grid-column:1/-1}
   .report-fields-dialog,.report-wizard-dialog{width:calc(100% - 16px)}
   .report-sites-toolbar .toolbar-actions{display:flex;width:auto!important;margin-left:auto}
   .report-export-all{min-height:36px;padding:7px 10px;font-size:.63rem}

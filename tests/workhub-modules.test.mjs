@@ -259,11 +259,25 @@ test('report CSV entry is scoped to assigned equipment and includes prefilled id
 });
 
 test('exported XLSX images use Excel-safe package names and preserve the textbox transform', async () => {
-  const reports = await read('frontend/reports.js');
+  const [module,reports] = await Promise.all([loadReportsCore(),read('frontend/reports.js')]);
   assert.match(reports, /function packageToken/);
   assert.match(reports, /const imageName=`workhub-\$\{packageToken\(equipment\.uid\)\}-\$\{packageToken\(field\.key\)\}\.jpg`/);
   assert.match(reports, /<a:xfrm><a:off x="\$\{x\}" y="\$\{y\}"\/><a:ext cx="\$\{cx\}" cy="\$\{cy\}"\/><\/a:xfrm>/);
   assert.match(reports, /createFolders:false/);
+  const source='<Types><Default Extension="jpeg" ContentType="image/jpeg"/></Types>';
+  const withJpg=module.ensureJpegContentTypeXml(source);
+  assert.match(withJpg, /Extension="jpg" ContentType="image\/jpeg"/);
+  assert.equal((module.ensureJpegContentTypeXml(withJpg).match(/Extension="jpg"/g)||[]).length,1);
+});
+
+test('site details are read-only until edit and image uploads preserve unsaved report fields', async () => {
+  const [reports,styles] = await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
+  assert.match(reports, /data-site-profile/);
+  assert.match(reports, /แก้ไขข้อมูลไซต์/);
+  assert.match(reports, /<label>SITE ID<input name="code" required/);
+  assert.match(reports, /item\.uid!==site\.uid&&item\.groupId===site\.groupId&&item\.id===siteCode/);
+  assert.match(reports, /const activeForm=event\.target\.closest\('\[data-report-data-form\]'\);if\(activeForm\)saveReportForm\(activeForm\)/);
+  assert.match(styles, /\.report-site-profile__grid\{/);
 });
 
 test('desktop sidebar remains scrollable on short tablet screens', async () => {
