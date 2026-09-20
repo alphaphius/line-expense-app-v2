@@ -454,7 +454,10 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .coming-soon-card code { border-radius:5px; background:#eaded2; padding:1px 5px; color:#704633; }
 
 @media (min-width:1024px) { .sidebar-section-label { display:block; } }
-@media (min-width:1024px) { .app-main { width:calc(100% - 16rem); min-width:0; } }
+@media (min-width:1024px) {
+  .app-main { width:calc(100vw - 18rem) !important; min-width:0; margin-left:18rem !important; }
+  body.sidebar-collapsed .app-main { width:calc(100vw - 84px) !important; margin-left:84px !important; }
+}
 @media (max-width:900px) {
   .template-uploader__form { grid-template-columns:1fr; }
   .receipt-edit-row { grid-template-columns:44px minmax(0,1fr) minmax(0,1fr); }

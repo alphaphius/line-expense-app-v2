@@ -150,6 +150,8 @@ test('desktop sidebar can collapse, restore, and remember the user preference', 
   assert.match(css, /body\.sidebar-collapsed \.app-sidebar/);
   assert.match(css, /body\.sidebar-collapsed \.app-main/);
   assert.match(css, /width:84px !important/);
+  assert.match(css, /width:calc\(100vw - 84px\) !important/);
+  assert.match(css, /width:calc\(100vw - 18rem\) !important/);
   assert.match(css, /max-width:none !important/);
   assert.match(css, /transform:rotate\(-90deg\)/);
   assert.match(css, /content:attr\(data-tooltip\)/);
