@@ -355,13 +355,27 @@ test('reports replace split DOCX and XLSX text placeholders without changing the
 test('report template fields accept Thai, spaces, commas, and image textbox names', async () => {
   const reports = await loadReportsCore();
   const fields = reports.collectTemplateFields([
-    '{Site Code} {ที่อยู่} {อุณหภูมิค่าอ่านเริ่มต้น,mA}',
+    '{Site Code} {ที่อยู่} {อุณหภูมิค่าอ่านเริ่มต้น,mA} {Lat} {Long}',
     '{img_รูปภาพป้าย}',
     '{Site Code}',
   ]);
-  assert.deepEqual(Array.from(fields, field => field.key), ['Site Code','ที่อยู่','อุณหภูมิค่าอ่านเริ่มต้น,mA','img_รูปภาพป้าย']);
+  assert.deepEqual(Array.from(fields, field => field.key), ['Site Code','ที่อยู่','อุณหภูมิค่าอ่านเริ่มต้น,mA','Lat','Long','img_รูปภาพป้าย']);
   assert.equal(fields[0].occurrences, 2);
-  assert.equal(fields[3].type, 'image');
+  assert.equal(fields[3].type, 'number');
+  assert.equal(fields[3].coordinateRole, 'latitude');
+  assert.equal(fields[4].coordinateRole, 'longitude');
+  assert.equal(fields[5].type, 'image');
+});
+
+test('Lat and Long placeholders are recognized as editable equipment coordinates', async () => {
+  const [reports, source] = await Promise.all([loadReportsCore(), read('frontend/reports.js')]);
+  assert.equal(reports.coordinateFieldRole('Lat'), 'latitude');
+  assert.equal(reports.coordinateFieldRole('Latitude'), 'latitude');
+  assert.equal(reports.coordinateFieldRole('Long'), 'longitude');
+  assert.equal(reports.coordinateFieldRole('Lng'), 'longitude');
+  assert.equal(reports.coordinateFieldRole('ที่อยู่'), '');
+  assert.match(source, /equipment\[role\]/);
+  assert.match(source, /พิกัดอุปกรณ์อัตโนมัติ แก้เฉพาะรายงานนี้ได้/);
 });
 
 test('XLSX formula XML is preserved while text placeholders are filled', async () => {

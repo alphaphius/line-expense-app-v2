@@ -113,12 +113,13 @@
   function selectedGroup() { return state.data.groups.find(row=>row.id===state.selectedGroup)||state.data.groups[0]; }
   function selectedSite() { return state.data.sites.find(row=>row.uid===state.selectedSite)||state.data.sites.find(row=>row.groupId===state.selectedGroup); }
   function selectedTemplate() { return state.data.templates.find(row=>row.id===state.selectedTemplate)||state.data.templates[0]; }
+  function coordinateFieldRole(fieldKey) {const key=String(fieldKey||'').trim().toLowerCase().replace(/[\s_-]+/g,'');if(['lat','latitude'].includes(key))return 'latitude';if(['long','lng','longitude'].includes(key))return 'longitude';return '';}
   function normalizeTemplatePages(template) {
     if(!template)return template;
     const source=Array.isArray(template.pages)&&template.pages.length?template.pages:[{number:1,title:'ข้อมูลทั่วไป'}];
     template.pages=source.map((page,index)=>({number:index+1,title:String(page?.title||`หน้า ${index+1}`).trim()||`หน้า ${index+1}`}));
     const max=template.pages.length;
-    (template.fields||[]).forEach(field=>{const page=Number(field.page);field.page=Number.isInteger(page)&&page>=1&&page<=max?page:1;if(field.type==='formula'&&field.source!=='custom')field.type='text';});
+    (template.fields||[]).forEach(field=>{const page=Number(field.page);field.page=Number.isInteger(page)&&page>=1&&page<=max?page:1;if(field.type==='formula'&&field.source!=='custom')field.type='text';const coordinateRole=field.source==='placeholder'&&coordinateFieldRole(field.key);if(coordinateRole){field.coordinateRole=coordinateRole;field.type='number';}});
     return template;
   }
   function templatePageTitle(template,pageNumber) {if(!template)return `หน้า ${pageNumber}`;normalizeTemplatePages(template);return template.pages.find(page=>page.number===Number(pageNumber))?.title||`หน้า ${pageNumber}`;}
@@ -158,6 +159,7 @@
     report.values.site_name=report.values.site_name||site?.name||'';
     report.values.equipment_id=report.values.equipment_id||equipment.id;
     report.values.serial_number=report.values.serial_number||equipment.serial||'';
+    const template=templateForEquipment(equipment);normalizeTemplatePages(template);for(const field of template?.fields||[]){const role=field.coordinateRole||coordinateFieldRole(field.key);if(role&&String(report.values[field.key]??'').trim()===''&&equipment[role]!==''&&equipment[role]!=null)report.values[field.key]=equipment[role];}
     return report;
   }
   function progress(equipment) {
@@ -306,11 +308,12 @@
     return `<aside class="report-editor"><header><div><span>${esc(site?.id)}</span><h4>${esc(equipment.id)} · ${esc(equipment.name)}</h4><p>${esc(template.name)} · ${template.format}</p></div>${statusPill(p.status)}</header><div class="editor-progress"><strong>${p.percent}%</strong><div><span>กรอกแล้ว ${p.done} จาก ${p.total} ช่องบังคับ</span><i><b style="width:${p.percent}%"></b></i></div></div><nav class="report-page-tabs" aria-label="หน้าข้อมูล">${template.pages.map(item=>`<button type="button" class="${item.number===currentPage?'active':''}" data-report-form-page="${item.number}"><span>${item.number}</span><strong>${esc(item.title)}</strong></button>`).join('')}</nav><div class="report-page-heading"><div><span>หน้า ${page.number} จาก ${template.pages.length}</span><h5>${esc(page.title)}</h5></div><small>${fields.length} ช่องข้อมูล</small></div><form data-report-data-form data-equipment="${esc(equipment.uid)}" data-current-page="${currentPage}"><div class="report-field-list">${fields.map(field=>reportField(field,report,equipment,template)).join('')||'<div class="module-empty"><strong>หน้านี้ยังไม่มี Field</strong><p>ไปที่ตั้งค่า Template เพื่อย้าย Field มาหน้านี้</p></div>'}</div><div class="report-page-actions">${previous?`<button type="button" class="module-secondary" data-report-form-page="${previous.number}">← ${esc(previous.title)}</button>`:'<span></span>'}<button type="submit" class="module-primary">${next?`บันทึกและไป ${esc(next.title)} →`:'บันทึกข้อมูลทั้งหมด'}</button></div></form></aside>`;
   }
   function reportField(field,report,equipment,template) {
-    const value=report.values[field.key]||'';if(field.type==='image'){const image=reportImage(equipment,field.key),stored=report.images[field.key]?.stored||image?.dataUrl;return `<label class="report-image-field"><span><code>{${esc(field.key)}}</code><strong>${esc(field.label)}${field.required?' *':''}</strong></span><div class="report-image-slot ${stored?'has-image':''}">${image?.dataUrl?`<img src="${image.dataUrl}" alt="${esc(field.label)}">`:`<span>${stored?'กำลังโหลดรูป…':'▧'}</span>`}<input type="file" accept="image/jpeg,image/png,image/webp" data-report-image="${esc(field.key)}"><button type="button">${stored?'เปลี่ยนรูป':'อัปโหลดรูป'}</button><small>1 Text Box = 1 รูป · ใช้ขนาดและตำแหน่งจาก Template</small></div></label>`;}
+    const value=report.values[field.key]??'';if(field.type==='image'){const image=reportImage(equipment,field.key),stored=report.images[field.key]?.stored||image?.dataUrl;return `<label class="report-image-field"><span><code>{${esc(field.key)}}</code><strong>${esc(field.label)}${field.required?' *':''}</strong></span><div class="report-image-slot ${stored?'has-image':''}">${image?.dataUrl?`<img src="${image.dataUrl}" alt="${esc(field.label)}">`:`<span>${stored?'กำลังโหลดรูป…':'▧'}</span>`}<input type="file" accept="image/jpeg,image/png,image/webp" data-report-image="${esc(field.key)}"><button type="button">${stored?'เปลี่ยนรูป':'อัปโหลดรูป'}</button><small>1 Text Box = 1 รูป · ใช้ขนาดและตำแหน่งจาก Template</small></div></label>`;}
     if(field.type==='formula'){const result=evaluateFormula(field.formula,calculateFormulaFields(template,report.values));return `<label class="report-formula-field">${esc(field.label)}${field.required?' *':''}<div class="formula-result ${result.error?'has-error':''}"><span>ƒx</span><input name="${esc(field.key)}" data-formula-output="${esc(field.key)}" readonly value="${esc(result.error?'':result.value)}"></div><small data-formula-status="${esc(field.key)}">${result.error?esc(result.error):`คำนวณอัตโนมัติ · ${esc(field.formula||'')}`}</small></label>`;}
     if(field.type==='textarea')return `<label>${esc(field.label)}${field.required?' *':''}<textarea name="${esc(field.key)}" rows="3" ${field.required?'required':''}>${esc(value)}</textarea><small>{${esc(field.key)}} · ${field.source==='custom'?'เก็บเพิ่มในระบบ':'จาก Template'}</small></label>`;
     if(field.type==='select')return `<label>${esc(field.label)}${field.required?' *':''}<select name="${esc(field.key)}" ${field.required?'required':''}><option value="">เลือก</option>${(field.options||[]).map(option=>`<option ${option===value?'selected':''}>${esc(option)}</option>`).join('')}</select></label>`;
-    return `<label>${esc(field.label)}${field.required?' *':''}<input name="${esc(field.key)}" type="${field.type==='date'?'date':field.type==='number'?'number':'text'}" ${field.type==='number'?'step="any" inputmode="decimal"':''} value="${esc(value)}" ${field.required?'required':''}><small>{${esc(field.key)}} · ${field.source==='custom'?'Field เพิ่มเติม':'จาก Template'}</small></label>`;
+    const coordinateRole=field.coordinateRole||coordinateFieldRole(field.key),coordinateLimit=coordinateRole==='latitude'?'min="-90" max="90"':coordinateRole==='longitude'?'min="-180" max="180"':'';
+    return `<label>${esc(field.label)}${field.required?' *':''}<input name="${esc(field.key)}" type="${field.type==='date'?'date':field.type==='number'?'number':'text'}" ${field.type==='number'?`step="any" inputmode="decimal" ${coordinateLimit}`:''} value="${esc(value)}" ${field.required?'required':''}><small>{${esc(field.key)}} · ${coordinateRole?'พิกัดอุปกรณ์อัตโนมัติ แก้เฉพาะรายงานนี้ได้':field.source==='custom'?'Field เพิ่มเติม':'จาก Template'}</small></label>`;
   }
 
   function bindFieldConfigDialog(dialog) {
@@ -356,7 +359,7 @@
   function placeholderTokens(text) {return [...String(text||'').matchAll(/\{([^{}\r\n]{1,160})\}/g)].map(match=>match[1].trim()).filter(Boolean);}
   function collectTemplateFields(texts) {
     const found=new Map();
-    for(const text of texts)for(const fieldKey of placeholderTokens(text)){const identity=fieldKey.toLocaleLowerCase('th'),image=/^img_/i.test(fieldKey),current=found.get(identity)||{key:fieldKey,label:image?`รูป ${fieldKey.replace(/^img_/i,'').replaceAll('_',' ')}`:fieldKey,type:image?'image':'text',required:true,source:'placeholder',occurrences:0,fit:'contain'};current.occurrences+=1;found.set(identity,current);}
+    for(const text of texts)for(const fieldKey of placeholderTokens(text)){const identity=fieldKey.toLocaleLowerCase('th'),image=/^img_/i.test(fieldKey),coordinateRole=coordinateFieldRole(fieldKey),current=found.get(identity)||{key:fieldKey,label:image?`รูป ${fieldKey.replace(/^img_/i,'').replaceAll('_',' ')}`:fieldKey,type:image?'image':coordinateRole?'number':'text',required:true,source:'placeholder',occurrences:0,fit:'contain',...(coordinateRole?{coordinateRole}:{})};current.occurrences+=1;found.set(identity,current);}
     return [...found.values()];
   }
   function xmlNodeText(node) {return elementsByLocalName(node,'t').map(item=>item.textContent||'').join('');}
@@ -639,5 +642,5 @@
   }
 
   async function activate(force){if(!state.data||force){if(!state.loading)state.loading=load().finally(()=>{state.loading=null;});await state.loading;}state.active='reports';state.selectedProvinces.clear();state.provinceFilterExplicit=false;state.provinceFilterOpen=false;const favoriteGroup=state.data.groups.find(group=>group.id===state.data.favorites.groupId);if(favoriteGroup){state.selectedGroup=favoriteGroup.id;state.selectedSite='';state.selectedEquipment='';state.reportStep='sites';}else state.reportStep='groups';if(!root().querySelector('.module-shell')||force)shell();else render();}
-  window.ReportManagerModule=Object.freeze({activate,scanTemplate,placeholderTokens,collectTemplateFields,parseCsv,replaceXmlPlaceholders,normalizeCoordinate,coordinatesFromRow,evaluateFormula,normalizeTemplatePages,siteAddress,dailyReplacements,resetLocal:()=>{localStorage.removeItem(STORAGE_KEY);state.data=null;activate(true);}});
+  window.ReportManagerModule=Object.freeze({activate,scanTemplate,placeholderTokens,collectTemplateFields,coordinateFieldRole,parseCsv,replaceXmlPlaceholders,normalizeCoordinate,coordinatesFromRow,evaluateFormula,normalizeTemplatePages,siteAddress,dailyReplacements,resetLocal:()=>{localStorage.removeItem(STORAGE_KEY);state.data=null;activate(true);}});
 })();
