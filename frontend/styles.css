@@ -284,6 +284,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .sidebar-brand-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 20px 14px; }
 .sidebar-brand-primary { display:flex; min-width:0; align-items:center; gap:12px; }
 .sidebar-brand-copy { min-width:0; }
+.sidebar-mode-icon { display:none; width:23px; height:23px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.8; }
 .sidebar-section-label { display:block; padding:4px 20px 8px; color:#c7b6ac; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
 .sidebar-toggle { display:none; }
 .product-nav { display:flex; gap:7px; margin:0; overflow-x:auto; padding:0 12px 15px; scrollbar-width:none; }
@@ -328,25 +329,42 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 @media (min-width:1024px) {
   .app-sidebar { overflow:hidden; transition:width .48s cubic-bezier(.2,.9,.25,1.18),box-shadow .3s ease; }
   .app-main { transition:margin-left .48s cubic-bezier(.2,.9,.25,1.08); }
-  .sidebar-brand-row,.sidebar-brand-primary,.sidebar-brand-copy,.product-nav,.resource-nav,#expense-subnav,.sidebar-section-label,.sidebar-version { transition:opacity .2s ease,transform .42s cubic-bezier(.2,.9,.25,1.12),margin .42s ease; }
+  .sidebar-brand-row,.sidebar-brand-primary,.sidebar-brand-copy,.sidebar-mode-nav,.product-nav,.resource-nav,#expense-subnav,.sidebar-section-label,.sidebar-version { transition:opacity .2s ease,transform .42s cubic-bezier(.2,.9,.25,1.12),margin .42s ease; }
   .sidebar-toggle { position:fixed; z-index:35; bottom:28px; left:calc(18rem - 20px); display:grid; width:40px; height:44px; place-items:center; border:1px solid rgba(255,255,255,.16); border-radius:12px; background:#3a2922; color:#fff8f0; box-shadow:0 8px 22px rgba(45,29,22,.22); animation:sidebar-fluid 4.2s ease-in-out infinite; transition:left .48s cubic-bezier(.2,.9,.25,1.18),background .18s ease,box-shadow .18s ease; }
   .sidebar-toggle:hover { background:#57392c; box-shadow:0 10px 26px rgba(45,29,22,.28); }
   .sidebar-toggle.is-bouncing { animation:sidebar-toggle-bounce .56s cubic-bezier(.34,1.56,.64,1); }
   .sidebar-toggle__icon { display:block; font-size:28px; line-height:1; transition:transform .22s ease; }
-  body.sidebar-collapsed .app-sidebar { width:84px !important; box-shadow:8px 0 28px rgba(55,35,26,.12); }
+  body.sidebar-collapsed .app-sidebar { width:84px !important; overflow:visible; box-shadow:8px 0 28px rgba(55,35,26,.12); }
   body.sidebar-collapsed .app-main { margin-left:84px !important; }
+  body.sidebar-collapsed .app-header>.mx-auto,
+  body.sidebar-collapsed .app-main>.mx-auto { width:100%; max-width:none !important; }
+  body.sidebar-collapsed .app-footer { width:100%; max-width:none; }
   body.sidebar-collapsed .sidebar-toggle { left:64px; }
   body.sidebar-collapsed .sidebar-toggle__icon { transform:rotate(180deg); }
-  body.sidebar-collapsed .sidebar-brand-row { height:100%; flex-direction:column; justify-content:flex-start; gap:0; padding:18px 12px 100px; }
+  body.sidebar-collapsed .sidebar-brand-row { flex-direction:column; justify-content:flex-start; gap:0; padding:16px 12px 0; }
   body.sidebar-collapsed .sidebar-brand-primary { width:100%; flex-direction:column; gap:0; }
   body.sidebar-collapsed .brand-mark { flex:0 0 44px; transform:none; }
-  body.sidebar-collapsed .sidebar-brand-copy { width:176px; min-width:176px; margin:70px 0; transform:rotate(-90deg); text-align:center; white-space:nowrap; }
+  body.sidebar-collapsed .sidebar-brand-copy { width:152px; min-width:152px; margin:58px 0; transform:rotate(-90deg); text-align:center; white-space:nowrap; }
   body.sidebar-collapsed .sidebar-brand-copy h1 { font-size:15px; }
   body.sidebar-collapsed .sidebar-brand-copy p { margin-top:2px; font-size:10px; }
   body.sidebar-collapsed .header-gfe-logo { margin-top:0; transform:none; }
-  body.sidebar-collapsed .sidebar-section-label,
+  body.sidebar-collapsed .sidebar-mode-nav { position:absolute; inset:264px 0 78px; z-index:2; overflow:visible; padding:4px 12px; }
+  body.sidebar-collapsed .sidebar-mode-nav .sidebar-section-label { display:none; }
   body.sidebar-collapsed .product-nav,
-  body.sidebar-collapsed .resource-nav,
+  body.sidebar-collapsed .resource-nav { display:grid; grid-template-columns:1fr; gap:4px; overflow:visible; margin:0; padding:0 6px 4px; visibility:visible; opacity:1; pointer-events:auto; transform:none; }
+  body.sidebar-collapsed .product-nav__button,
+  body.sidebar-collapsed .resource-nav__button { position:relative; display:grid; width:44px; min-width:44px; min-height:44px; margin:0 auto; place-items:center; border-radius:13px; padding:0; }
+  body.sidebar-collapsed .sidebar-mode-icon { display:block; }
+  body.sidebar-collapsed .sidebar-mode-label,
+  body.sidebar-collapsed .product-nav__button small,
+  body.sidebar-collapsed .resource-nav__button small { display:none; }
+  body.sidebar-collapsed .product-nav__button::after,
+  body.sidebar-collapsed .resource-nav__button::after { position:absolute; z-index:60; top:50%; left:calc(100% + 12px); visibility:hidden; border:1px solid #d7c1b1; border-radius:9px; background:#2f211b; padding:7px 10px; color:#fffaf4; box-shadow:0 8px 24px rgba(41,26,20,.24); content:attr(data-tooltip); font-size:12px; font-weight:650; line-height:1.2; opacity:0; pointer-events:none; transform:translate(-6px,-50%); transition:opacity .16s ease,transform .16s ease,visibility .16s; white-space:nowrap; }
+  body.sidebar-collapsed .product-nav__button:hover::after,
+  body.sidebar-collapsed .product-nav__button:focus-visible::after,
+  body.sidebar-collapsed .resource-nav__button:hover::after,
+  body.sidebar-collapsed .resource-nav__button:focus-visible::after { visibility:visible; opacity:1; transform:translate(0,-50%); }
+  body.sidebar-collapsed .sidebar-section-label,
   body.sidebar-collapsed #expense-subnav,
   body.sidebar-collapsed .sidebar-version { visibility:hidden; opacity:0; pointer-events:none; transform:translateX(-18px); }
   .product-nav { display:grid; grid-template-columns:1fr; padding-bottom:18px; }
