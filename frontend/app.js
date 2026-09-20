@@ -7,6 +7,7 @@
   function setDesktopSidebarCollapsed(collapsed, persist = true) {
     const isCollapsed = Boolean(collapsed);
     document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+    if (!isCollapsed) hideSidebarTooltip();
     const button = document.getElementById('sidebar-toggle');
     if (button) {
       const label = isCollapsed ? 'แสดงแถบเมนู' : 'ซ่อนแถบเมนู';
@@ -17,6 +18,42 @@
     if (persist) {
       try { localStorage.setItem(SIDEBAR_STORAGE_KEY, isCollapsed ? '1' : '0'); } catch (_) {}
     }
+  }
+
+  function sidebarTooltipNode() {
+    let tooltip = document.getElementById('sidebar-floating-tooltip');
+    if (tooltip) return tooltip;
+    tooltip = document.createElement('div');
+    tooltip.id = 'sidebar-floating-tooltip';
+    tooltip.className = 'sidebar-floating-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.hidden = true;
+    document.body.appendChild(tooltip);
+    return tooltip;
+  }
+
+  function hideSidebarTooltip() {
+    const tooltip = document.getElementById('sidebar-floating-tooltip');
+    if (!tooltip) return;
+    const owner = document.querySelector(`[aria-describedby="${tooltip.id}"]`);
+    if (owner) owner.removeAttribute('aria-describedby');
+    tooltip.hidden = true;
+    tooltip.textContent = '';
+  }
+
+  function showSidebarTooltip(target) {
+    if (!document.body.classList.contains('sidebar-collapsed') || !window.matchMedia('(min-width: 1024px)').matches) return;
+    const label = String(target?.dataset.tooltip || '').trim();
+    if (!label) return;
+    const tooltip = sidebarTooltipNode();
+    tooltip.textContent = label;
+    tooltip.hidden = false;
+    target.setAttribute('aria-describedby', tooltip.id);
+    const targetRect = target.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const top = Math.max(8, Math.min(window.innerHeight - tooltipRect.height - 8, targetRect.top + (targetRect.height - tooltipRect.height) / 2));
+    tooltip.style.left = `${Math.round(targetRect.right + 12)}px`;
+    tooltip.style.top = `${Math.round(top)}px`;
   }
 
   function initializeDesktopSidebar() {
@@ -31,6 +68,14 @@
       window.setTimeout(() => button.classList.remove('is-bouncing'), 580);
       setDesktopSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
     });
+    document.querySelectorAll('#app-sidebar [data-tooltip]').forEach(item => {
+      item.addEventListener('mouseenter', () => showSidebarTooltip(item));
+      item.addEventListener('mouseleave', hideSidebarTooltip);
+      item.addEventListener('focus', () => showSidebarTooltip(item));
+      item.addEventListener('blur', hideSidebarTooltip);
+    });
+    document.getElementById('app-sidebar')?.addEventListener('scroll', hideSidebarTooltip, { passive:true });
+    window.addEventListener('resize', hideSidebarTooltip, { passive:true });
   }
 
   function gas(method, ...args) {

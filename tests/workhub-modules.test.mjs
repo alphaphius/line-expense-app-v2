@@ -154,7 +154,9 @@ test('desktop sidebar can collapse, restore, and remember the user preference', 
   assert.match(css, /width:calc\(100vw - 18rem\) !important/);
   assert.match(css, /max-width:none !important/);
   assert.match(css, /transform:rotate\(-90deg\)/);
-  assert.match(css, /content:attr\(data-tooltip\)/);
+  assert.match(app, /function showSidebarTooltip/);
+  assert.match(app, /sidebar-floating-tooltip/);
+  assert.match(css, /\.sidebar-floating-tooltip \{ position:fixed; z-index:1000/);
   assert.match(css, /@keyframes sidebar-fluid/);
   assert.match(css, /bottom:28px/);
   assert.match(css, /@media \(min-width:1024px\)/);
@@ -278,6 +280,9 @@ test('site details are read-only until edit and image uploads preserve unsaved r
   assert.match(reports, /item\.uid!==site\.uid&&item\.groupId===site\.groupId&&item\.id===siteCode/);
   assert.match(reports, /const activeForm=event\.target\.closest\('\[data-report-data-form\]'\);if\(activeForm\)saveReportForm\(activeForm\)/);
   assert.match(styles, /\.report-site-profile__grid\{/);
+  assert.match(styles, /\.report-site-profile__grid\{display:flex;[^}]*flex-wrap:wrap/);
+  assert.doesNotMatch(reports, /const profile=.*detail\('Group ID'/);
+  assert.doesNotMatch(reports, /const profile=.*detail\('Latitude \/ N'/);
 });
 
 test('desktop sidebar remains scrollable on short tablet screens', async () => {

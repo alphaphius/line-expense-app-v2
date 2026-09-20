@@ -363,11 +363,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   body.sidebar-collapsed .product-nav__button small,
   body.sidebar-collapsed .resource-nav__button small { display:none; }
   body.sidebar-collapsed .product-nav__button::after,
-  body.sidebar-collapsed .resource-nav__button::after { position:absolute; z-index:60; top:50%; left:calc(100% + 12px); visibility:hidden; border:1px solid #d7c1b1; border-radius:9px; background:#2f211b; padding:7px 10px; color:#fffaf4; box-shadow:0 8px 24px rgba(41,26,20,.24); content:attr(data-tooltip); font-size:12px; font-weight:650; line-height:1.2; opacity:0; pointer-events:none; transform:translate(-6px,-50%); transition:opacity .16s ease,transform .16s ease,visibility .16s; white-space:nowrap; }
-  body.sidebar-collapsed .product-nav__button:hover::after,
-  body.sidebar-collapsed .product-nav__button:focus-visible::after,
-  body.sidebar-collapsed .resource-nav__button:hover::after,
-  body.sidebar-collapsed .resource-nav__button:focus-visible::after { visibility:visible; opacity:1; transform:translate(0,-50%); }
+  body.sidebar-collapsed .resource-nav__button::after { display:none; }
   body.sidebar-collapsed .sidebar-section-label,
   body.sidebar-collapsed #expense-subnav,
   body.sidebar-collapsed .sidebar-version { visibility:hidden; opacity:0; pointer-events:none; transform:translateX(-18px); }
@@ -375,6 +371,8 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   .product-nav__button { width:100%; min-width:0; }
   .resource-nav { padding-bottom:18px; }
 }
+.sidebar-floating-tooltip { position:fixed; z-index:1000; width:max-content; max-width:min(240px,calc(100vw - 110px)); border:1px solid #d7c1b1; border-radius:9px; background:#2f211b; padding:8px 11px; color:#fffaf4; box-shadow:0 10px 28px rgba(41,26,20,.3); font-size:12px; font-weight:700; line-height:1.3; pointer-events:none; }
+.sidebar-floating-tooltip[hidden] { display:none; }
 @media (max-width:1023px) {
   .app-sidebar { position:relative; z-index:20; }
   .sidebar-brand-row { padding-top:calc(16px + env(safe-area-inset-top)); }
