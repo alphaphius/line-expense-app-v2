@@ -1,4 +1,4 @@
-const CACHE_NAME = 'workhub-shell-6';
+const CACHE_NAME = 'workhub-shell-7';
 const SHELL = ['./', './index.html', './styles.css', './workhub-modules.css', './config.js', './api.js', './image-optimizer.js', './protected-access.js', './receipts.js', './workhub-core.js', './module-store.js', './tasks.js', './payroll.js', './report-xlsx.js', './reports.js', './app.js', './pwa.js', './manifest.webmanifest', './icons/app-icon-wh-192.png', './icons/app-icon-wh-512.png', './vendor/sweetalert2.all.min.js', './vendor/chart.umd.js', './vendor/jszip.min.js', './vendor/markerclusterer.umd.js'];
 
 self.addEventListener('install', event => {

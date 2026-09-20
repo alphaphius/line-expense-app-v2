@@ -433,6 +433,51 @@ test('XLSX formula XML is preserved while text placeholders are filled', async (
   assert.match(output, /<f>CONCAT\("\{Site Code\}",A1\)<\/f>/);
 });
 
+test('XLSX export writes numeric placeholders as numeric cells for linked formulas', async () => {
+  const reports = await loadReportsCore();
+  const shared = '<sst><si><t>{อุณหภูมิค่าอ่านเริ่มต้น,mA}</t></si><si><t>{หมายเลขเครื่องมือ}</t></si></sst>';
+  const worksheet = '<worksheet><c r="J13" s="49" t="s"><v>0</v></c><c r="J14" s="49" t="s"><v>1</v></c></worksheet>';
+  const fields = [
+    { key:'อุณหภูมิค่าอ่านเริ่มต้น,mA', type:'text', source:'placeholder' },
+    { key:'หมายเลขเครื่องมือ', type:'text', source:'placeholder' },
+  ];
+  const output = reports.replaceXlsxTypedPlaceholderCells(worksheet, fields, {
+    '{อุณหภูมิค่าอ่านเริ่มต้น,mA}':'12.222',
+    '{หมายเลขเครื่องมือ}':'001230',
+  }, reports.xlsxSharedStringValues(shared));
+  assert.match(output, /<c r="J13" s="49"><v>12\.222<\/v><\/c>/);
+  assert.match(output, /<c r="J14" s="49" t="s"><v>1<\/v><\/c>/);
+});
+
+test('XLSX export clears stale formula caches and requests full automatic recalculation', async () => {
+  const reports = await loadReportsCore();
+  const worksheet = '<worksheet><c r="F7" t="str"><f>$J$13</f><v>{reading}</v></c><c r="G7" t="e"><f>(($F$7-4)/16)*120-40</f><v>#VALUE!</v></c></worksheet>';
+  const cleared = reports.clearXlsxFormulaCaches(worksheet);
+  assert.doesNotMatch(cleared, /t="(?:str|e)"|<v>/);
+  assert.match(cleared, /<f>\(\(\$F\$7-4\)\/16\)\*120-40<\/f>/);
+  const workbook = reports.forceXlsxCalculationXml('<workbook><calcPr calcId="1"/></workbook>');
+  assert.match(workbook, /calcMode="auto"/);
+  assert.match(workbook, /fullCalcOnLoad="1"/);
+  assert.match(workbook, /forceFullCalc="1"/);
+  assert.doesNotMatch(reports.removeXlsxCalcChainRelationshipXml('<Relationships><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/></Relationships>'), /calcChain/);
+  assert.doesNotMatch(reports.removeXlsxCalcChainContentTypeXml('<Types><Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>'), /calcChain/);
+});
+
+test('XLSX package drops stale calcChain and rebuilds formula dependencies on open', async () => {
+  const reports = await loadReportsCore(), zip = new JSZip();
+  zip.file('xl/workbook.xml', '<workbook><calcPr calcId="1"/></workbook>');
+  zip.file('xl/_rels/workbook.xml.rels', '<Relationships><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/></Relationships>');
+  zip.file('[Content_Types].xml', '<Types><Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>');
+  zip.file('xl/worksheets/sheet1.xml', '<worksheet><c r="A1" t="e"><f>B1*2</f><v>#VALUE!</v></c></worksheet>');
+  zip.file('xl/calcChain.xml', '<calcChain><c r="A1"/></calcChain>');
+  await reports.prepareXlsxForCalculation(zip);
+  assert.equal(zip.file('xl/calcChain.xml'), null);
+  assert.doesNotMatch(await zip.file('xl/_rels/workbook.xml.rels').async('string'), /calcChain/);
+  assert.doesNotMatch(await zip.file('[Content_Types].xml').async('string'), /calcChain/);
+  assert.match(await zip.file('xl/workbook.xml').async('string'), /forceFullCalc="1"/);
+  assert.doesNotMatch(await zip.file('xl/worksheets/sheet1.xml').async('string'), /#VALUE!|t="e"/);
+});
+
 test('report templates support named pages without manual page-number entry', async () => {
   const [reports, source, styles] = await Promise.all([loadReportsCore(), read('frontend/reports.js'), read('frontend/workhub-modules.css')]);
   const template = { fields:[{ key:'site_name', type:'text' },{ key:'reading', type:'number', page:9 }] };

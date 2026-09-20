@@ -1,6 +1,6 @@
 {
   "name": "workhub",
-  "version": "4.6.1",
+  "version": "4.6.2",
   "private": true,
   "description": "WorkHub web app for Synology NAS, MariaDB and bill OCR with Gemini",
   "scripts": {
