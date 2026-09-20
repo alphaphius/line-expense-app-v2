@@ -33,7 +33,9 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Unable to resolve Git commit" }
   $releaseId = "$(Get-Date -Format 'yyyyMMdd-HHmmss')-$commit"
   $archive = Join-Path ([System.IO.Path]::GetTempPath()) "workhub-$releaseId.tar.gz"
+  $remoteScriptLocal = Join-Path ([System.IO.Path]::GetTempPath()) "workhub-deploy-$releaseId.sh"
   $remoteArchive = "$RemoteRoot/releases/workhub-$releaseId.tar.gz"
+  $remoteScript = "$RemoteRoot/releases/deploy-$releaseId.sh"
   $target = "$NasUser@$NasHost"
 
   Write-Host "[1/5] Building verified release $releaseId"
@@ -131,9 +133,12 @@ fi
 tar -czf "`$BACKUP/source.tar.gz" -C "`$PREVIOUS" .
 rm -rf "`$PREVIOUS"
 echo '$commit' > "`$ROOT/app/DEPLOYED_COMMIT"
+rm -f '$remoteScript'
 echo "Release `$RID is healthy"
 "@
-  Invoke-External ssh @("-p", "$SshPort", $target, $remoteDeploy)
+  Set-Content -LiteralPath $remoteScriptLocal -Value $remoteDeploy -NoNewline
+  Invoke-External scp @("-O", "-P", "$SshPort", $remoteScriptLocal, "${target}:$remoteScript")
+  Invoke-External ssh @("-tt", "-p", "$SshPort", $target, "sudo -S sh '$remoteScript'")
 
   Write-Host "[5/5] Verifying LAN and public HTTPS"
   Invoke-External curl @("-fsS", "http://${NasHost}:8080/api/health")
@@ -144,5 +149,8 @@ finally {
   Pop-Location
   if ($archive -and (Test-Path $archive)) {
     Remove-Item -LiteralPath $archive -Force
+  }
+  if ($remoteScriptLocal -and (Test-Path $remoteScriptLocal)) {
+    Remove-Item -LiteralPath $remoteScriptLocal -Force
   }
 }
