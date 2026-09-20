@@ -86,7 +86,7 @@ test('all module dialog cancel controls bypass required-field validation', async
 
 test('build and offline shell include all local-test modules', async () => {
   const [build, worker] = await Promise.all([read('scripts/build.mjs'), read('frontend/service-worker.js')]);
-  for (const asset of ['workhub-core.js','tasks.js','payroll.js','report-xlsx.js','reports.js','workhub-modules.css']) {
+  for (const asset of ['workhub-core.js','module-store.js','tasks.js','payroll.js','report-xlsx.js','reports.js','workhub-modules.css']) {
     assert.match(build, new RegExp(asset.replace('.', '\\.')));
     assert.match(worker, new RegExp(asset.replace('.', '\\.')));
   }
