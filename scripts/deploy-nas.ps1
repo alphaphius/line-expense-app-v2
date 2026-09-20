@@ -52,7 +52,9 @@ mkdir -p '$RemoteRoot/releases' '$RemoteRoot/backups'
   Invoke-External ssh @("-p", "$SshPort", "-o", "ConnectTimeout=10", $target, $preflight)
 
   Write-Host "[3/5] Uploading release archive"
-  Invoke-External scp @("-P", "$SshPort", $archive, "${target}:$remoteArchive")
+  # Synology DSM may disable the SFTP subsystem used by modern scp.
+  # Force the legacy SCP protocol, which works over the same secured SSH session.
+  Invoke-External scp @("-O", "-P", "$SshPort", $archive, "${target}:$remoteArchive")
 
   Write-Host "[4/5] Backing up and rebuilding WorkHub"
   $remoteDeploy = @"
