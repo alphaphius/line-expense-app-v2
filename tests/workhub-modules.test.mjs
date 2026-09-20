@@ -164,7 +164,7 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   const [reports, styles] = await Promise.all([read('frontend/reports.js'), read('frontend/workhub-modules.css')]);
   assert.match(reports, /workhub-installation-reports-v2/);
   assert.match(reports, /async function scanTemplate/);
-  assert.match(reports, /fieldKey\.startsWith\('img_'\)/);
+  assert.match(reports, /image=\/\^img_\/i\.test\(fieldKey\)/);
   assert.match(reports, /'eq-a-sm1'.*id:'SM1'/s);
   assert.match(reports, /'eq-a-sm2'.*id:'SM2'/s);
   assert.match(reports, /'eq-a-sm3'.*id:'SM3'/s);
@@ -350,6 +350,26 @@ test('reports replace split DOCX and XLSX text placeholders without changing the
   const xlsx = '<xdr:sp><a:p><a:r><a:t>{equipment_</a:t></a:r><a:r><a:t>id}</a:t></a:r></a:p></xdr:sp>';
   assert.match(reports.replaceXmlPlaceholders(docx, {'{site_name}':'ไซต์ A & B'}, 'DOCX'), /ไซต์ A &amp; B/);
   assert.match(reports.replaceXmlPlaceholders(xlsx, {'{equipment_id}':'SM1'}, 'XLSX'), /SM1/);
+});
+
+test('report template fields accept Thai, spaces, commas, and image textbox names', async () => {
+  const reports = await loadReportsCore();
+  const fields = reports.collectTemplateFields([
+    '{Site Code} {ที่อยู่} {อุณหภูมิค่าอ่านเริ่มต้น,mA}',
+    '{img_รูปภาพป้าย}',
+    '{Site Code}',
+  ]);
+  assert.deepEqual(Array.from(fields, field => field.key), ['Site Code','ที่อยู่','อุณหภูมิค่าอ่านเริ่มต้น,mA','img_รูปภาพป้าย']);
+  assert.equal(fields[0].occurrences, 2);
+  assert.equal(fields[3].type, 'image');
+});
+
+test('XLSX formula XML is preserved while text placeholders are filled', async () => {
+  const reports = await loadReportsCore();
+  const xml = '<worksheet><c t="inlineStr"><is><t>{Site Code}</t></is></c><c><f>CONCAT("{Site Code}",A1)</f><v>0</v></c></worksheet>';
+  const output = reports.replaceXmlPlaceholders(xml, {'{Site Code}':'SITE-A'}, 'XLSX');
+  assert.match(output, /<t>SITE-A<\/t>/);
+  assert.match(output, /<f>CONCAT\("\{Site Code\}",A1\)<\/f>/);
 });
 
 test('report templates support named pages without manual page-number entry', async () => {
