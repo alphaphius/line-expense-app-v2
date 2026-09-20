@@ -61,6 +61,8 @@ mkdir -p '$RemoteRoot/releases' '$RemoteRoot/backups'
   Write-Host "[4/5] Backing up and rebuilding WorkHub"
   $remoteDeploy = @"
 set -eu
+# Synology Container Manager keeps its CLI outside sudo's restricted PATH.
+export PATH="/var/packages/ContainerManager/target/usr/bin:`$PATH"
 ROOT='$RemoteRoot'
 RID='$releaseId'
 STAGE="`$ROOT/app.__staging_`$RID"
