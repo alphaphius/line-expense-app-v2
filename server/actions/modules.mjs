@@ -1,5 +1,5 @@
-import { execute, one, transaction } from '../db.mjs';
-import { apiError, clean, nowSql } from '../utils.mjs';
+import { execute, one, select, transaction } from '../db.mjs';
+import { apiError, clean, nowSql, uuid } from '../utils.mjs';
 import { readBuffer, removeFile, safeName, storeBuffer } from '../files.mjs';
 
 const allowedModules = new Set(['tasks', 'payroll', 'reports']);
@@ -45,6 +45,52 @@ export async function saveModuleState(payload = {}, actor = '') {
     { key, json, actor:clean(actor,160), now });
   const row = await one('SELECT module_key,revision,updated_at FROM workhub_module_state WHERE module_key=:key', { key });
   return { module:key, revision:Number(row.revision), updatedAt:row.updated_at };
+}
+
+function bangkokClock(value = new Date()) {
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(value).map(part=>[part.type,part.value]));
+  return {date:`${parts.year}-${parts.month}-${parts.day}`,minutes:Number(parts.hour)*60+Number(parts.minute)};
+}
+
+function bangkokDate(value) {
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value).map(part=>[part.type,part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export async function captureScheduledModuleSnapshots(value = new Date()) {
+  const clock=bangkokClock(value),slots=[['08:00',8*60],['12:00',12*60]].filter(([,minutes])=>clock.minutes>=minutes),now=nowSql();
+  for(const [slot] of slots)await execute(`INSERT IGNORE INTO workhub_module_snapshots
+    (snapshot_id,module_key,snapshot_date,snapshot_slot,state_json,source_revision,created_at)
+    SELECT :id,module_key,:date,:slot,state_json,revision,:now FROM workhub_module_state WHERE module_key='reports'`,
+    {id:uuid(),date:clock.date,slot,now});
+  const cutoff=new Date(`${clock.date}T12:00:00+07:00`);cutoff.setDate(cutoff.getDate()-19);const cutoffDate=bangkokDate(cutoff);
+  await execute('DELETE FROM workhub_module_snapshots WHERE module_key=:key AND snapshot_date<:cutoff',{key:'reports',cutoff:cutoffDate});
+  return {date:clock.date,slots:slots.map(([slot])=>slot),cutoff:cutoffDate};
+}
+
+export async function listModuleSnapshots(payload = {}) {
+  const key=moduleKey(payload.module||'reports');
+  if(key==='reports')await captureScheduledModuleSnapshots();
+  const rows=await selectSnapshots(key);
+  return {module:key,snapshots:rows.map(row=>({id:row.snapshot_id,date:String(row.snapshot_date).slice(0,10),slot:row.snapshot_slot,revision:Number(row.source_revision),createdAt:row.created_at}))};
+}
+
+async function selectSnapshots(key) {
+  return select('SELECT snapshot_id,snapshot_date,snapshot_slot,source_revision,created_at FROM workhub_module_snapshots WHERE module_key=:key ORDER BY snapshot_date DESC,snapshot_slot DESC LIMIT 40',{key});
+}
+
+export async function restoreModuleSnapshot(payload = {}, actor = '') {
+  const key=moduleKey(payload.module||'reports'),snapshotId=clean(payload.snapshotId,36);
+  if(!/^[0-9a-f-]{36}$/i.test(snapshotId))throw apiError('INVALID_SNAPSHOT','รหัสเวอร์ชันไม่ถูกต้อง',400);
+  return transaction(async connection=>{
+    const [rows]=await connection.execute('SELECT * FROM workhub_module_snapshots WHERE snapshot_id=? AND module_key=? FOR UPDATE',[snapshotId,key]);const snapshot=rows[0];
+    if(!snapshot)throw apiError('SNAPSHOT_NOT_FOUND','ไม่พบเวอร์ชันที่เลือกหรือหมดอายุแล้ว',404);
+    const now=nowSql();
+    await connection.execute(`INSERT INTO workhub_module_state (module_key,state_json,revision,updated_by,created_at,updated_at)
+      VALUES (?,?,1,?,?,?) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),revision=revision+1,updated_by=VALUES(updated_by),updated_at=VALUES(updated_at)`,[key,snapshot.state_json,clean(actor,160),now,now]);
+    const [currentRows]=await connection.execute('SELECT * FROM workhub_module_state WHERE module_key=?',[key]);
+    return {...parse(currentRows[0]),restoredSnapshot:{id:snapshot.snapshot_id,date:String(snapshot.snapshot_date).slice(0,10),slot:snapshot.snapshot_slot}};
+  });
 }
 
 function fileKey(value) {

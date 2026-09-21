@@ -75,6 +75,24 @@ test('Task, payroll, reports, Daily Report, templates, and report images persist
   assert.match(reports,/getModuleFile/);
 });
 
+test('report snapshots run at 08:00 and 12:00, retain 20 days, and restore through protected API', async () => {
+  const [schema,actions,api,server]=await Promise.all([
+    fs.readFile(path.join(root,'server/migrations/006_module_snapshots.sql'),'utf8'),
+    fs.readFile(path.join(root,'server/actions/modules.mjs'),'utf8'),
+    fs.readFile(path.join(root,'server/api.mjs'),'utf8'),
+    fs.readFile(path.join(root,'server/server.mjs'),'utf8'),
+  ]);
+  assert.match(schema,/CREATE TABLE IF NOT EXISTS workhub_module_snapshots/);
+  assert.match(schema,/UNIQUE KEY uq_workhub_module_snapshot_slot/);
+  assert.match(actions,/\['08:00',8\*60\]/);
+  assert.match(actions,/\['12:00',12\*60\]/);
+  assert.match(actions,/setDate\(cutoff\.getDate\(\)-19\)/);
+  assert.match(actions,/export async function restoreModuleSnapshot/);
+  assert.match(api,/protectedActions[\s\S]*listModuleSnapshots/);
+  assert.match(api,/mutationActions[\s\S]*restoreModuleSnapshot/);
+  assert.match(server,/setInterval\(\(\)=>captureScheduledModuleSnapshots/);
+});
+
 test('Gemini Thai-ID batching maps each image and normalizes safe editable fields', () => {
   const request=buildReceiptAiRequest([{buffer:Buffer.from('one')},{buffer:Buffer.from('two')}]);
   assert.equal(request.contents[0].parts.filter(part=>part.inlineData).length,2);

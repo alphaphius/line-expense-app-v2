@@ -7,6 +7,7 @@ import { ensureDataDirs } from './files.mjs';
 import { ensureDefaults } from './actions/masters.mjs';
 import { repairAddressMatchFlags } from './actions/bills.mjs';
 import { recoverReceiptAiJobs } from './actions/receipts.mjs';
+import { captureScheduledModuleSnapshots } from './actions/modules.mjs';
 import { apiErrorEnvelope, handleApi } from './api.mjs';
 import { handleLineWebhook, verifyLineSignature } from './line.mjs';
 
@@ -20,6 +21,9 @@ await ensureDefaults();
 await repairAddressMatchFlags();
 await recoverReceiptAiJobs();
 await ping();
+await captureScheduledModuleSnapshots().catch(error=>app.log.error({err:error},'Initial report snapshot failed'));
+const snapshotTimer=setInterval(()=>captureScheduledModuleSnapshots().catch(error=>app.log.error({err:error},'Scheduled report snapshot failed')),5*60*1000);
+snapshotTimer.unref();
 
 app.addHook('onSend',async(request,reply,payload)=>{reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','same-origin').header('Permissions-Policy','camera=(), microphone=(), geolocation=(self)').header('X-Frame-Options','SAMEORIGIN');return payload;});
 app.post('/api',async(request,reply)=>{try{reply.header('Cache-Control','no-store');return await handleApi(request.body||{});}catch(error){request.log.error({err:error,action:request.body?.action},'API request failed');reply.code(Number(error.statusCode)||500);return apiErrorEnvelope(error,request.body?.requestId||request.id);}});
@@ -29,6 +33,6 @@ app.get('/config.js',async(request,reply)=>{reply.type('text/javascript; charset
 await app.register(fastifyStatic,{root:config.publicDir,prefix:'/',maxAge:'1h',immutable:false,index:['index.html'],setHeaders(reply,filePath){if(/(?:index\.html|config\.js|service-worker\.js|app\.js|api\.js|protected-access\.js|receipts\.js|pwa\.js|styles\.css)$/.test(filePath))reply.header('Cache-Control','no-cache, no-store, must-revalidate');else if(/\.(wasm|gz)$/.test(filePath))reply.header('Cache-Control','public, max-age=31536000, immutable');}});
 app.setNotFoundHandler((request,reply)=>{if(request.method==='GET'&&!path.extname(request.url.split('?')[0]))return reply.sendFile('index.html');return reply.code(404).send({error:'Not found'});});
 
-const shutdown=async signal=>{app.log.info({signal},'Shutting down');await app.close();await closeDb();process.exit(0);};
+const shutdown=async signal=>{app.log.info({signal},'Shutting down');clearInterval(snapshotTimer);await app.close();await closeDb();process.exit(0);};
 process.on('SIGTERM',()=>shutdown('SIGTERM'));process.on('SIGINT',()=>shutdown('SIGINT'));
 await app.listen({host:config.host,port:config.port});

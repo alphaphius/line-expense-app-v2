@@ -345,6 +345,54 @@ test('Daily Report supports date and site entry, quantities, quick-edit details,
   assert.match(styles, /\.daily-sticky-actions/);
 });
 
+test('report management supports three-character group icons and password-protected bulk deletion', async () => {
+  const [reports,styles]=await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
+  assert.match(reports,/function threeCharacters/);
+  assert.match(reports,/name="shortCode" maxlength="3"/);
+  assert.match(reports,/short_code/);
+  assert.match(reports,/groupShortCode\(group\)/);
+  assert.match(reports,/selectedEntities:\{groups:new Set\(\),sites:new Set\(\),equipment:new Set\(\)\}/);
+  assert.match(reports,/data-entity-check="groups"/);
+  assert.match(reports,/data-entity-check="sites"/);
+  assert.match(reports,/data-entity-check="equipment"/);
+  assert.match(reports,/function deleteSelectedEntities/);
+  assert.match(reports,/authorizeDelete\(`ลบ/);
+  assert.match(styles,/\.entity-selection-bar\{/);
+});
+
+test('Daily Report uses a full-month two-column workspace and safe XLSX recalculation', async () => {
+  const [reports,styles]=await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
+  assert.match(reports,/function monthCalendarDates/);
+  assert.match(reports,/class="daily-month-grid"/);
+  assert.match(reports,/class="daily-workspace"/);
+  assert.match(reports,/class="daily-entry-pane"/);
+  assert.match(reports,/await prepareXlsxForCalculation\(zip\)/);
+  assert.match(reports,/replaceXlsxTypedPlaceholderCells/);
+  assert.match(styles,/\.daily-workspace\{display:grid;grid-template-columns:/);
+  assert.match(styles,/@media\(max-width:700px\)\{[^}]*\.entity-selection-bar/s);
+});
+
+test('equipment saves confirm success and every report export shows progress', async () => {
+  const reports=await read('frontend/reports.js');
+  assert.match(reports,/function showReportSaved/);
+  assert.match(reports,/title:'บันทึกข้อมูลแล้ว'/);
+  assert.match(reports,/function withExportProgress/);
+  assert.match(reports,/data-export-progress-bar/);
+  assert.match(reports,/await withExportProgress\('กำลังสร้าง Daily Report'/);
+  assert.match(reports,/await withExportProgress\('กำลัง Export ข้อมูลทั้งหมด'/);
+  assert.match(reports,/await withExportProgress\(`กำลัง Export/);
+});
+
+test('report version restore is available from the kebab menu', async () => {
+  const [reports,store]=await Promise.all([read('frontend/reports.js'),read('frontend/module-store.js')]);
+  assert.match(reports,/data-version-restore/);
+  assert.match(reports,/function versionRestoreDialog/);
+  assert.match(reports,/data-snapshot-restore/);
+  assert.match(reports,/authorizeDelete\('ยืนยันการย้อนคืนเวอร์ชั่น'/);
+  assert.match(store,/listModuleSnapshots/);
+  assert.match(store,/restoreModuleSnapshot/);
+});
+
 test('Daily Report replacements preserve ordered items and blank every unused placeholder', async () => {
   const reports = await loadReportsCore();
   const replacements = reports.dailyReplacements({
