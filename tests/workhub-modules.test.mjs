@@ -223,7 +223,7 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(reports, /data-field-drag/);
   assert.match(reports, /data-field-move/);
   assert.match(reports, /row\.latitude\|\|row\.lat\|\|row\.n/);
-  assert.match(reports, /headers:\['work_group_id','site_id','site_name','description','map_pin_text'/);
+  assert.match(reports, /headers:\['work_group_id','site_id','site_code','site_name','description','map_pin_text'/);
   assert.match(reports, /1 Text Box = 1 รูป/);
   assert.match(reports, /IndexedDB|indexedDB/);
   assert.match(reports, /policy==='blank'/);
@@ -277,7 +277,7 @@ test('site details are read-only until edit and image uploads preserve unsaved r
   assert.match(reports, /data-site-profile/);
   assert.match(reports, /แก้ไขข้อมูลไซต์/);
   assert.match(reports, /<label>SITE ID<input name="code" required/);
-  assert.match(reports, /item\.uid!==site\.uid&&item\.groupId===site\.groupId&&item\.id===siteCode/);
+  assert.match(reports, /item\.uid!==site\.uid&&item\.groupId===site\.groupId&&item\.id===siteId/);
   assert.match(reports, /const activeForm=event\.target\.closest\('\[data-report-data-form\]'\);if\(activeForm\)saveReportForm\(activeForm\)/);
   assert.match(styles, /\.report-site-profile__grid\{/);
   assert.match(styles, /\.report-site-profile__grid\{display:flex;[^}]*flex-wrap:wrap/);
@@ -553,4 +553,49 @@ test('safe report formulas support field clicks, arithmetic, text, and degree tr
   assert.equal(reports.evaluateFormula('SIN(30) + COS(60) + TAN(45)', {}).value, 2);
   assert.match(reports.evaluateFormula('{value} / 0', { value:10 }).error, /หารด้วยศูนย์/);
   assert.match(reports.evaluateFormula('UNKNOWN(1)', {}).error, /ไม่รองรับคำสั่ง/);
+});
+
+test('report UX supports automatic site fields, drag-drop uploads, resizable maps, and safe bulk deletion mode', async () => {
+  const [reports,styles,access] = await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css'),read('frontend/protected-access.js')]);
+  assert.match(reports,/templateFieldAutoRole/);
+  assert.match(reports,/compact==='ที่อยู่'/);
+  assert.match(reports,/\['sitecode','รหัสไซต์'\]/);
+  assert.match(reports,/หมู่ \$\{site\.moo\}/);
+  assert.match(reports,/function wireDropzones/);
+  assert.match(reports,/event\.dataTransfer\?\.files/);
+  assert.match(reports,/report-upload-file-name/);
+  assert.match(reports,/data-map-drag/);
+  assert.match(reports,/workhub-report-map-ratio/);
+  assert.match(reports,/function renderGlobalMap/);
+  assert.match(reports,/data-map-site-focus/);
+  assert.match(reports,/data-entity-delete-mode/);
+  assert.match(reports,/function updateEntitySelectionUi/);
+  assert.match(styles,/\.report-map-resizer/);
+  assert.match(styles,/\.report-global-site-cards/);
+  assert.match(access,/event\.key !== 'Enter'/);
+  assert.match(access,/Swal\.clickConfirm\(\)/);
+});
+
+test('report templates support rename, Enum and Quick Edit fields, UTF-8 CSV, and timestamped report names', async () => {
+  const reports = await read('frontend/reports.js');
+  assert.match(reports,/name="templateName"/);
+  assert.match(reports,/value="enum"/);
+  assert.match(reports,/value="quick"/);
+  assert.match(reports,/\.options=input\.value\.split\('\|'\)/);
+  assert.match(reports,/function csvUtf8/);
+  assert.match(reports,/\\uFEFF/);
+  assert.match(reports,/function reportFileBase/);
+  assert.match(reports,/site\?\.siteCode\|\|site\?\.id/);
+  assert.match(reports,/fileTimestamp\(\)/);
+});
+
+test('report state uses revision conflicts and periodic refresh for multiple devices', async () => {
+  const [store,reports,server] = await Promise.all([read('frontend/module-store.js'),read('frontend/reports.js'),read('server/actions/modules.mjs')]);
+  assert.match(store,/expectedRevision:revisions\.get\(module\)\|\|0/);
+  assert.match(store,/async function refresh/);
+  assert.match(server,/SELECT module_key,revision,updated_at FROM workhub_module_state WHERE module_key=\? FOR UPDATE/);
+  assert.match(server,/MODULE_STATE_CONFLICT/);
+  assert.match(reports,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'\)refreshRemoteState\(false\);\},12000\)/);
+  assert.match(reports,/data-report-refresh-now/);
+  assert.match(reports,/data-report-back/);
 });

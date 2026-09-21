@@ -28,6 +28,11 @@
           toggle.setAttribute('aria-label', reveal ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน');
           input.focus();
         });
+        input.addEventListener('keydown', event => {
+          if (event.key !== 'Enter' || event.isComposing) return;
+          event.preventDefault();
+          Swal.clickConfirm();
+        });
         input.focus();
       },
       preConfirm: async () => {

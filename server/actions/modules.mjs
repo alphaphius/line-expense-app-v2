@@ -38,13 +38,17 @@ export async function getModuleState(payload = {}, actor = '') {
 export async function saveModuleState(payload = {}, actor = '') {
   const key = moduleKey(payload.module);
   const json = normalizeState(payload.state);
-  const now = nowSql();
-  await execute(`INSERT INTO workhub_module_state (module_key,state_json,revision,updated_by,created_at,updated_at)
-    VALUES (:key,:json,1,:actor,:now,:now)
-    ON DUPLICATE KEY UPDATE state_json=VALUES(state_json),revision=revision+1,updated_by=VALUES(updated_by),updated_at=VALUES(updated_at)`,
-    { key, json, actor:clean(actor,160), now });
-  const row = await one('SELECT module_key,revision,updated_at FROM workhub_module_state WHERE module_key=:key', { key });
-  return { module:key, revision:Number(row.revision), updatedAt:row.updated_at };
+  const expectedRevision = Math.max(0,Math.trunc(Number(payload.expectedRevision)||0));
+  return transaction(async connection=>{
+    const [rows]=await connection.execute('SELECT module_key,revision,updated_at FROM workhub_module_state WHERE module_key=? FOR UPDATE',[key]);
+    const current=rows[0];
+    if(current&&expectedRevision!==Number(current.revision))throw apiError('MODULE_STATE_CONFLICT','ข้อมูลมีการเปลี่ยนแปลงจากอุปกรณ์อื่น กรุณาโหลดข้อมูลล่าสุดก่อนบันทึกอีกครั้ง',409);
+    const now=nowSql();
+    if(current)await connection.execute('UPDATE workhub_module_state SET state_json=?,revision=revision+1,updated_by=?,updated_at=? WHERE module_key=?',[json,clean(actor,160),now,key]);
+    else await connection.execute('INSERT INTO workhub_module_state (module_key,state_json,revision,updated_by,created_at,updated_at) VALUES (?,?,1,?,?,?)',[key,json,clean(actor,160),now,now]);
+    const [saved]=await connection.execute('SELECT module_key,revision,updated_at FROM workhub_module_state WHERE module_key=?',[key]);
+    return {module:key,revision:Number(saved[0].revision),updatedAt:saved[0].updated_at};
+  });
 }
 
 function bangkokClock(value = new Date()) {
