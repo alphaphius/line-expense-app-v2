@@ -8,7 +8,7 @@ import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, in
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
 import { billConfirmation, billSavedConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
-import { addressesMatch, normalizeQualityScore } from '../server/actions/bills.mjs';
+import { addressesMatch, companyNamesMatch, normalizeCurrentYearBillDate, normalizeQualityScore } from '../server/actions/bills.mjs';
 import { buildReceiptAiRequest, normalizeReceiptAiResult } from '../server/actions/receipts.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -139,6 +139,20 @@ test('Thai company addresses match despite labels, spacing, and Bangkok abbrevia
   const electronicBillAddress = 'เลขที่ 151 ถนน นวลจันทร์ แขวงนวลจันทร์ เขตบึงกุ่ม กรุงเทพมหานคร 10230';
   assert.equal(addressesMatch(companyAddress, electronicBillAddress), true);
   assert.equal(addressesMatch(companyAddress, '99 ถนนสุขุมวิท เขตวัฒนา กรุงเทพมหานคร 10110'), false);
+});
+
+test('bill buyer company validation rejects lookalike names and requires branch qualifiers', () => {
+  assert.equal(companyNamesMatch('บริษัท วิศวกรรมธรณีและฐานราก จำกัด', 'บริษัท วิศวกรรมธรณีและฐานราก จำกัด (สำนักงานใหญ่)', 'สำนักงานใหญ่'), true);
+  assert.equal(companyNamesMatch('บริษัท วิศวกรรมธรณีและฐานราก จำกัด', 'บริษัท วิศวกรรมและฐานราก จำกัด (สำนักงานใหญ่)', 'สำนักงานใหญ่'), false);
+  assert.equal(companyNamesMatch('บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (มหาชน)', 'บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (มหาชน) (สำนักงานใหญ่)', 'สำนักงานใหญ่'), true);
+  assert.equal(companyNamesMatch('บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (มหาชน)', 'บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (สำนักงานใหญ่)', 'สำนักงานใหญ่'), false);
+  assert.equal(companyNamesMatch('บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (มหาชน)', 'บริษัท ทีม คอนซัลติ้ง เอนจิเนียริ่ง แอนด์ แมเนจเมนท์ จำกัด (มหาชน)', 'สำนักงานใหญ่'), false);
+});
+
+test('bill document dates are normalized to the current Bangkok year for CE and BE input', () => {
+  const currentYear = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok', year:'numeric' }).format(new Date());
+  assert.equal(normalizeCurrentYearBillDate('2024-09-08'), `${currentYear}-09-08`);
+  assert.equal(normalizeCurrentYearBillDate('2568-01-31'), `${currentYear}-01-31`);
 });
 
 test('manual XLSX export is a valid OOXML zip', async () => {

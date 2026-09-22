@@ -135,6 +135,20 @@ function aggregate(rows, keyFn) {
   return [...map.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'th'));
 }
 
+function aggregateOwners(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const label = ownerLabel(row) || 'ไม่ระบุ';
+    const entry = map.get(label) || { label, total:0, count:0, owner_ids:[] };
+    entry.total += number(row.grand_total);
+    entry.count += 1;
+    const ownerId = clean(row.source_user_id, 160);
+    if (ownerId && !entry.owner_ids.includes(ownerId)) entry.owner_ids.push(ownerId);
+    map.set(label, entry);
+  }
+  return [...map.values()].sort((a,b)=>b.total-a.total||a.label.localeCompare(b.label,'th'));
+}
+
 export async function listBills(filters = {}) {
   const params = {};
   const where = [];
@@ -152,10 +166,18 @@ export async function listBills(filters = {}) {
       where.push(`b.source_user_id IN (${placeholders.join(',')})`);
     }
   }
+  if (Array.isArray(filters.owner_names)) {
+    const ownerNames = [...new Set(filters.owner_names.map(value => clean(value, 255)).filter(Boolean))].slice(0, 50);
+    if (!ownerNames.length) where.push('1 = 0');
+    else {
+      const placeholders = ownerNames.map((value, index) => { params[`ownerName${index}`] = value; return `:ownerName${index}`; });
+      where.push(`COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) IN (${placeholders.join(',')})`);
+    }
+  }
   if (filters.year) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%Y') = :year"); params.year = clean(filters.year, 4); }
   if (filters.month) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%m') = :month"); params.month = clean(filters.month, 2).padStart(2, '0'); }
   if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, b.source_user_name, lu.display_name, lu.workhub_name, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }
-  const from = `FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+  const from = `FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id LEFT JOIN (SELECT bill_id,SUBSTRING_INDEX(GROUP_CONCAT(doc_id ORDER BY page_no),',',1) AS preview_doc_id FROM bill_documents GROUP BY bill_id) docs ON docs.bill_id=b.bill_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
   const count = await one(`SELECT COUNT(*) AS total ${from}`, params);
   const allowedSorts = new Set(['document_date','created_at','grand_total','vendor_name','status','document_no']);
   const sort = allowedSorts.has(filters.sort_by) ? filters.sort_by : 'document_date';
@@ -165,13 +187,13 @@ export async function listBills(filters = {}) {
   const page = Math.max(1, Math.min(pages, Number(filters.page) || 1));
   params.limit = pageSize;
   params.offset = (page - 1) * pageSize;
-  const rows = await select(`SELECT b.*, p.project_name, co.company_name, c.category_name, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC LIMIT :limit OFFSET :offset`, params);
+  const rows = await select(`SELECT b.*, p.project_name, co.company_name, c.category_name, docs.preview_doc_id, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC LIMIT :limit OFFSET :offset`, params);
   return { rows: rows.map(enrichBill), total: Number(count.total), page, pageSize, pages };
 }
 
 export async function getDashboard(filters = {}) {
   const period = normalizePeriod(filters.period);
-  const all = (await select("SELECT b.*, p.project_name, c.category_name, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id WHERE b.status <> 'REJECTED' ORDER BY b.document_date DESC, b.created_at DESC")).map(enrichBill);
+  const all = (await select("SELECT b.*, p.project_name, c.category_name, docs.preview_doc_id, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id LEFT JOIN (SELECT bill_id,SUBSTRING_INDEX(GROUP_CONCAT(doc_id ORDER BY page_no),',',1) AS preview_doc_id FROM bill_documents GROUP BY bill_id) docs ON docs.bill_id=b.bill_id WHERE b.status <> 'REJECTED' ORDER BY b.document_date DESC, b.created_at DESC")).map(enrichBill);
   const periodRows = all.filter(row => String(row.document_date || row.created_at).slice(0, 7) === period);
   const ownerOptions = aggregate(periodRows, ownerLabel);
   const available = ownerOptions.map(item => item.label);
@@ -185,7 +207,7 @@ export async function getDashboard(filters = {}) {
   const totalOf = data => data.reduce((sum, row) => sum + number(row.grand_total), 0);
   const previousRows = rows.filter(row => String(row.document_date || row.created_at).slice(0,7) === previousPeriod);
   const previousProjects = aggregate(previousRows, row => row.project_name || 'ไม่ระบุโครงการ').map(item => ({ project_name: item.label, total: item.total }));
-  const uploaderSummary = aggregate(selectedPeriodRows, ownerLabel);
+  const uploaderSummary = aggregateOwners(selectedPeriodRows);
   const ownerCategories = new Map();
   for (const row of selectedPeriodRows) {
     const owner = ownerLabel(row); const category = row.category_name || 'ยังไม่จัดกลุ่ม';

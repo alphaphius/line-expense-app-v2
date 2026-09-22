@@ -41,7 +41,7 @@ const expectedV1Calls = [
   'backfillLineUsernames', 'clearQuickSettings', 'confirmBill', 'deleteBill',
   'deleteMasterData', 'exportMonthlyBillExcel', 'exportMonthlyBillWord',
   'getBillDetail', 'getBillDetail', 'getBillDetail', 'getBillDocumentPreview', 'getBillOwners', 'getBootstrapData',
-  'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills', 'listBills',
+  'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills', 'listBills', 'listBills',
   'listPendingReviewBills', 'restoreBill', 'saveBillOwnerName', 'saveBillOwnerName', 'saveMasterData', 'saveQuickSettings',
   'submitBillPages', 'updateBill', 'verifyDatabaseAccess',
 ];

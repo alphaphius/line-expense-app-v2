@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.4 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.5 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -224,7 +224,7 @@
           </article>
           <div class="card overflow-hidden">
             <div class="p-5"><h3 id="dashboard-bill-list-title" class="section-title">รายการบิลเดือนที่เลือก</h3><p id="dashboard-bill-list-helper" class="text-xs text-slate-500">เรียงตามวันที่ในบิล โดยรายการใหม่อยู่ด้านบน</p></div>
-            <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>วันที่ในบิล</th><th>ร้านค้า</th><th>โครงการ</th><th>หมวด</th><th>ผู้อัปโหลด</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody id="bill-table"></tbody></table></div>
+            <div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="bill-preview-column"><span class="sr-only">รูปบิล</span></th><th>วันที่ในบิล</th><th>ร้านค้า</th><th>โครงการ</th><th>หมวด</th><th>ผู้อัปโหลด</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody id="bill-table"></tbody></table></div>
           </div>
         </section>
 
@@ -258,8 +258,17 @@
             </div>
           </div>
           <div class="card overflow-hidden">
-            <div class="flex items-center justify-between p-5"><h3 class="section-title !mb-0">รายการบิลทั้งหมด</h3><span id="bill-list-count" class="text-sm text-slate-500">0 รายการ</span></div>
-            <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>วันที่</th><th>ร้านค้า/เลขที่</th><th>โครงการ</th><th>บริษัท</th><th>หมวด</th><th>ผู้ส่ง</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody id="all-bills-table"></tbody></table></div>
+            <div class="bill-list-head">
+              <div><h3 class="section-title !mb-0">รายการบิลทั้งหมด</h3><span id="bill-list-count" class="text-sm text-slate-500">0 รายการ</span></div>
+              <div class="bill-list-head__controls">
+                <div class="bill-order-switch" role="group" aria-label="เรียงรายการบิล">
+                  <button type="button" data-bill-order="created_at:desc">เวลาอัปโหลด</button>
+                  <button type="button" data-bill-order="document_date:desc" class="active">วันที่ในบิล</button>
+                </div>
+                <label class="bill-page-size">แสดง<select id="bill-page-size" aria-label="จำนวนรายการต่อหน้า"><option value="20">20</option><option value="30">30</option><option value="50">50</option></select>รายการ</label>
+              </div>
+            </div>
+            <div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="bill-preview-column"><span class="sr-only">รูปบิล</span></th><th>วันที่</th><th>ร้านค้า/เลขที่</th><th>โครงการ</th><th>บริษัท</th><th>หมวด</th><th>ผู้ส่ง</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody id="all-bills-table"></tbody></table></div>
             <div class="flex items-center justify-between border-t border-slate-200 p-4"><button id="bill-prev" class="rounded-lg border px-3 py-2 text-sm">ก่อนหน้า</button><span id="bill-page-info" class="text-sm text-slate-500">หน้า 1/1</span><button id="bill-next" class="rounded-lg border px-3 py-2 text-sm">ถัดไป</button></div>
           </div>
         </section>

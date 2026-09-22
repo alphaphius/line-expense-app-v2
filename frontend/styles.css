@@ -87,7 +87,8 @@
   .uploader-summary-card { overflow:hidden; padding:20px 22px; }
   .uploader-summary-card__head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; }
   .uploader-summary-bars { display:grid; max-height:300px; gap:13px; margin-top:18px; overflow-y:auto; padding-right:4px; scrollbar-color:#cfb69f transparent; scrollbar-width:thin; }
-  .uploader-bar-row { display:grid; grid-template-columns:minmax(150px,.8fr) minmax(220px,1.8fr); align-items:center; gap:16px; min-width:0; }
+  .uploader-bar-row { display:grid; width:100%; grid-template-columns:minmax(150px,.8fr) minmax(220px,1.8fr); align-items:center; gap:16px; min-width:0; border-radius:11px; padding:7px 9px; text-align:left; transition:background .18s,transform .18s; }
+  button.uploader-bar-row:hover, button.uploader-bar-row:focus-visible { background:#fbf1e5; transform:translateY(-1px); }
   .uploader-bar-meta { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:10px; }
   .uploader-bar-meta strong { min-width:0; overflow:hidden; color:#59483f; font-size:12px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
   .uploader-bar-meta span { flex:0 0 auto; border-radius:999px; background:#f1e5d8; padding:3px 8px; color:#806552; font-size:10px; white-space:nowrap; }
@@ -145,6 +146,34 @@
   .data-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
   .data-table th { background: #faf4eb; color: #735f53; font-weight: 500; text-align: left; }
   .data-table th, .data-table td { border-top: 1px solid #eee2d5; padding: 12px 16px; }
+  .data-table tr.bill-date-band--a > td { background:#fbf4eb; }
+  .data-table tr.bill-date-band--b > td { background:#fffdf9; }
+  .data-table tr.bill-date-band--a:hover > td, .data-table tr.bill-date-band--b:hover > td { background:#f5e7d8; }
+  .bill-preview-column { width:52px; min-width:52px; text-align:center !important; }
+  .bill-preview-btn { display:inline-grid; width:36px; height:36px; place-items:center; border:1px solid #d8c2ad; border-radius:10px; background:#fffdf9; color:#7b4e38; transition:background .18s,border-color .18s,transform .18s; }
+  .bill-preview-btn:hover, .bill-preview-btn:focus-visible { border-color:#9a6244; background:#f8eadb; transform:translateY(-1px); }
+  .bill-preview-btn:disabled { border-color:#e8ded5; background:#f6f3ef; color:#b7aaa1; }
+  .bill-preview-btn svg { width:18px; height:18px; }
+  .bill-list-head { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:18px 20px; }
+  .bill-list-head > div:first-child { display:flex; min-width:0; align-items:baseline; gap:12px; }
+  .bill-list-head__controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; }
+  .bill-order-switch { display:flex; border:1px solid #d9c8b7; border-radius:11px; background:#f6eee5; padding:3px; }
+  .bill-order-switch button { min-height:38px; border-radius:8px; padding:7px 12px; color:#715e53; font-size:12px; font-weight:650; }
+  .bill-order-switch button.active { background:#4a3329; color:#fff9f1; box-shadow:0 4px 12px rgba(58,37,28,.16); }
+  .bill-page-size { display:flex; min-height:44px; align-items:center; gap:7px; color:#7b685d; font-size:12px; white-space:nowrap; }
+  .bill-page-size select { min-height:40px; border:1px solid #d9c8b7; border-radius:9px; background:#fffdf9; padding:6px 28px 6px 10px; color:#49372f; }
+  .owner-bills-popup { text-align:left; }
+  .owner-bills-toolbar { display:grid; grid-template-columns:minmax(150px,1fr) minmax(180px,1fr); gap:10px; margin-bottom:12px; }
+  .owner-bills-toolbar label { color:#79675d; font-size:11px; }
+  .owner-bills-toolbar input, .owner-bills-toolbar select { width:100%; min-height:42px; margin-top:4px; border:1px solid #d9c8b7; border-radius:10px; background:#fffdf9; padding:8px 10px; color:#3e2e27; }
+  .owner-bills-table-wrap { max-height:52vh; overflow:auto; border:1px solid #e4d4c4; border-radius:13px; }
+  .owner-bills-table { width:100%; min-width:680px; border-collapse:collapse; font-size:12px; }
+  .owner-bills-table th { position:sticky; z-index:1; top:0; background:#f7ede2; color:#715c50; text-align:left; }
+  .owner-bills-table th, .owner-bills-table td { border-bottom:1px solid #eadfd4; padding:10px 12px; }
+  .owner-bills-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
+  .owner-bills-footer__pages { display:flex; align-items:center; gap:8px; color:#79675d; font-size:12px; }
+  .owner-bills-footer button { min-height:40px; border:1px solid #cfb49d; border-radius:9px; padding:7px 12px; color:#754631; font-size:12px; font-weight:650; }
+  .owner-bills-footer button.owner-bills-all { border-color:#4a3329; background:#4a3329; color:#fff9f1; }
   .master-card { overflow: hidden; }
   .master-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding: 18px; font-weight: 600; }
   .master-head button { color: var(--copper-dark); font-size: 13px; }
@@ -298,6 +327,15 @@
     .monthly-export__actions { width:100%; min-width:0; }
     .bill-owner-filter__panel { position:fixed; top:auto; right:10px; bottom:calc(10px + env(safe-area-inset-bottom)); left:10px; width:auto; max-height:70dvh; overflow:auto; }
     .bill-owner-filter__options { grid-template-columns:1fr; }
+    .bill-list-head { align-items:stretch; flex-direction:column; gap:12px; padding:16px; }
+    .bill-list-head > div:first-child { justify-content:space-between; }
+    .bill-list-head__controls { align-items:stretch; flex-direction:column; }
+    .bill-order-switch { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .bill-page-size { justify-content:flex-end; }
+    .owner-bills-toolbar { grid-template-columns:1fr; }
+    .owner-bills-footer { align-items:stretch; flex-direction:column; }
+    .owner-bills-footer__pages { justify-content:space-between; }
+    .owner-bills-footer button.owner-bills-all { width:100%; }
     .export-download-grid { grid-template-columns:1fr; }
   }
 }

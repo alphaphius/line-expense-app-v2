@@ -113,6 +113,23 @@ test('bill owner checkbox selection drives both list filters and exports', async
   assert.match(preview, /filters\.owner_ids\.includes\(row\.source_user_id\)/);
 });
 
+test('bill tables provide image preview, date-band grouping, page sizes, sort controls, and owner drilldown', async () => {
+  const [html, app, css, masters] = await Promise.all([
+    read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'), read('server/actions/masters.mjs'),
+  ]);
+  assert.match(html, /id="bill-page-size"/);
+  assert.match(html, /data-bill-order="created_at:desc"/);
+  assert.match(html, /data-bill-order="document_date:desc"/);
+  assert.match(app, /function billPreviewButton/);
+  assert.match(app, /function rowsWithDateBands/);
+  assert.match(app, /function openOwnerBills/);
+  assert.match(app, /page_size:\s*Number\(document\.getElementById\('bill-page-size'\)\.value\)/);
+  assert.match(css, /\.bill-date-band--a/);
+  assert.match(css, /\.owner-bills-table/);
+  assert.match(masters, /preview_doc_id/);
+  assert.match(masters, /aggregateOwners/);
+});
+
 test('secondary navigation exposes protected Main App, Stock App, Database, and Reports access', async () => {
   const [html, app, css, preview] = await Promise.all([
     read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'), read('scripts/dev-server.mjs'),
