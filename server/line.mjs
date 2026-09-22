@@ -64,6 +64,15 @@ async function pushWithRetry(target, messages) {
   throw lastError;
 }
 
+async function notifyLine(replyToken,target,messages) {
+  if(replyToken){try{return await reply(replyToken,messages);}catch(error){if(!target)throw error;}}
+  return pushWithRetry(target,messages);
+}
+
+async function acknowledgeImage(replyToken,target) {
+  return notifyLine(replyToken,target,[message('ได้รับรูปบิลแล้ว กำลังบันทึกรูป…')]);
+}
+
 async function reserveEvent(event) {
   const eventId=clean(event.webhookEventId,160)||crypto.createHash('sha256').update(JSON.stringify(event)).digest('hex');
   const source=event.source||{};
@@ -195,9 +204,9 @@ async function processSession(sessionId,userId,contextId,replyToken,source) {
   const session=await requireSession(sessionId,userId,contextId);
   if(number(session.received_pages)!==number(session.expected_pages))throw new Error('จำนวนรูปยังไม่ครบตามที่ระบุ');
   if(!session.project_id||!session.company_id)throw new Error('กรุณาเลือกโครงการและบริษัทให้ครบ');
-  if(!config.geminiApiKey){await reply(replyToken,[message('ยังวิเคราะห์ไม่ได้ เพราะ NAS ยังไม่ได้ตั้งค่า GEMINI_API_KEY รูปยังถูกเก็บไว้และเลือกตัวเลือกเดิมซ้ำได้หลังตั้งค่าแล้ว')]);return;}
+  if(!config.geminiApiKey){await notifyLine(replyToken,contextId,[message('ยังวิเคราะห์ไม่ได้ เพราะ NAS ยังไม่ได้ตั้งค่า GEMINI_API_KEY รูปยังถูกเก็บไว้และเลือกตัวเลือกเดิมซ้ำได้หลังตั้งค่าแล้ว')]);return;}
   await execute("UPDATE upload_sessions SET status='PROCESSING',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-  await reply(replyToken,[message('รับข้อมูลครบแล้ว กำลังให้ Gemini อ่านและบีบอัดบิล กรุณารอสักครู่…')]);
+  await notifyLine(replyToken,contextId,[message('รับข้อมูลครบแล้ว กำลังให้ Gemini อ่านและบีบอัดบิล กรุณารอสักครู่…')]);
   const pages=await select('SELECT * FROM line_upload_pages WHERE session_id=:id ORDER BY page_no',{id:sessionId});
   let billCreated=false;
   try {
@@ -225,15 +234,17 @@ async function handleImage(event,userId,contextId) {
   if(session&&['PROCESSING','AWAITING_PROJECT','AWAITING_COMPANY'].includes(session.status)){await reply(event.replyToken,[message('กรุณาทำรายการเดิมให้เสร็จก่อน หรือพิมพ์ “ยกเลิก” เพื่อเริ่มใหม่')]);return;}
   if(!session)session=await createSession(userId,contextId);
   const received=number(session.received_pages),expected=number(session.expected_pages);
+  if(session.status==='AWAITING_PAGE_COUNT'&&received>0){await reply(event.replyToken,[pageCountMessage(session.session_id,received,await getQuickSettings())]);return;}
   if(expected&&received>=expected){await reply(event.replyToken,[message('ได้รับรูปครบแล้ว กรุณาเลือกโครงการ/บริษัท หรือพิมพ์ “ยกเลิก”')]);return;}
+  await acknowledgeImage(event.replyToken,contextId);
   await saveLineImage(session,clean(event.message.id,160),received+1);
   const next=received+1;
   const status=!expected?'AWAITING_PAGE_COUNT':next>=expected?'AWAITING_PROJECT':'COLLECTING_PAGES';
   await execute('UPDATE upload_sessions SET received_pages=:received,status=:status,updated_at=:updated WHERE session_id=:id',{id:session.session_id,received:next,status,updated:nowSql()});
-  if(!expected){await reply(event.replyToken,[pageCountMessage(session.session_id,next,await getQuickSettings())]);return;}
-  if(next<expected){await reply(event.replyToken,[message(`ได้รับหน้า ${next}/${expected} แล้ว กรุณาส่งหน้าถัดไป`)]);return;}
-  if(session.project_id&&session.company_id)await processSession(session.session_id,userId,contextId,event.replyToken,event.source);
-  else await reply(event.replyToken,[await projectSelectionMessage(session.session_id)]);
+  if(!expected){await pushWithRetry(contextId,[pageCountMessage(session.session_id,next,await getQuickSettings())]);return;}
+  if(next<expected){await pushWithRetry(contextId,[message(`ได้รับหน้า ${next}/${expected} แล้ว กรุณาส่งหน้าถัดไป`)]);return;}
+  if(session.project_id&&session.company_id)await processSession(session.session_id,userId,contextId,'',event.source);
+  else await pushWithRetry(contextId,[await projectSelectionMessage(session.session_id)]);
 }
 
 async function handlePostback(event,userId,contextId) {

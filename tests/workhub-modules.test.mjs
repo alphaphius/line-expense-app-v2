@@ -257,7 +257,9 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
 test('report navigation uses descriptive site choices, device-local fiscal filters, assignment drill-down, and province pin labels', async () => {
   const [reports,styles]=await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
   assert.match(reports,/function siteChoiceLabel/);
-  assert.match(reports,/site\?\.id\|\|'-'.*site\?\.siteCode.*site\?\.village/s);
+  assert.match(reports,/function siteCodeValue/);
+  assert.match(reports,/legacyNameIsCode/);
+  assert.match(reports,/site\?\.id\|\|'-'.*siteCodeValue\(site\).*site\?\.village/s);
   assert.match(reports,/siteOptionRows\(available,site\.uid\)/);
   assert.match(reports,/siteOptionRows\(sites,site\.uid\)/);
   assert.match(reports,/fiscalYearFilterExplicit/);
@@ -273,6 +275,15 @@ test('report navigation uses descriptive site choices, device-local fiscal filte
   assert.match(styles,/\.report-group-filters/);
   assert.match(styles,/--province-color/);
   assert.match(styles,/\.site-daily-shortcut\{right:-1px;bottom:-1px/);
+});
+
+test('legacy site rows display their real compact Site Code instead of repeating Site ID', async () => {
+  const reports=await loadReportsCore();
+  const legacy={id:'69A_I4',siteCode:'69A_I4',name:'MSMLan022I',village:'บ้านแม่แงะ'};
+  assert.equal(reports.siteCodeValue(legacy),'MSMLan022I');
+  assert.equal(reports.siteChoiceLabel(legacy),'69A_I4-MSMLan022I-บ้านแม่แงะ');
+  assert.equal(reports.siteCodeValue({id:'SITE-A',siteCode:'SITE-A',name:'ไซต์ A โรงไฟฟ้า'}),'SITE-A');
+  assert.equal(reports.siteCodeValue({id:'SITE-B',siteCode:'DMR-B',name:'ไซต์ B'}),'DMR-B');
 });
 
 test('report CSV entry is scoped to assigned equipment and includes prefilled identity columns', async () => {
