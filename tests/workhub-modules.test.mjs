@@ -365,16 +365,32 @@ test('report management supports three-character group icons and password-protec
   assert.match(styles,/\.entity-selection-bar\{/);
 });
 
-test('Daily Report uses a full-month two-column workspace and safe XLSX recalculation', async () => {
+test('Daily Report uses a full-month resizable workspace and safe XLSX recalculation', async () => {
   const [reports,styles]=await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
   assert.match(reports,/function monthCalendarDates/);
   assert.match(reports,/class="daily-month-grid"/);
-  assert.match(reports,/class="daily-workspace"/);
+  assert.match(reports,/daily-workspace--resizable/);
+  assert.match(reports,/data-daily-pane-drag/);
   assert.match(reports,/class="daily-entry-pane"/);
   assert.match(reports,/await prepareXlsxForCalculation\(zip\)/);
   assert.match(reports,/replaceXlsxTypedPlaceholderCells/);
-  assert.match(styles,/\.daily-workspace\{display:grid;grid-template-columns:/);
+  assert.match(styles,/\.daily-workspace\.daily-workspace--resizable\{grid-template-columns:/);
   assert.match(styles,/@media\(max-width:700px\)\{[^}]*\.entity-selection-bar/s);
+});
+
+test('Weather reports support multiple site events, two images, recap, calendar indicators, CSV and generated DOCX', async () => {
+  const [reports,styles]=await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
+  assert.match(reports,/weatherReports:\[\]/);
+  assert.match(reports,/รายงานสภาพอากาศ/);
+  assert.match(reports,/data-weather-image="\$\{index\}"/);
+  assert.match(reports,/function weatherDaySummary/);
+  assert.match(reports,/function confirmWeatherSave/);
+  assert.match(reports,/function weatherCsv/);
+  assert.match(reports,/async function createWeatherDocx/);
+  assert.match(reports,/application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/);
+  assert.match(reports,/data-weather-export-form/);
+  assert.match(styles,/\.weather-export-dashboard/);
+  assert.match(styles,/\.weather-image-slot/);
 });
 
 test('equipment saves confirm success and every report export shows progress', async () => {
