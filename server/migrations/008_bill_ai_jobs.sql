@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS bill_ai_jobs (
+  job_id VARCHAR(64) PRIMARY KEY,
+  bill_id VARCHAR(64) NOT NULL,
+  requested_document_date DATE NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'AI_QUEUED',
+  attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  max_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 5,
+  model VARCHAR(120) NOT NULL DEFAULT '',
+  fallback_model VARCHAR(120) NOT NULL DEFAULT '',
+  error_code VARCHAR(80) NOT NULL DEFAULT '',
+  last_error VARCHAR(1000) NOT NULL DEFAULT '',
+  status_message VARCHAR(500) NOT NULL DEFAULT '',
+  next_attempt_at DATETIME(3) NULL,
+  started_at DATETIME(3) NULL,
+  completed_at DATETIME(3) NULL,
+  last_notified_status VARCHAR(32) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  CONSTRAINT fk_bill_ai_jobs_bill FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE,
+  UNIQUE KEY uq_bill_ai_jobs_bill (bill_id),
+  INDEX idx_bill_ai_jobs_queue (status, next_attempt_at, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

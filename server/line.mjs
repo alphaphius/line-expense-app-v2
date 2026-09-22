@@ -210,26 +210,41 @@ async function processSession(sessionId,userId,contextId,replyToken,source) {
   if(!session.project_id||!session.company_id)throw new Error('กรุณาเลือกโครงการและบริษัทให้ครบ');
   if(!config.geminiApiKey){await notifyLine(replyToken,contextId,[message('ยังวิเคราะห์ไม่ได้ เพราะ NAS ยังไม่ได้ตั้งค่า GEMINI_API_KEY รูปยังถูกเก็บไว้และเลือกตัวเลือกเดิมซ้ำได้หลังตั้งค่าแล้ว')]);return;}
   await execute("UPDATE upload_sessions SET status='PROCESSING',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-  await notifyLine(replyToken,contextId,[message('รับข้อมูลครบแล้ว กำลังให้ Gemini อ่านและบีบอัดบิล กรุณารอสักครู่…')]);
+  await notifyLine(replyToken,contextId,[message('รับข้อมูลครบแล้ว กำลังเก็บรูปบน WorkHub กรุณารอสักครู่…')]);
   const pages=await select('SELECT * FROM line_upload_pages WHERE session_id=:id ORDER BY page_no',{id:sessionId});
-  let billCreated=false;
   try {
     const profile=await lineProfile(userId,source);
     await rememberLineUser(userId,profile);
     const files=await Promise.all(pages.map(async page=>({name:page.file_name,dataUrl:`data:${page.mime_type};base64,${(await readBuffer(page.file_path)).toString('base64')}`})));
-    const bill=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_user_name:profile.displayName,source_context_id:contextId});
-    billCreated=true;
+    const job=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_user_name:profile.displayName,source_context_id:contextId});
     await execute("UPDATE upload_sessions SET status='COMPLETED',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
     await cleanupSessionFiles(sessionId);
-    await pushWithRetry(contextId,[billConfirmation(bill)]);
+    await pushWithRetry(contextId,[message(`เก็บรูปบิลครบ ${job.page_count} หน้าแล้ว ✅\nอยู่ในคิวรอ Gemini วิเคราะห์ ระบบจะแจ้งผลกลับมาอัตโนมัติ ไม่ต้องส่งรูปซ้ำ`)]);
   } catch(error) {
-    if(!billCreated){
-      await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-      await push(contextId,[message(`วิเคราะห์บิลไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปยังถูกเก็บไว้ พิมพ์ “ยกเลิก” เพื่อเริ่มใหม่ หรือลองเลือกบริษัทอีกครั้งหลังแก้การตั้งค่า`)]).catch(()=>{});
-    }
+    await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
+    await push(contextId,[message(`เก็บบิลเข้าคิวไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปต้นฉบับจาก LINE ยังถูกเก็บไว้ ลองเลือกบริษัทอีกครั้งได้โดยไม่ต้องส่งรูปใหม่`)]).catch(()=>{});
     error.lineNotified=true;
     throw error;
   }
+}
+
+export async function notifyBillAiJobOutcome(outcome) {
+  const job=outcome?.job;
+  if(!job||job.source!=='LINE'||!job.source_context_id||job.last_notified_status===job.status)return false;
+  if(job.status==='AI_COMPLETED'&&outcome.bill){
+    await pushWithRetry(job.source_context_id,[billConfirmation(outcome.bill)]);
+    return true;
+  }
+  if(job.status==='AI_RETRY'){
+    const when=job.next_attempt_at?new Date(String(job.next_attempt_at).replace(' ','T')+'Z').toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',minute:'2-digit'}):'อีกสักครู่';
+    await pushWithRetry(job.source_context_id,[message(`${job.status_message}\nระบบจะลองอีกครั้งประมาณ ${when} น. รูปถูกเก็บไว้อย่างปลอดภัย ไม่ต้องส่งซ้ำ`)]);
+    return true;
+  }
+  if(job.status==='AI_ACTION_REQUIRED'){
+    await pushWithRetry(job.source_context_id,[message(`${job.status_message}\nรูปยังอยู่ใน WorkHub กรุณาแจ้งผู้ดูแลให้ตรวจการตั้งค่า แล้วกด “ลองวิเคราะห์ใหม่” จากหน้าบิลทั้งหมด`)]);
+    return true;
+  }
+  return false;
 }
 
 async function handleImage(event,userId,contextId) {
@@ -312,7 +327,12 @@ async function handleEvent(event) {
   if(event.type==='message'&&event.message?.type==='text'){
     const text=clean(event.message.text,500);
     if(/^(ยกเลิก|cancel)$/i.test(text)){const cancelled=await cancelSession(userId,contextId);return reply(event.replyToken,[message(cancelled?'ยกเลิกรายการที่กำลังทำแล้ว ส่งรูปใหม่ได้เลยครับ':'ไม่พบรายการที่กำลังทำครับ')]);}
-    if(/^(สถานะ|status)$/i.test(text))return reply(event.replyToken,[message(`WorkHub พร้อมรับบิล${config.geminiApiKey?' และ Gemini พร้อมวิเคราะห์':' แต่ยังไม่ได้ตั้งค่า Gemini บน NAS'}\nส่งรูปบิลเพื่อเริ่มใช้งาน`)]);
+    if(/^(สถานะ|status)$/i.test(text)){
+      const latest=await one(`SELECT j.status,j.status_message,j.next_attempt_at FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
+        WHERE b.source_user_id=:user AND b.source_context_id=:context ORDER BY j.created_at DESC LIMIT 1`,{user:userId,context:contextId});
+      if(latest&&latest.status!=='AI_COMPLETED')return reply(event.replyToken,[message(`${latest.status_message||'ระบบกำลังดำเนินการ'}\nรูปบิลถูกเก็บไว้แล้ว ไม่ต้องส่งซ้ำ`)]);
+      return reply(event.replyToken,[message(`WorkHub พร้อมรับบิล${config.geminiApiKey?' และ Gemini พร้อมวิเคราะห์':' แต่ยังไม่ได้ตั้งค่า Gemini บน NAS'}\nส่งรูปบิลเพื่อเริ่มใช้งาน`)]);
+    }
     return reply(event.replyToken,[message('ส่งรูปบิลเข้ามาได้เลยครับ ระบบจะถามจำนวนหน้า โครงการ และบริษัทก่อนวิเคราะห์\nพิมพ์ “ยกเลิก” เพื่อยกเลิกรายการ')]);
   }
   if(['follow','join'].includes(event.type)&&event.replyToken)return reply(event.replyToken,[message('ยินดีต้อนรับสู่ WorkHub\nส่งรูปบิลเพื่อเริ่มบันทึกค่าใช้จ่ายได้เลยครับ')]);

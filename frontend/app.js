@@ -659,7 +659,7 @@
   }
 
   function statusBadge(status) {
-    const labels = { CONFIRMED: ['ยืนยันแล้ว','bg-emerald-100 text-emerald-700'], NEEDS_REVIEW: ['ตรวจสอบ','bg-amber-100 text-amber-700'], PENDING_CONFIRMATION: ['รอยืนยัน','bg-blue-100 text-blue-700'], REJECTED: ['ยกเลิกแล้ว','bg-red-100 text-red-700'] };
+    const labels = { CONFIRMED: ['ยืนยันแล้ว','bg-emerald-100 text-emerald-700'], NEEDS_REVIEW: ['ตรวจสอบ','bg-amber-100 text-amber-700'], PENDING_CONFIRMATION: ['รอยืนยัน','bg-blue-100 text-blue-700'], REJECTED: ['ยกเลิกแล้ว','bg-red-100 text-red-700'], AI_QUEUED:['เก็บรูปแล้ว · รอ AI','bg-sky-100 text-sky-700'], AI_PROCESSING:['AI กำลังอ่าน','bg-indigo-100 text-indigo-700'], AI_RETRY:['AI หนาแน่น · รอลองใหม่','bg-orange-100 text-orange-700'], AI_ACTION_REQUIRED:['ต้องตรวจการตั้งค่า AI','bg-red-100 text-red-700'], AI_COMPLETED:['AI อ่านเสร็จแล้ว','bg-emerald-100 text-emerald-700'] };
     const item = labels[status] || [status || '-', 'bg-slate-100 text-slate-600'];
     return `<span class="rounded-full px-2 py-1 text-xs ${item[1]}">${item[0]}</span>`;
   }
@@ -885,6 +885,40 @@
     document.getElementById('file-list').innerHTML = files.map((file, index) => `<div class="rounded-xl bg-slate-100 p-3 text-sm"><span class="font-medium">หน้า ${index + 1}</span><p class="truncate text-xs text-slate-500">${escapeHtml(file.name)} · ${(file.size/1048576).toFixed(2)} MB</p></div>`).join('');
   }
 
+  function billAiStatusText(job) {
+    const next = job.next_attempt_at ? thaiDateTime(job.next_attempt_at) : '';
+    if (job.status === 'AI_QUEUED') return ['เก็บรูปเรียบร้อยแล้ว', 'อยู่ในคิวรอ Gemini วิเคราะห์ ไม่ต้องอัปโหลดซ้ำ'];
+    if (job.status === 'AI_PROCESSING') return ['Gemini กำลังอ่านบิล', `กำลังวิเคราะห์ครั้งที่ ${Number(job.attempts || 1)}`];
+    if (job.status === 'AI_RETRY') return ['Gemini มีผู้ใช้งานหนาแน่น', `${job.status_message || 'ระบบจะลองใหม่อัตโนมัติ'}${next ? ` · ครั้งถัดไป ${next}` : ''}`];
+    if (job.status === 'AI_ACTION_REQUIRED') return ['ต้องให้ผู้ดูแลตรวจสอบ', job.status_message || 'รูปยังถูกเก็บไว้ สามารถสั่งลองใหม่ได้ภายหลัง'];
+    return ['กำลังติดตามสถานะบิล', job.status_message || 'รูปถูกเก็บไว้ใน WorkHub แล้ว'];
+  }
+
+  async function waitForBillAiJob(initialJob) {
+    let job = initialJob;
+    for (let round = 0; round < 30; round += 1) {
+      const [title, detail] = billAiStatusText(job);
+      showActivityToast(title, detail, job.status === 'AI_RETRY' ? 'warning' : undefined);
+      if (job.status === 'AI_COMPLETED') return gas('getBillDetail', job.bill_id);
+      if (job.status === 'AI_ACTION_REQUIRED') {
+        hideActivityToast();
+        const decision = await Swal.fire({
+          icon:'warning', title:'รูปบิลถูกเก็บไว้แล้ว', text:job.status_message || 'Gemini ยังวิเคราะห์ไม่ได้',
+          footer:'ไม่ต้องอัปโหลดรูปซ้ำ รายการนี้ยังอยู่ในหน้าบิลทั้งหมด',
+          showCancelButton:true, confirmButtonText:'ลองวิเคราะห์ใหม่', cancelButtonText:'ติดตามภายหลัง', confirmButtonColor:'#8f5f42',
+        });
+        if (!decision.isConfirmed) return null;
+        job = await gas('retryBillAiJob', job.job_id);
+        continue;
+      }
+      await new Promise(resolve => window.setTimeout(resolve, 3000));
+      job = await gas('getBillAiJob', job.job_id);
+    }
+    hideActivityToast();
+    await Swal.fire({ icon:'info', title:'ระบบยังดำเนินการอยู่', html:'รูปบิลถูกเก็บไว้แล้วและ Gemini จะทำงานต่ออัตโนมัติ<br><strong>ปิดหน้านี้ได้โดยไม่ต้องส่งรูปซ้ำ</strong><br>ติดตามสถานะได้ในเมนู “บิลทั้งหมด”', confirmButtonColor:'#8f5f42' });
+    return null;
+  }
+
   async function submitUpload(event) {
     event.preventDefault();
     const files = [...document.getElementById('bill-files').files];
@@ -904,9 +938,9 @@
         showActivityToast('กำลังบีบอัดรูป…', detail);
         if (submitButton) submitButton.textContent = `เตรียมรูป ${progress.completed}/${progress.total}`;
       });
-      showActivityToast('กำลังวิเคราะห์บิล…', 'อัปโหลดไฟล์ขนาดเล็กและให้ Gemini อ่านข้อมูล');
-      if (submitButton) submitButton.textContent = 'Gemini กำลังวิเคราะห์…';
-      const bill = await window.V2Api.callWithRequestId('submitBillPages', state.uploadRequestId, {
+      showActivityToast('กำลังเก็บรูปบิล…', 'เมื่อเก็บสำเร็จแล้วสามารถปิดหน้านี้ได้ ระบบจะวิเคราะห์ต่อเอง');
+      if (submitButton) submitButton.textContent = 'กำลังเก็บรูป…';
+      const job = await window.V2Api.callWithRequestId('submitBillPages', state.uploadRequestId, {
         project_id: document.getElementById('upload-project').value,
         company_id: document.getElementById('upload-company').value,
         document_date: document.getElementById('upload-document-date').value,
@@ -914,17 +948,29 @@
       });
       state.uploadRequestId = '';
       document.getElementById('upload-form').reset(); document.getElementById('file-list').innerHTML = ''; await bootstrap();
-      await showBillResult(bill);
+      const bill = await waitForBillAiJob(job);
+      if (bill) { await bootstrap(); await showBillResult(bill); }
       hideActivityToast();
     } catch (error) {
       hideActivityToast();
-      Swal.fire({ icon:'error', title:'วิเคราะห์ไม่สำเร็จ', text:error.message });
+      Swal.fire({ icon:'error', title:'รับบิลไม่สำเร็จ', text:error.message, footer:'หากขึ้นข้อความว่าเก็บรูปสำเร็จแล้วก่อนหน้านี้ ไม่ต้องอัปโหลดซ้ำ ให้ตรวจสถานะใน “บิลทั้งหมด”' });
     } finally {
-      if (submitButton) { submitButton.disabled = false; submitButton.textContent = submitButton.dataset.originalText || 'วิเคราะห์บิลด้วย Gemini'; }
+      if (submitButton) { submitButton.disabled = false; submitButton.textContent = submitButton.dataset.originalText || 'เก็บและวิเคราะห์บิล'; }
     }
   }
 
   async function showBillResult(bill, options = {}) {
+    if (['AI_QUEUED','AI_PROCESSING','AI_RETRY','AI_ACTION_REQUIRED'].includes(bill.status)) {
+      const [title, detail] = billAiStatusText({ status:bill.status, status_message:bill.ai_status_message, next_attempt_at:bill.ai_next_attempt_at, attempts:bill.ai_attempts });
+      const canRetry = bill.status === 'AI_ACTION_REQUIRED' && bill.ai_job_id;
+      const result = await Swal.fire({ icon:canRetry?'warning':'info', title, text:detail, footer:'รูปบิลถูกเก็บไว้แล้ว ไม่ต้องอัปโหลดซ้ำ', showCancelButton:canRetry, confirmButtonText:canRetry?'ลองวิเคราะห์ใหม่':'ปิด', cancelButtonText:'ปิด', confirmButtonColor:'#8f5f42' });
+      if (canRetry && result.isConfirmed) {
+        const job = await gas('retryBillAiJob', bill.ai_job_id);
+        const completed = await waitForBillAiJob(job);
+        if (completed) return showBillResult(completed, options);
+      }
+      return { action:'pending', billId:bill.bill_id };
+    }
     const isDeleted = bill.status === 'REJECTED';
     const needsReview = bill.needs_review === true || String(bill.needs_review).toLowerCase() === 'true';
     const warning = needsReview ? `<div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-900"><strong class="block">จุดที่ควรตรวจสอบ</strong><span class="mt-1 block">${escapeHtml(bill.review_reasons || 'กรุณาตรวจสอบข้อมูลก่อน')}</span></div>` : '';

@@ -8,7 +8,7 @@ import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, in
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
 import { billConfirmation, billSavedConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
-import { addressesMatch, companyNamesMatch, normalizeCurrentYearBillDate, normalizeQualityScore } from '../server/actions/bills.mjs';
+import { addressesMatch, billAiRetryDelayMs, classifyGeminiFailure, companyNamesMatch, normalizeCurrentYearBillDate, normalizeQualityScore } from '../server/actions/bills.mjs';
 import { buildReceiptAiRequest, normalizeReceiptAiResult } from '../server/actions/receipts.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -64,6 +64,21 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
 test('database migrations ignore macOS metadata sidecar files', async () => {
   const source = await read('server/db.mjs');
   assert.match(source, /\^\\d\{3\}_\[a-z0-9_\]\+\\\.sql\$/i);
+});
+
+test('bill OCR persists a durable queue and reports retryable Gemini states', async () => {
+  const [migration,bills,server,line,frontend]=await Promise.all([
+    read('server/migrations/008_bill_ai_jobs.sql'),read('server/actions/bills.mjs'),read('server/server.mjs'),read('server/line.mjs'),read('frontend/app.js'),
+  ]);
+  assert.match(migration,/CREATE TABLE IF NOT EXISTS bill_ai_jobs/);
+  assert.match(bills,/processNextBillAiJob/);
+  assert.match(bills,/geminiFallbackModel/);
+  assert.match(server,/billAiTimer/);
+  assert.match(line,/ไม่ต้องส่งรูปซ้ำ/);
+  assert.match(frontend,/waitForBillAiJob/);
+  assert.equal(classifyGeminiFailure({geminiStatus:503,message:'high demand'}).code,'GEMINI_HIGH_DEMAND');
+  assert.equal(classifyGeminiFailure({geminiStatus:401,message:'invalid key'}).retryable,false);
+  assert.ok(billAiRetryDelayMs(2)>billAiRetryDelayMs(1));
 });
 
 test('Task, payroll, reports, Daily Report, templates, and report images persist on NAS', async () => {
