@@ -244,14 +244,35 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(styles, /\.field-drag-handle\{/);
   assert.match(styles, /\.report-shell\{grid-template-columns:minmax\(0,1fr\)/);
   assert.match(styles, /\.report-journey-site>\.report-favorite-button\{position:absolute;top:-11px/);
-  assert.match(reports, /labeledMarkerContent\(pin,title\)/);
-  assert.match(reports, /labeledMarkerContent\(pin,item\.mapPinText\|\|item\.id\)/);
+  assert.match(reports, /labeledMarkerContent\(pin,title,province,style\.color\)/);
+  assert.match(reports, /labeledMarkerContent\(pin,item\.mapPinText\|\|item\.id,province,provinceColor\)/);
   assert.match(styles, /\.workhub-map-marker>span\{/);
   assert.match(styles, /\.report-device-row\.is-ready/);
   assert.match(styles, /\.report-journey-site\.is-ready/);
   assert.match(reports, /SITE ID:/);
   assert.match(reports, /Equipment ID/);
   assert.match(reports, /Group ID:/);
+});
+
+test('report navigation uses descriptive site choices, device-local fiscal filters, assignment drill-down, and province pin labels', async () => {
+  const [reports,styles]=await Promise.all([read('frontend/reports.js'),read('frontend/workhub-modules.css')]);
+  assert.match(reports,/function siteChoiceLabel/);
+  assert.match(reports,/site\?\.id\|\|'-'.*site\?\.siteCode.*site\?\.village/s);
+  assert.match(reports,/siteOptionRows\(available,site\.uid\)/);
+  assert.match(reports,/siteOptionRows\(sites,site\.uid\)/);
+  assert.match(reports,/fiscalYearFilterExplicit/);
+  assert.match(reports,/data-group-year-filter/);
+  assert.match(reports,/data-group-years-all/);
+  assert.match(reports,/data-group-years-none/);
+  assert.match(reports,/data-assignment-label-mode/);
+  assert.match(reports,/data-assignment-type-open/);
+  assert.match(reports,/data-assignment-equipment-open/);
+  assert.match(reports,/data-assignment-equipment-remove/);
+  assert.match(reports,/provinceLabel\.textContent/);
+  assert.match(styles,/\.assignment-site-list/);
+  assert.match(styles,/\.report-group-filters/);
+  assert.match(styles,/--province-color/);
+  assert.match(styles,/\.site-daily-shortcut\{right:-1px;bottom:-1px/);
 });
 
 test('report CSV entry is scoped to assigned equipment and includes prefilled identity columns', async () => {
