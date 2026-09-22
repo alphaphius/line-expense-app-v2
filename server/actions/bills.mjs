@@ -19,15 +19,22 @@ const companyNameCore = value => thaiNormalize(value)
   .replace(/สาขาที่\d+/g, '')
   .replace(/สาขา/g, '');
 
-export function companyNamesMatch(expectedName, actualName, expectedBranch = '') {
+export function companyNamesMatch(expectedName, actualName, expectedBranch = '', expectedTax = '', actualTax = '') {
   const expected = thaiNormalize(`${expectedName || ''}${expectedBranch || ''}`);
   const actual = thaiNormalize(actualName);
   if (!expected || !actual) return false;
   if (expected.includes('มหาชน') && !actual.includes('มหาชน')) return false;
-  if (expected.includes('สำนักงานใหญ่') && !actual.includes('สำนักงานใหญ่')) return false;
   const expectedCore = companyNameCore(expectedName);
   const actualCore = companyNameCore(actualName);
-  return expectedCore.length >= 6 && expectedCore === actualCore;
+  if (expectedCore.length < 6 || expectedCore !== actualCore) return false;
+  if (expected.includes('สำนักงานใหญ่') && !actual.includes('สำนักงานใหญ่')) {
+    const expectedTaxId = taxId(expectedTax);
+    const actualTaxId = taxId(actualTax);
+    // OCR มักตัดคำในวงเล็บท้ายชื่อออก แม้ข้อความบนบิลมีอยู่จริง
+    // ยอมให้ผ่านได้เฉพาะเมื่อแกนชื่อเท่ากันทุกตัวและเลขภาษี 13 หลักตรงกันเท่านั้น
+    return !!expectedTaxId && expectedTaxId === actualTaxId;
+  }
+  return true;
 }
 
 function bangkokDateParts(date = new Date()) {
@@ -197,7 +204,7 @@ export async function submitBillPages(payload = {}) {
     const analysis=await analyzeWithGemini(images,{companies,categories,billId,receivedDate,requestedDate});
     const targetTax=taxId(company.tax_id); const buyerTax=taxId(analysis.buyer_tax_id);
     const taxMatch=!!targetTax&&targetTax===buyerTax;
-    const companyMatch=companyNamesMatch(company.company_name,analysis.buyer_name,company.branch_name);
+    const companyMatch=companyNamesMatch(company.company_name,analysis.buyer_name,company.branch_name,company.tax_id,buyerTax);
     const addressMatch=addressesMatch(company.address,analysis.buyer_address);
     const duplicateKey=[taxId(analysis.vendor_tax_id)||thaiNormalize(analysis.vendor_name),clean(analysis.document_no,160),analysis.document_date,number(analysis.grand_total).toFixed(2)].join('|');
     const duplicate=await one("SELECT bill_id FROM bills WHERE duplicate_key=:key AND status<>'REJECTED' LIMIT 1",{key:duplicateKey});
@@ -232,7 +239,7 @@ export async function repairAddressMatchFlags() {
     WHERE b.status<>'REJECTED'`);
   let repaired = 0;
   for (const row of rows) {
-    const companyMatch = companyNamesMatch(row.company_name, row.buyer_name, row.branch_name);
+    const companyMatch = companyNamesMatch(row.company_name, row.buyer_name, row.branch_name, row.company_tax_id, row.buyer_tax_id);
     const taxMatch = !!taxId(row.company_tax_id) && taxId(row.company_tax_id) === taxId(row.buyer_tax_id);
     const addressMatch = addressesMatch(row.company_address, row.buyer_address);
     let reasons = [];
@@ -256,7 +263,7 @@ export async function repairAddressMatchFlags() {
   return repaired;
 }
 
-export async function updateBill(payload={},actor='WEB'){const id=clean(payload.bill_id,64);const before=await one('SELECT * FROM bills WHERE bill_id=:id',{id});if(!before)throw apiError('BILL_NOT_FOUND','ไม่พบบิล');if(before.status==='REJECTED')throw apiError('BILL_REJECTED','กรุณากู้คืนบิลก่อนแก้ไข');const patch={};for(const field of BILL_FIELDS)if(Object.hasOwn(payload,field)){if(['subtotal','discount','vat_rate','vat_amount','withholding_tax','grand_total'].includes(field))patch[field]=number(payload[field]);else if(field==='document_date')patch[field]=normalizeCurrentYearBillDate(payload[field]);else if(field==='due_date')patch[field]=sqlDate(payload[field]);else if(['vendor_tax_id','buyer_tax_id'].includes(field))patch[field]=taxId(payload[field]);else patch[field]=clean(payload[field],['description','notes','vendor_address','buyer_address'].includes(field)?2000:255);}if(Object.hasOwn(payload,'source_user_id')){const ownerId=clean(payload.source_user_id,160);const owner=await billOwner(ownerId);if(!owner)throw apiError('BILL_OWNER_REQUIRED','กรุณาเลือกเจ้าของบิลจากรายชื่อผู้ที่เคยส่งบิลผ่าน LINE');patch.source_user_id=owner.user_id;patch.source_user_name=clean(owner.owner_name,255)||'ผู้ส่งผ่าน LINE';}if(!patch.project_id&&!before.project_id||!patch.company_id&&!before.company_id)throw apiError('REQUIRED_FIELDS','กรุณาเลือกโครงการและบริษัท');const company=await one('SELECT * FROM companies WHERE company_id=:id',{id:patch.company_id||before.company_id});const effective={...before,...patch};patch.tax_id_match=company&&taxId(company.tax_id)===taxId(effective.buyer_tax_id)?1:0;patch.company_match=company&&companyNamesMatch(company.company_name,effective.buyer_name,company.branch_name)?1:0;patch.address_match=company&&addressesMatch(company.address,effective.buyer_address)?1:0;patch.needs_review=!patch.company_match||!patch.tax_id_match||!patch.address_match||!effective.document_date||!effective.vendor_name?1:0;patch.status=patch.needs_review?'NEEDS_REVIEW':'PENDING_CONFIRMATION';patch.updated_at=nowSql();const columns=Object.keys(patch);await execute(`UPDATE bills SET ${columns.map(key=>`${key}=:${key}`).join(',')} WHERE bill_id=:bill_id`,{...patch,bill_id:id});await execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (:log,\'bill\',:id,\'UPDATE\',:actor,:before,:after,:created)',{log:uuid(),id,actor,before:JSON.stringify(publicRow(before)),after:JSON.stringify(patch),created:nowSql()});return getBillDetail(id);}
+export async function updateBill(payload={},actor='WEB'){const id=clean(payload.bill_id,64);const before=await one('SELECT * FROM bills WHERE bill_id=:id',{id});if(!before)throw apiError('BILL_NOT_FOUND','ไม่พบบิล');if(before.status==='REJECTED')throw apiError('BILL_REJECTED','กรุณากู้คืนบิลก่อนแก้ไข');const patch={};for(const field of BILL_FIELDS)if(Object.hasOwn(payload,field)){if(['subtotal','discount','vat_rate','vat_amount','withholding_tax','grand_total'].includes(field))patch[field]=number(payload[field]);else if(field==='document_date')patch[field]=normalizeCurrentYearBillDate(payload[field]);else if(field==='due_date')patch[field]=sqlDate(payload[field]);else if(['vendor_tax_id','buyer_tax_id'].includes(field))patch[field]=taxId(payload[field]);else patch[field]=clean(payload[field],['description','notes','vendor_address','buyer_address'].includes(field)?2000:255);}if(Object.hasOwn(payload,'source_user_id')){const ownerId=clean(payload.source_user_id,160);const owner=await billOwner(ownerId);if(!owner)throw apiError('BILL_OWNER_REQUIRED','กรุณาเลือกเจ้าของบิลจากรายชื่อผู้ที่เคยส่งบิลผ่าน LINE');patch.source_user_id=owner.user_id;patch.source_user_name=clean(owner.owner_name,255)||'ผู้ส่งผ่าน LINE';}if(!patch.project_id&&!before.project_id||!patch.company_id&&!before.company_id)throw apiError('REQUIRED_FIELDS','กรุณาเลือกโครงการและบริษัท');const company=await one('SELECT * FROM companies WHERE company_id=:id',{id:patch.company_id||before.company_id});const effective={...before,...patch};patch.tax_id_match=company&&taxId(company.tax_id)===taxId(effective.buyer_tax_id)?1:0;patch.company_match=company&&companyNamesMatch(company.company_name,effective.buyer_name,company.branch_name,company.tax_id,effective.buyer_tax_id)?1:0;patch.address_match=company&&addressesMatch(company.address,effective.buyer_address)?1:0;patch.needs_review=!patch.company_match||!patch.tax_id_match||!patch.address_match||!effective.document_date||!effective.vendor_name?1:0;patch.status=patch.needs_review?'NEEDS_REVIEW':'PENDING_CONFIRMATION';patch.updated_at=nowSql();const columns=Object.keys(patch);await execute(`UPDATE bills SET ${columns.map(key=>`${key}=:${key}`).join(',')} WHERE bill_id=:bill_id`,{...patch,bill_id:id});await execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (:log,\'bill\',:id,\'UPDATE\',:actor,:before,:after,:created)',{log:uuid(),id,actor,before:JSON.stringify(publicRow(before)),after:JSON.stringify(patch),created:nowSql()});return getBillDetail(id);}
 
 async function setBillStatus(id,status,actor){const before=await one('SELECT * FROM bills WHERE bill_id=:id',{id:clean(id,64)});if(!before)throw apiError('BILL_NOT_FOUND','ไม่พบบิล');const timestamp=nowSql();const patch=status==='CONFIRMED'?{status,needs_review:0,confirmed_at:timestamp,updated_at:timestamp}:status==='REJECTED'?{status,needs_review:0,confirmed_at:before.confirmed_at||null,updated_at:timestamp}:{status:'NEEDS_REVIEW',needs_review:1,confirmed_at:null,updated_at:timestamp};await execute('UPDATE bills SET status=:status,needs_review=:needs_review,confirmed_at=:confirmed_at,updated_at=:updated_at WHERE bill_id=:id',{...patch,id});await execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (:log,\'bill\',:id,:action,:actor,:before,:after,:created)',{log:uuid(),id,action:status,actor:clean(actor||'WEB',160),before:JSON.stringify(publicRow(before)),after:JSON.stringify(patch),created:timestamp});return getBillDetail(id);}
 export const confirmBill=(id,actor)=>setBillStatus(id,'CONFIRMED',actor);

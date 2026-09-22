@@ -949,7 +949,7 @@
 
   function billSummaryHtml(bill) {
     const items = (bill.items || []).map(item => `<tr><td>${escapeHtml(item.line_no)}</td><td>${escapeHtml(item.description)}</td><td class="text-right">${Number(item.quantity)||0} ${escapeHtml(item.unit||'')}</td><td class="text-right">${money(item.unit_price)}</td><td class="text-right">${money(item.amount)}</td></tr>`).join('');
-    const documents = (bill.documents || []).map(doc => `<button class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50" data-preview-doc="${escapeHtml(doc.doc_id)}">🧾 หน้า ${escapeHtml(doc.page_no || 1)} · ${escapeHtml(doc.file_name || 'ดูเอกสาร')}<small class="mt-1 block text-slate-400">${escapeHtml(doc.mime_type || 'ไม่ระบุชนิดไฟล์')} · ${doc.size_bytes ? (Number(doc.size_bytes)/1048576).toFixed(2)+' MB' : 'ไม่ระบุขนาด'}</small></button>`).join('');
+    const documents = (bill.documents || []).map(doc => `<button class="bill-document-link" data-preview-doc="${escapeHtml(doc.doc_id)}"><span class="bill-document-link__page">🧾 หน้า ${escapeHtml(doc.page_no || 1)}</span><span class="bill-document-link__name" title="${escapeHtml(doc.file_name || 'ดูเอกสาร')}">${escapeHtml(doc.file_name || 'ดูเอกสาร')}</span><small>${escapeHtml(doc.mime_type || 'ไม่ระบุชนิดไฟล์')} · ${doc.size_bytes ? (Number(doc.size_bytes)/1048576).toFixed(2)+' MB' : 'ไม่ระบุขนาด'}</small></button>`).join('');
     const check = value => value === true || String(value).toLowerCase() === 'true' ? '✅ ตรงกัน' : '⚠️ ไม่ตรง/อ่านไม่พบ';
     return `<div class="max-h-[65vh] space-y-4 overflow-y-auto pr-2 text-left text-sm">
       <section class="bill-review-summary"><div class="min-w-0"><p class="truncate text-lg font-semibold text-slate-900">${escapeHtml(bill.vendor_name || 'ไม่ทราบร้านค้า')}</p><p class="mt-1 text-sm text-slate-500">${escapeHtml(docTypeLabel(bill.doc_type))} · ${escapeHtml(bill.document_no || 'ไม่มีเลขที่เอกสาร')}</p><p class="mt-2 text-sm text-slate-600">${escapeHtml(thaiDate(bill.document_date))}</p></div><div class="text-right"><p class="text-xs font-medium text-slate-500">ยอดสุทธิ</p><p class="mt-1 text-2xl font-semibold text-emerald-700">${money(bill.grand_total)}</p><div class="mt-2">${statusBadge(bill.status)}</div></div></section>
@@ -985,9 +985,9 @@
     try {
       const document = await runBusy(() => gas('getBillDocumentPreview', docId), 'กำลังโหลดเอกสาร…');
       if (document.dataUrl && /^image\//.test(document.mimeType)) {
-        await Swal.fire({ title:document.fileName, imageUrl:document.dataUrl, imageAlt:document.fileName, width:900, confirmButtonText:'ปิด' });
+        await Swal.fire({ title:document.fileName, imageUrl:document.dataUrl, imageAlt:document.fileName, width:900, confirmButtonText:'ปิด', customClass:{ popup:'bill-document-preview', title:'bill-document-preview__title' } });
       } else if (document.dataUrl && document.mimeType === 'application/pdf') {
-        await Swal.fire({ title:document.fileName, html:`<iframe class="h-[70vh] w-full" src="${document.dataUrl}"></iframe>`, width:1000, confirmButtonText:'ปิด' });
+        await Swal.fire({ title:document.fileName, html:`<iframe class="h-[70vh] w-full" src="${document.dataUrl}"></iframe>`, width:1000, confirmButtonText:'ปิด', customClass:{ popup:'bill-document-preview', title:'bill-document-preview__title' } });
       } else if (document.externalUrl) {
         window.open(document.externalUrl, '_blank', 'noopener');
       } else throw new Error('ไฟล์นี้ไม่มีตัวอย่างให้แสดง');
