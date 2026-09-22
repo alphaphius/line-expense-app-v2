@@ -61,6 +61,11 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(line, /openExternalBrowser=1/);
 });
 
+test('database migrations ignore macOS metadata sidecar files', async () => {
+  const source = await read('server/db.mjs');
+  assert.match(source, /\^\\d\{3\}_\[a-z0-9_\]\+\\\.sql\$/i);
+});
+
 test('Task, payroll, reports, Daily Report, templates, and report images persist on NAS', async () => {
   const [schema,actions,api,moduleStore,reports]=await Promise.all([
     fs.readFile(path.join(root,'server/migrations/005_workhub_modules.sql'),'utf8'),

@@ -16,7 +16,9 @@ export const pool = mysql.createPool({
 
 export async function migrate() {
   const migrationDir = new URL('./migrations/', import.meta.url);
-  const names = (await fs.readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
+  const names = (await fs.readdir(migrationDir))
+    .filter(name => /^\d{3}_[a-z0-9_]+\.sql$/i.test(name))
+    .sort();
   const connection = await pool.getConnection();
   try {
     for (const name of names) {
@@ -69,4 +71,3 @@ export async function closeDb() {
 }
 
 export const migrationPath = path.resolve(new URL('./migrations/', import.meta.url).pathname);
-
