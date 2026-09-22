@@ -10,6 +10,8 @@ const MASTER_MAP = Object.freeze({
 
 function enrichBill(row) {
   const bill = publicRow(row);
+  if (bill.owner_display_name) bill.source_user_name = bill.owner_display_name;
+  delete bill.owner_display_name;
   bill.needs_review = bool(bill.needs_review);
   bill.company_match = bill.company_match == null ? false : bool(bill.company_match);
   bill.tax_id_match = bill.tax_id_match == null ? false : bool(bill.tax_id_match);
@@ -40,8 +42,26 @@ export async function ensureDefaults() {
 }
 
 export async function listBillOwners() {
-  const rows = await select("SELECT user_id, display_name, picture_url, last_seen_at FROM line_users WHERE user_id REGEXP '^U[0-9A-Fa-f]{32}$' ORDER BY display_name, last_seen_at DESC LIMIT 500");
+  const rows = await select("SELECT user_id, display_name AS line_display_name, workhub_name, COALESCE(NULLIF(workhub_name, ''), NULLIF(display_name, ''), 'ผู้ส่งผ่าน LINE') AS display_name, picture_url, first_seen_at, last_seen_at FROM line_users WHERE user_id REGEXP '^U[0-9A-Fa-f]{32}$' ORDER BY COALESCE(NULLIF(workhub_name, ''), NULLIF(display_name, '')), last_seen_at DESC LIMIT 500");
   return rows.map(publicRow);
+}
+
+export async function saveBillOwnerName(payload = {}, actor = 'WEB') {
+  const userId = clean(payload.user_id, 160);
+  const workhubName = clean(payload.workhub_name, 255);
+  if (!/^U[0-9A-Fa-f]{32}$/.test(userId)) throw apiError('INVALID_LINE_USER', 'ไม่พบผู้ส่งบิลจาก LINE ที่ต้องการแก้ไข');
+  const timestamp = nowSql();
+  return transaction(async connection => {
+    const [rows] = await connection.execute('SELECT * FROM line_users WHERE user_id = ? FOR UPDATE', [userId]);
+    const before = rows[0];
+    if (!before) throw apiError('LINE_USER_NOT_FOUND', 'ไม่พบผู้ส่งบิลรายนี้ กรุณาให้ผู้ใช้ส่งบิลผ่าน LINE ก่อน');
+    await connection.execute('UPDATE line_users SET workhub_name = ? WHERE user_id = ?', [workhubName, userId]);
+    const effectiveName = workhubName || clean(before.display_name, 255) || 'ผู้ส่งผ่าน LINE';
+    const [updatedBills] = await connection.execute('UPDATE bills SET source_user_name = ? WHERE source_user_id = ?', [effectiveName, userId]);
+    const after = { ...before, workhub_name:workhubName, display_name:effectiveName, line_display_name:before.display_name, updated_bill_count:Number(updatedBills.affectedRows) || 0 };
+    await connection.execute('INSERT INTO audit_logs (log_id, entity_type, entity_id, action, actor, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [uuid(), 'bill_owner', userId, workhubName ? 'RENAME' : 'RESET_NAME', clean(actor, 160), JSON.stringify(publicRow(before)), JSON.stringify(publicRow(after)), timestamp]);
+    return publicRow(after);
+  });
 }
 
 export async function listMasterData() {
@@ -134,8 +154,8 @@ export async function listBills(filters = {}) {
   }
   if (filters.year) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%Y') = :year"); params.year = clean(filters.year, 4); }
   if (filters.month) { where.push("DATE_FORMAT(COALESCE(b.document_date, b.created_at), '%m') = :month"); params.month = clean(filters.month, 2).padStart(2, '0'); }
-  if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, b.source_user_name, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }
-  const from = `FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+  if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, b.source_user_name, lu.display_name, lu.workhub_name, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }
+  const from = `FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
   const count = await one(`SELECT COUNT(*) AS total ${from}`, params);
   const allowedSorts = new Set(['document_date','created_at','grand_total','vendor_name','status','document_no']);
   const sort = allowedSorts.has(filters.sort_by) ? filters.sort_by : 'document_date';
@@ -145,13 +165,13 @@ export async function listBills(filters = {}) {
   const page = Math.max(1, Math.min(pages, Number(filters.page) || 1));
   params.limit = pageSize;
   params.offset = (page - 1) * pageSize;
-  const rows = await select(`SELECT b.*, p.project_name, co.company_name, c.category_name ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC LIMIT :limit OFFSET :offset`, params);
+  const rows = await select(`SELECT b.*, p.project_name, co.company_name, c.category_name, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC LIMIT :limit OFFSET :offset`, params);
   return { rows: rows.map(enrichBill), total: Number(count.total), page, pageSize, pages };
 }
 
 export async function getDashboard(filters = {}) {
   const period = normalizePeriod(filters.period);
-  const all = (await select("SELECT b.*, p.project_name, c.category_name FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN categories c ON c.category_id=b.category_id WHERE b.status <> 'REJECTED' ORDER BY b.document_date DESC, b.created_at DESC")).map(enrichBill);
+  const all = (await select("SELECT b.*, p.project_name, c.category_name, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id WHERE b.status <> 'REJECTED' ORDER BY b.document_date DESC, b.created_at DESC")).map(enrichBill);
   const periodRows = all.filter(row => String(row.document_date || row.created_at).slice(0, 7) === period);
   const ownerOptions = aggregate(periodRows, ownerLabel);
   const available = ownerOptions.map(item => item.label);

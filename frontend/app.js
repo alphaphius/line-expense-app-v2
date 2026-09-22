@@ -563,8 +563,77 @@
     renderMasterList('project-list', 'project', state.masters.projects, row => [row.project_name, row.project_code]);
     renderMasterList('company-list', 'company', state.masters.companies, row => [row.company_name, row.tax_id]);
     renderMasterList('category-list', 'category', state.masters.categories, row => [row.category_name, row.aliases]);
+    renderBillOwnersMaster();
     document.getElementById('vendor-tags').innerHTML = state.masters.vendors.length ? state.masters.vendors.slice(0, 100).map(v => `<span class="rounded-full bg-slate-100 px-3 py-1 text-xs">${escapeHtml(v.vendor_name)} (${Number(v.use_count) || 0})</span>`).join('') : '<span class="text-sm text-slate-400">ยังไม่มีรายชื่อ</span>';
     document.getElementById('vendor-suggestions').innerHTML = state.masters.vendors.map(v => `<option value="${escapeHtml(v.vendor_name)}"></option>`).join('');
+  }
+
+  function renderBillOwnersMaster() {
+    const rows = Array.isArray(state.masters.billOwners) ? state.masters.billOwners : [];
+    const count = document.getElementById('bill-owner-count');
+    const list = document.getElementById('bill-owner-master-list');
+    if (!count || !list) return;
+    count.textContent = `${rows.length.toLocaleString('th-TH')} คน`;
+    if (!rows.length) {
+      list.innerHTML = '<div class="owner-master-empty"><strong>ยังไม่มีรายชื่อผู้ส่งบิล</strong><span>รายชื่อจะปรากฏหลังจากมีการส่งบิลผ่าน LINE ครั้งแรก</span></div>';
+      return;
+    }
+    list.innerHTML = rows.map(owner => {
+      const effectiveName = owner.display_name || 'ผู้ส่งผ่าน LINE';
+      const lineName = owner.line_display_name || 'ไม่พบชื่อ LINE';
+      const custom = String(owner.workhub_name || '').trim();
+      const initials = Array.from(effectiveName.trim()).slice(0, 2).join('').toUpperCase() || 'WH';
+      const avatar = owner.picture_url
+        ? `<img src="${escapeHtml(owner.picture_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+        : `<span>${escapeHtml(initials)}</span>`;
+      return `<div class="owner-master-row">
+        <div class="owner-master-avatar" aria-hidden="true">${avatar}</div>
+        <div class="owner-master-copy">
+          <div class="owner-master-name"><strong>${escapeHtml(effectiveName)}</strong>${custom ? '<span>ชื่อ WorkHub</span>' : '<span class="is-line">ชื่อจาก LINE</span>'}</div>
+          <p>ชื่อ LINE ล่าสุด: ${escapeHtml(lineName)}</p>
+          <small>LINE ID · …${escapeHtml(String(owner.user_id || '').slice(-8))}</small>
+        </div>
+        <button class="owner-rename-btn" type="button" data-rename-bill-owner="${escapeHtml(owner.user_id)}">${custom ? 'แก้ชื่อ' : 'ตั้งชื่อ'}</button>
+      </div>`;
+    }).join('');
+  }
+
+  async function openBillOwnerNameForm(userId) {
+    const owner = (state.masters.billOwners || []).find(item => item.user_id === userId);
+    if (!owner) return;
+    const lineName = owner.line_display_name || owner.display_name || 'ไม่พบชื่อ LINE';
+    const result = await Swal.fire({
+      title:'ตั้งชื่อที่ใช้ใน WorkHub',
+      html:`<div class="owner-rename-dialog"><p>ชื่อ LINE ล่าสุด</p><strong>${escapeHtml(lineName)}</strong><small>ชื่อนี้ยังเก็บไว้เพื่อยืนยันตัวบุคคล แม้ผู้ใช้จะเปลี่ยนชื่อ LINE ภายหลัง</small></div>`,
+      input:'text',
+      inputValue:owner.workhub_name || '',
+      inputPlaceholder:'เช่น คุณเอก · ทีมสำรวจ',
+      inputAttributes:{ maxlength:'255', autocapitalize:'off', autocomplete:'off' },
+      showCancelButton:true,
+      showDenyButton:Boolean(owner.workhub_name),
+      confirmButtonText:'บันทึกชื่อ',
+      denyButtonText:'กลับไปใช้ชื่อ LINE',
+      cancelButtonText:'ยกเลิก',
+      confirmButtonColor:'#8f5f42',
+      denyButtonColor:'#78675d',
+      showLoaderOnConfirm:true,
+      allowOutsideClick:()=>!Swal.isLoading(),
+      preConfirm:async value => {
+        const name = String(value || '').trim();
+        if (!name) return Swal.showValidationMessage('กรุณากรอกชื่อ หรือกด “กลับไปใช้ชื่อ LINE”');
+        try { return await gas('saveBillOwnerName', { user_id:userId, workhub_name:name }); }
+        catch (error) { Swal.showValidationMessage(error.message); return false; }
+      },
+      preDeny:async () => {
+        try { return await gas('saveBillOwnerName', { user_id:userId, workhub_name:'' }); }
+        catch (error) { Swal.showValidationMessage(error.message); return false; }
+      },
+    });
+    if (!result.isConfirmed && !result.isDenied) return;
+    await bootstrap();
+    const saved = result.value || {};
+    const affected = Number(saved.updated_bill_count) || 0;
+    Swal.fire({ icon:'success', title:result.isDenied?'กลับไปใช้ชื่อ LINE แล้ว':'บันทึกชื่อใหม่แล้ว', text:`ชื่อเจ้าของบิลถูกอัปเดต ${affected.toLocaleString('th-TH')} รายการ`, timer:1800, showConfirmButton:false });
   }
 
   function quickSettingSlots() {
@@ -1200,6 +1269,7 @@
     const add = event.target.closest('[data-add]'); if (add) await openMasterForm(add.dataset.add);
     const edit = event.target.closest('[data-edit]'); if (edit) { const map={project:['projects','project_id'],company:['companies','company_id'],category:['categories','category_id']}; const [list,key]=map[edit.dataset.edit]; await openMasterForm(edit.dataset.edit,state.masters[list].find(x=>String(x[key])===String(edit.dataset.id))||{}); }
     const del = event.target.closest('[data-delete]'); if (del) await deleteMaster(del.dataset.delete,del.dataset.id);
+    const renameOwner = event.target.closest('[data-rename-bill-owner]'); if (renameOwner) await openBillOwnerNameForm(renameOwner.dataset.renameBillOwner);
     const bill = event.target.closest('[data-bill]'); if (bill) await openBill(bill.dataset.bill);
     const preview = event.target.closest('[data-preview-doc]'); if (preview) await previewDocument(preview.dataset.previewDoc);
     const deleteBillButton = event.target.closest('[data-delete-bill]'); if (deleteBillButton) await deleteBillFromWeb(deleteBillButton.dataset.deleteBill);

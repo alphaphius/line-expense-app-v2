@@ -1,0 +1,3 @@
+ALTER TABLE line_users
+  ADD COLUMN IF NOT EXISTS workhub_name VARCHAR(255) NOT NULL DEFAULT '' AFTER display_name;
+

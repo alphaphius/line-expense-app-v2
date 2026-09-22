@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.3 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.4 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -343,6 +343,21 @@
                 <div id="quick-settings-status-2" class="quick-settings-status" role="status" aria-live="polite"></div>
               </form>
             </div>
+          </article>
+          <article class="card owner-settings-card">
+            <div class="owner-settings-card__intro">
+              <div>
+                <p class="eyebrow">BILL OWNERS</p>
+                <h3 class="mt-1 text-xl font-semibold">ชื่อผู้ส่งบิลใน WorkHub</h3>
+                <p class="mt-2 text-sm text-slate-500">ตั้งชื่อที่ทีมงานคุ้นเคยโดยผูกกับ LINE User ID ชื่อจาก LINE จะเก็บไว้เป็นข้อมูลอ้างอิงและไม่ทับชื่อที่ตั้งเอง</p>
+              </div>
+              <span id="bill-owner-count" class="owner-settings-card__count">0 คน</span>
+            </div>
+            <div class="owner-name-guide" role="note">
+              <span aria-hidden="true">i</span>
+              <p><strong>เปลี่ยนครั้งเดียว ใช้ทั้งระบบ</strong> ชื่อใหม่จะแสดงในภาพรวม รายการบิล รายละเอียดบิล ไฟล์ Export และบิลใหม่ที่ส่งเข้ามาครั้งถัดไป</p>
+            </div>
+            <div id="bill-owner-master-list" class="owner-master-list" aria-live="polite"></div>
           </article>
           <div class="grid gap-5 xl:grid-cols-3">
             <div class="master-card"><div class="master-head"><h3>โครงการ</h3><button data-add="project">+ เพิ่ม</button></div><div id="project-list" class="master-list"></div></div>

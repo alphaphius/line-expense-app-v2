@@ -9,9 +9,9 @@ const int = (name, fallback) => {
 
 export const config = Object.freeze({
   appName: 'WorkHub',
-  appVersion: '4.9.3-nas',
+  appVersion: '4.9.4-nas',
   apiVersion: '2.0',
-  schemaVersion: 5,
+  schemaVersion: 7,
   host: process.env.HOST || '0.0.0.0',
   port: int('PORT', 8080),
   dataDir: path.resolve(process.env.DATA_DIR || './.workhub-data'),

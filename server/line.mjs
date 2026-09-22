@@ -339,7 +339,8 @@ export async function backfillLineUsernames(){
     const profile=await lineProfile(row.source_user_id,{});
     if(profile.displayName==='LINE User'){skipped+=1;continue;}
     await rememberLineUser(row.source_user_id,profile);
-    const result=await execute("UPDATE bills SET source_user_name=:name WHERE source='LINE' AND source_user_id=:id",{id:row.source_user_id,name:profile.displayName});
+    const owner=await one("SELECT COALESCE(NULLIF(workhub_name,''),NULLIF(display_name,''),'ผู้ส่งผ่าน LINE') AS owner_name FROM line_users WHERE user_id=:id",{id:row.source_user_id});
+    const result=await execute("UPDATE bills SET source_user_name=:name WHERE source='LINE' AND source_user_id=:id",{id:row.source_user_id,name:owner?.owner_name||profile.displayName});
     updated+=Number(result.affectedRows)||0;
   }
   return{updated,skipped,message:`อัปเดตชื่อผู้ส่งแล้ว ${updated} บิล${skipped?` · อ่านชื่อไม่ได้ ${skipped} คน`:''}`};

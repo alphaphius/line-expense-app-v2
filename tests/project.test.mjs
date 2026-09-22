@@ -33,7 +33,7 @@ const expectedV1Ids = [
   'upload-company', 'upload-form', 'upload-project', 'upload-quick-options',
   'upload-owner', 'upload-document-date',
   'upload-quick-preset', 'uploader-summary-bars', 'uploader-summary-card',
-  'uploader-summary-period', 'vendor-suggestions', 'vendor-tags', 'view-bills',
+  'uploader-summary-period', 'vendor-suggestions', 'vendor-tags', 'bill-owner-master-list', 'bill-owner-count', 'view-bills',
   'view-dashboard', 'view-masters', 'view-system', 'view-title', 'view-upload',
 ];
 
@@ -42,7 +42,7 @@ const expectedV1Calls = [
   'deleteMasterData', 'exportMonthlyBillExcel', 'exportMonthlyBillWord',
   'getBillDetail', 'getBillDetail', 'getBillDetail', 'getBillDocumentPreview', 'getBillOwners', 'getBootstrapData',
   'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills', 'listBills',
-  'listPendingReviewBills', 'restoreBill', 'saveMasterData', 'saveQuickSettings',
+  'listPendingReviewBills', 'restoreBill', 'saveBillOwnerName', 'saveBillOwnerName', 'saveMasterData', 'saveQuickSettings',
   'submitBillPages', 'updateBill', 'verifyDatabaseAccess',
 ];
 

@@ -12,6 +12,7 @@ import { addressesMatch, normalizeQualityScore } from '../server/actions/bills.m
 import { buildReceiptAiRequest, normalizeReceiptAiResult } from '../server/actions/receipts.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+const read = relative => fs.readFile(path.join(root, relative), 'utf8');
 
 async function templateDocx() {
   const zip = new JSZip();
@@ -193,6 +194,22 @@ test('LINE Flex preserves the legacy visual sections, six-page limit, cancel and
   assert.match(savedFlex,/เจ้าของบิล/);
   assert.match(savedFlex,/Fiat Taksakorn/);
   assert.doesNotMatch(flex,/เลขที่เอกสาร|document_no/);
+});
+
+test('bill owner aliases preserve LINE identity and drive old and future bill labels', async () => {
+  const [migration, masters, bills, line, api] = await Promise.all([
+    read('server/migrations/007_line_user_workhub_names.sql'),
+    read('server/actions/masters.mjs'),
+    read('server/actions/bills.mjs'),
+    read('server/line.mjs'),
+    read('server/api.mjs'),
+  ]);
+  assert.match(migration, /workhub_name VARCHAR\(255\)/);
+  assert.match(masters, /display_name AS line_display_name/);
+  assert.match(masters, /UPDATE bills SET source_user_name = \? WHERE source_user_id = \?/);
+  assert.match(bills, /NULLIF\(workhub_name, ''\).*NULLIF\(display_name, ''\)/);
+  assert.match(line, /ON DUPLICATE KEY UPDATE display_name=VALUES\(display_name\)/);
+  assert.match(api, /saveBillOwnerName/);
 });
 
 test('receipt DOCX clones templates, replaces split placeholders, and adds compressed cards', async () => {
