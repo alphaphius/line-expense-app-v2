@@ -1,4 +1,4 @@
-const CACHE_NAME = 'workhub-shell-14';
+const CACHE_NAME = 'workhub-shell-15';
 const SHELL = ['./', './index.html', './styles.css', './workhub-modules.css', './config.js', './api.js', './image-optimizer.js', './protected-access.js', './receipts.js', './workhub-core.js', './module-store.js', './tasks.js', './payroll.js', './report-xlsx.js', './reports.js', './app.js', './pwa.js', './manifest.webmanifest', './icons/app-icon-wh-192.png', './icons/app-icon-wh-512.png', './vendor/sweetalert2.all.min.js', './vendor/chart.umd.js', './vendor/jszip.min.js', './vendor/markerclusterer.umd.js'];
 
 self.addEventListener('install', event => {
@@ -13,15 +13,16 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  const isNavigation = event.request.mode === 'navigate' || event.request.destination === 'document';
   event.respondWith(fetch(event.request).then(response => {
-    if (response.ok && ['script', 'style', 'document', 'manifest'].includes(event.request.destination)) {
+    if (response.ok && !isNavigation && ['script', 'style', 'manifest'].includes(event.request.destination) && url.pathname !== '/config.js') {
       const copy = response.clone();
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
     }
     return response;
   }).catch(() => caches.match(event.request).then(cached => {
     if (cached) return cached;
-    if (event.request.mode === 'navigate' || event.request.destination === 'document') return caches.match('./index.html');
+    if (isNavigation) return caches.match('./index.html');
     return Response.error();
   })));
 });

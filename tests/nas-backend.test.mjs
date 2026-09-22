@@ -56,6 +56,8 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(line, /acknowledgeImage\(event\.replyToken,contextId\)/);
   assert.match(line, /pushWithRetry\(contextId,\[pageCountMessage/);
   assert.match(line, /session\.status==='AWAITING_PAGE_COUNT'&&received>0/);
+  assert.match(line, /label:'ระบบ WorkHub'/);
+  assert.match(line, /openExternalBrowser=1/);
 });
 
 test('Task, payroll, reports, Daily Report, templates, and report images persist on NAS', async () => {

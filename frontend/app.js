@@ -1,8 +1,13 @@
-  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 } };
+  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 }, activeView:'dashboard' };
   const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
   const protectedViews = ['receipts','payroll','tasks','reports'];
   const SIDEBAR_STORAGE_KEY = 'workhub.desktopSidebarCollapsed';
+  const LIVE_REFRESH_INTERVAL_MS = 12000;
+  let liveRefreshTimer = null;
+  let liveRefreshReady = false;
+  let liveRefreshPromise = null;
+  let lastLiveRefreshAt = 0;
 
   function setDesktopSidebarCollapsed(collapsed, persist = true) {
     const isCollapsed = Boolean(collapsed);
@@ -82,6 +87,45 @@
     return window.V2Api.call(method, ...args);
   }
 
+  function hasBlockingEditor() {
+    return Boolean(document.querySelector('dialog[open], .swal2-container'));
+  }
+
+  async function refreshVisibleData(force = false) {
+    if (!liveRefreshReady || document.visibilityState === 'hidden' || (!force && hasBlockingEditor())) return;
+    if (!force && Date.now() - lastLiveRefreshAt < 2500) return;
+    if (liveRefreshPromise) return liveRefreshPromise;
+    const activeView = state.activeView;
+    liveRefreshPromise = (async () => {
+      if (activeView === 'dashboard') {
+        const dashboard = await window.V2Api.call('getDashboard', dashboardRequestPayload_());
+        if (state.activeView !== activeView) return;
+        state.dashboard = dashboard;
+        syncDashboardFilterState_(dashboard);
+        renderDashboard();
+      } else if (activeView === 'bills') {
+        await refreshBillOwners();
+        if (state.activeView !== activeView) return;
+        renderBillOwnerFilter();
+        await loadAllBills(state.billList.page || 1, { silent:true });
+      } else if (activeView === 'receipts' && window.ReceiptModule) {
+        await window.ReceiptModule.refresh?.();
+      }
+      lastLiveRefreshAt = Date.now();
+    })().catch(error => console.warn('WorkHub background refresh failed:', error.message)).finally(() => { liveRefreshPromise = null; });
+    return liveRefreshPromise;
+  }
+
+  function startLiveRefresh() {
+    if (liveRefreshTimer) return;
+    const resume = () => refreshVisibleData(false);
+    liveRefreshTimer = window.setInterval(resume, LIVE_REFRESH_INTERVAL_MS);
+    window.addEventListener('focus', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('online', () => refreshVisibleData(true));
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
+  }
+
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   }
@@ -116,6 +160,7 @@
     document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
     const target = document.getElementById('view-' + view);
     if (!target) return;
+    state.activeView = view;
     target.classList.remove('hidden');
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.toggle('active', el.dataset.view === view));
     const product = expenseViews.indexOf(view) >= 0 ? 'expenses' : view;
@@ -439,7 +484,7 @@
     requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
   }
 
-  async function loadAllBills(page = 1) {
+  async function loadAllBills(page = 1, options = {}) {
     const [sortBy, sortDir] = (document.getElementById('bill-sort').value || 'document_date:desc').split(':');
     const filters = Object.assign(currentBillFilters(), {
       page, page_size: 25, query: document.getElementById('bill-search').value,
@@ -448,7 +493,10 @@
     try {
       state.billList = await gas('listBills', filters);
       renderAllBills();
-    } catch (error) { Swal.fire({ icon:'error', title:'โหลดรายการไม่สำเร็จ', text:error.message }); }
+    } catch (error) {
+      if (!options.silent) Swal.fire({ icon:'error', title:'โหลดรายการไม่สำเร็จ', text:error.message });
+      else throw error;
+    }
   }
 
   function currentBillFilters() {
@@ -1228,6 +1276,8 @@
       document.title = health.appName || 'WorkHub';
       await initializeLiff();
       await bootstrap();
+      liveRefreshReady = true;
+      startLiveRefresh();
       const linkedBillId = window.INITIAL_BILL_ID || '';
       window.setTimeout(() => {
         if(linkedBillId&&window.INITIAL_BILL_EDIT)openBillForEdit(linkedBillId).catch(showFatal);

@@ -115,6 +115,11 @@
     renderRegistry();
   }
 
+  async function refresh() {
+    if (!state.loaded || state.processing || state.selectedFiles.length || state.draftRows.length || document.querySelector('#view-receipts dialog[open]')) return;
+    await refreshRegistry();
+  }
+
   function selectedRegistrationIds() {
     return Array.from(document.querySelectorAll('[data-receipt-select]:checked')).map(input => input.value);
   }
@@ -396,5 +401,5 @@
   }
 
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded',bind) : bind();
-  window.ReceiptModule = Object.freeze({ activate });
+  window.ReceiptModule = Object.freeze({ activate, refresh });
 })();

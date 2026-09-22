@@ -170,7 +170,10 @@ function resultMark(ok){return ok?'✓ ตรงกัน':'! ไม่ตรง
 function row(label,value,color='#44312A'){return{type:'box',layout:'baseline',spacing:'sm',contents:[{type:'text',text:label,color:'#8C756A',size:'sm',flex:4},{type:'text',text:clean(value,300)||'-',color,weight:'bold',size:'sm',align:'end',wrap:true,flex:7}]};}
 
 function billSavedConfirmation(bill){
-  const buttons=config.publicBaseUrl?[{type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'เปิดและแก้ไขบิล',uri:`${config.publicBaseUrl}/?bill_id=${encodeURIComponent(bill.bill_id)}&edit=1`}}]:[];
+  const buttons=config.publicBaseUrl?[
+    {type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'เปิดและแก้ไขบิล',uri:`${config.publicBaseUrl}/?bill_id=${encodeURIComponent(bill.bill_id)}&edit=1`}},
+    {type:'button',style:'primary',color:'#31473A',action:{type:'uri',label:'ระบบ WorkHub',uri:`${config.publicBaseUrl}/?openExternalBrowser=1`}},
+  ]:[];
   return{type:'flex',altText:`บันทึกบิล ${bill.vendor_name||''} เรียบร้อยแล้ว`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'บันทึกบิลเรียบร้อย',color:'#FFFFFF',weight:'bold',size:'xl'},{type:'text',text:'ข้อมูลถูกเพิ่มเข้า WorkHub แล้ว',color:'#DCE9DF',size:'sm',margin:'sm'}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[row('ชื่อร้าน',bill.vendor_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),row('เจ้าของบิล',bill.source_user_name||'ผู้ส่งผ่าน LINE'),row('ยอดสุทธิ',`${moneyText(bill.grand_total)} บาท`)]},...(buttons.length?{footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:buttons}}:{})}};
 }
 
@@ -180,6 +183,7 @@ function billConfirmation(bill) {
   const buttons=[
     {type:'button',style:'primary',color:'#31473A',action:{type:'postback',label:'ยืนยันบิล',data:`action=confirm_bill&bill_id=${bill.bill_id}`,displayText:'ยืนยันบิลนี้'}},
     ...(config.publicBaseUrl?[{type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'แก้ไขข้อมูลบิล',uri:`${config.publicBaseUrl}/?bill_id=${encodeURIComponent(bill.bill_id)}&edit=1`}}]:[]),
+    ...(config.publicBaseUrl?[{type:'button',style:'secondary',color:'#31473A',action:{type:'uri',label:'ระบบ WorkHub',uri:`${config.publicBaseUrl}/?openExternalBrowser=1`}}]:[]),
     {type:'button',style:'secondary',color:'#B84C3F',action:{type:'postback',label:'ยกเลิกบิล',data:`action=cancel_bill&bill_id=${bill.bill_id}`,displayText:'ยกเลิกบิลนี้'}},
   ];
   const verificationColor=bill.needs_review?'#A15A34':'#77703F';

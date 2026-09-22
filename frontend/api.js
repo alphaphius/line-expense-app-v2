@@ -86,6 +86,7 @@
     try {
       const response = await fetch(endpoint + '?requestId=' + encodeURIComponent(requestId), {
         method: 'POST',
+        cache: 'no-store',
         redirect: 'follow',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
