@@ -77,9 +77,9 @@
             <svg class="sidebar-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 8 8-4 8 4-8 4zM4 8v9l8 4 8-4V8M12 12v9"/></svg>
             <span class="sidebar-mode-label">Stock App</span><small>Inventory</small>
           </button>
-          <button id="open-database-btn" class="resource-nav__button" type="button" data-database-url="http://nasgfe1.synology.me/phpmyadmin/index.php?route=/" data-tooltip="Database" aria-label="เปิดฐานข้อมูล MariaDB">
-            <svg class="sidebar-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="7" ry="3"/><path d="M5 5.5v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6M5 11.5v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
-            <span class="sidebar-mode-label">Database</span><small>MariaDB</small>
+          <button class="resource-nav__button" type="button" data-view="ai-usage" data-resource="ai-usage" data-tooltip="AI Usage" aria-label="ตรวจสอบการใช้งาน AI">
+            <svg class="sidebar-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9M10 18V5M16 18v-7M22 18V3"/><path d="M3 21h19M4 9l6-4 6 6 6-8"/></svg>
+            <span class="sidebar-mode-label">AI Usage</span><small>Free Plan</small>
           </button>
           <button class="resource-nav__button" type="button" data-view="reports" data-resource="reports" data-tooltip="รายงาน" aria-label="รายงาน">
             <svg class="sidebar-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 16v-4M12 16V8M15 16v-6"/></svg>
@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.10 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.11 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -389,10 +389,9 @@
 
           <div id="receipt-workspace" class="space-y-5">
             <article class="card receipt-setup-card">
-              <div class="receipt-section-head"><div><span class="step-kicker">01 · เตรียมชุดเอกสาร</span><h3>Template และกลุ่มแรงงาน</h3></div><div class="receipt-setup-actions"><button id="receipt-template-manage-btn" class="secondary-btn" type="button">จัดการ Template</button><button id="receipt-new-group-btn" class="secondary-btn" type="button">+ สร้างกลุ่ม</button></div></div>
-              <div class="receipt-setup-grid">
-                <label class="label">Template ที่ใช้<select id="receipt-template-select" class="field mt-2"><option value="">เลือก Template</option></select></label>
-                <label class="label">กลุ่มแรงงาน / ไซต์งาน<select id="receipt-group-select" class="field mt-2"><option value="">เลือกกลุ่มแรงงาน</option></select></label>
+              <div class="receipt-section-head"><div><span class="step-kicker">01 · เตรียมชุดเอกสาร</span><h3>Template และกลุ่มแรงงานสำหรับนำเข้า</h3><p>อัปโหลด Template เก็บไว้ก่อน และเลือกกลุ่มที่จะรับรายชื่อชุดนี้ ส่วน Template ที่ใช้สร้างเอกสารจะเลือกหลังจากกด Export</p></div><div class="receipt-setup-actions"><button id="receipt-template-manage-btn" class="secondary-btn" type="button">จัดการ Template</button><button id="receipt-new-group-btn" class="secondary-btn" type="button">+ สร้างกลุ่ม</button></div></div>
+              <div class="receipt-setup-grid receipt-setup-grid--single">
+                <label class="label">กลุ่มแรงงาน / ไซต์งานที่จะนำเข้า<select id="receipt-group-select" class="field mt-2"><option value="">เลือกกลุ่มแรงงาน</option></select></label>
               </div>
               <details class="template-uploader">
                 <summary>อัปโหลด Template ใหม่ (DOC/DOCX)</summary>
@@ -443,6 +442,10 @@
 
         <section id="view-reports" class="app-view hidden">
           <div id="report-manager-root" aria-live="polite"></div>
+        </section>
+
+        <section id="view-ai-usage" class="app-view hidden">
+          <div id="ai-usage-root" aria-live="polite"></div>
         </section>
 
         <section id="view-system" class="app-view hidden">

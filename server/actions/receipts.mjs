@@ -96,8 +96,9 @@ async function reportSites() {
   } catch { return []; }
 }
 
-async function groupsWithProjects() {
-  return (await select("SELECT g.*, COALESCE(NULLIF(g.site_code,''),p.project_code,'') AS resolved_site_code, COALESCE(p.project_name,'') AS project_site_name FROM labor_groups g LEFT JOIN projects p ON p.project_id=g.project_id WHERE g.active=1 ORDER BY g.group_name")).map(row=>publicRow({...row,site_name:row.project_site_name||row.group_name}));
+async function groupsWithProjects(activeOnly = true) {
+  const where=activeOnly?'WHERE g.active=1':'';
+  return (await select(`SELECT g.*, COALESCE(NULLIF(g.site_code,''),p.project_code,'') AS resolved_site_code, COALESCE(p.project_name,'') AS project_site_name FROM labor_groups g LEFT JOIN projects p ON p.project_id=g.project_id ${where} ORDER BY g.active DESC,g.group_name`)).map(row=>publicRow({...row,site_name:row.project_site_name||row.group_name}));
 }
 
 function registrationForClient(row, includeSensitive = false) {
@@ -153,6 +154,19 @@ export async function saveLaborGroup(payload={}) {
 
 async function convertDoc(buffer,fileName){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'workhub-doc-'));try{const input=path.join(directory,safeName(fileName,'template.doc'));await fs.writeFile(input,buffer);await run('libreoffice',['--headless','--convert-to','docx','--outdir',directory,input],{timeout:120000,maxBuffer:1024*1024});const output=path.join(directory,path.basename(input).replace(/\.doc$/i,'.docx'));return await fs.readFile(output);}catch(error){throw apiError('DOC_CONVERSION_FAILED',`แปลงไฟล์ DOC ไม่สำเร็จ: ${clean(error.message,300)}`);}finally{await fs.rm(directory,{recursive:true,force:true});}}
 
+async function convertDocxToPdf(buffer,fileName='receipt-preview.docx') {
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'workhub-receipt-preview-'));
+  try{
+    const input=path.join(directory,safeName(fileName,'receipt-preview.docx'));
+    const profile=path.join(directory,'libreoffice-profile');
+    await fs.writeFile(input,buffer);
+    await run('libreoffice',[`-env:UserInstallation=file://${profile}`,'--headless','--convert-to','pdf','--outdir',directory,input],{timeout:180000,maxBuffer:2*1024*1024});
+    const output=path.join(directory,path.basename(input).replace(/\.docx$/i,'.pdf'));
+    return await fs.readFile(output);
+  }catch(error){throw apiError('RECEIPT_PREVIEW_FAILED',`สร้าง Preview เอกสารไม่สำเร็จ: ${clean(error.message,300)}`);}
+  finally{await fs.rm(directory,{recursive:true,force:true});}
+}
+
 export async function saveReceiptTemplate(payload={}) {
   const fileName=safeName(payload.file_name,'template.docx'); const extension=path.extname(fileName).toLowerCase(); const name=clean(payload.template_name||fileName.replace(/\.docx?$/i,''),255);
   if(!['.doc','.docx'].includes(extension))throw apiError('TEMPLATE_FORMAT','รองรับ Template เฉพาะไฟล์ DOC และ DOCX');
@@ -177,7 +191,7 @@ export async function deleteReceiptTemplate(payload={}) {
   return {deleted:true,template_id:id,template_name:template.template_name};
 }
 
-export async function createReceiptBatch(payload={}){const templateId=clean(payload.template_id,64),groupId=clean(payload.group_id,64),total=Math.trunc(number(payload.total_count));if(!await one('SELECT template_id FROM receipt_templates WHERE template_id=:id AND active=1',{id:templateId}))throw apiError('TEMPLATE_REQUIRED','กรุณาเลือก Template');if(!await one('SELECT group_id FROM labor_groups WHERE group_id=:id AND active=1',{id:groupId}))throw apiError('GROUP_REQUIRED','กรุณาเลือกกลุ่มแรงงาน');if(total<1||total>config.receiptMaxBatchCards)throw apiError('BATCH_SIZE',`อัปโหลดได้ครั้งละ 1-${config.receiptMaxBatchCards} รูป`);const id=uuid(),timestamp=nowSql();await execute('INSERT INTO receipt_batches (batch_id,template_id,group_id,status,total_count,processed_count,error_count,created_by,ai_model,last_error,created_at,updated_at) VALUES (:id,:template,:groupId,\'UPLOADING\',:total,0,0,:actor,:model,:error,:created,:updated)',{id,template:templateId,groupId,total,actor:clean(payload.created_by||'WEB',160),model:config.receiptGeminiModel,error:config.receiptGeminiApiKey?'':'ยังไม่ได้ตั้งค่า Gemini API รูปจะเก็บบน NAS และรอผู้ดูแลตั้งค่า',created:timestamp,updated:timestamp});return publicRow(await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id}));}
+export async function createReceiptBatch(payload={}){const groupId=clean(payload.group_id,64),total=Math.trunc(number(payload.total_count));if(!await one('SELECT group_id FROM labor_groups WHERE group_id=:id AND active=1',{id:groupId}))throw apiError('GROUP_REQUIRED','กรุณาเลือกกลุ่มแรงงานที่เปิดใช้งาน');if(total<1||total>config.receiptMaxBatchCards)throw apiError('BATCH_SIZE',`อัปโหลดได้ครั้งละ 1-${config.receiptMaxBatchCards} รูป`);const id=uuid(),timestamp=nowSql();await execute('INSERT INTO receipt_batches (batch_id,template_id,group_id,status,total_count,processed_count,error_count,created_by,ai_model,last_error,created_at,updated_at) VALUES (:id,\'\',:groupId,\'UPLOADING\',:total,0,0,:actor,:model,:error,:created,:updated)',{id,groupId,total,actor:clean(payload.created_by||'WEB',160),model:config.receiptGeminiModel,error:config.receiptGeminiApiKey?'':'ยังไม่ได้ตั้งค่า Gemini API รูปจะเก็บบน NAS และรอผู้ดูแลตั้งค่า',created:timestamp,updated:timestamp});return publicRow(await one('SELECT * FROM receipt_batches WHERE batch_id=:id',{id}));}
 
 async function findDuplicate(nationalId,digest,exclude=''){return one("SELECT registration_id,worker_id,CASE WHEN national_id=:national AND :national<>'' THEN 'NATIONAL_ID' WHEN card_sha256=:digest THEN 'IMAGE' ELSE 'NAME' END AS duplicate_type FROM receipt_registrations WHERE registration_id<>:exclude AND status<>'REJECTED' AND ((national_id=:national AND :national<>'') OR card_sha256=:digest) ORDER BY updated_at DESC LIMIT 1",{national:nationalId,digest,exclude});}
 
@@ -324,15 +338,34 @@ export async function saveReceiptRegistrationEntry(payload={}) {
 }
 
 export async function getPayrollRegistry() {
-  const [groups,workers,sites]=await Promise.all([groupsWithProjects(),select(`SELECT w.*,m.group_id,g.group_name,g.site_code,g.province
+  const [groups,workers,sites]=await Promise.all([groupsWithProjects(false),select(`SELECT w.*,m.group_id,g.group_name,g.site_code,g.province
     FROM workers w LEFT JOIN worker_group_members m ON m.worker_id=w.worker_id AND m.active=1
     LEFT JOIN labor_groups g ON g.group_id=m.group_id WHERE w.status<>'DELETED' ORDER BY w.full_name`),reportSites()]);
   return {groups,reportSites:sites,workers:workers.map(row=>publicRow({...row,national_id_masked:maskNationalId(row.national_id)}))};
 }
 
+export async function setLaborGroupActive(payload={}) {
+  const groupId=clean(payload.group_id,64),active=bool(payload.active)?1:0;
+  const group=await one('SELECT group_id,group_name FROM labor_groups WHERE group_id=:id',{id:groupId});
+  if(!group)throw apiError('GROUP_NOT_FOUND','ไม่พบกลุ่มแรงงานที่เลือก');
+  await execute('UPDATE labor_groups SET active=:active,updated_at=:updated WHERE group_id=:id',{id:groupId,active,updated:nowSql()});
+  return{group_id:groupId,group_name:group.group_name,active:!!active};
+}
+
+export async function deletePayrollWorker(payload={}) {
+  const workerId=clean(payload.worker_id||payload.id,64),worker=await one("SELECT worker_id,full_name FROM workers WHERE worker_id=:id AND status<>'DELETED'",{id:workerId});
+  if(!worker)throw apiError('WORKER_NOT_FOUND','ไม่พบรายชื่อแรงงานที่ต้องการลบ');
+  const timestamp=nowSql();
+  await transaction(async connection=>{
+    await connection.execute("UPDATE workers SET status='DELETED',updated_at=? WHERE worker_id=?",[timestamp,workerId]);
+    await connection.execute('UPDATE worker_group_members SET active=0,updated_at=? WHERE worker_id=?',[timestamp,workerId]);
+  });
+  return{deleted:true,worker_id:workerId,full_name:worker.full_name};
+}
+
 export async function savePayrollWorker(payload={}) {
   const workerId=clean(payload.worker_id||payload.id,64)||uuid(),names=splitName(payload.full_name||payload.fullName),nickname=clean(payload.nickname,160),address=clean(payload.address,1000),note=clean(payload.note,1000),groupId=clean(payload.group_id||payload.groupId,64),dailyWage=Math.max(0,number(payload.daily_wage??payload.dailyRate)),otRate=Math.max(0,number(payload.ot_rate??payload.otRate)),effectiveDate=/^\d{4}-\d{2}-\d{2}$/.test(String(payload.effective_date||payload.effectiveDate||''))?String(payload.effective_date||payload.effectiveDate):null,status=clean(payload.status||'ACTIVE',32).toUpperCase();
-  if(!names.fullName)throw apiError('WORKER_NAME_REQUIRED','กรุณาระบุชื่อพนักงาน');if(groupId&&!await one('SELECT group_id FROM labor_groups WHERE group_id=:id AND active=1',{id:groupId}))throw apiError('GROUP_NOT_FOUND','ไม่พบกลุ่มแรงงานที่เลือก');
+  if(!names.fullName)throw apiError('WORKER_NAME_REQUIRED','กรุณาระบุชื่อพนักงาน');if(groupId&&!await one('SELECT group_id FROM labor_groups WHERE group_id=:id',{id:groupId}))throw apiError('GROUP_NOT_FOUND','ไม่พบกลุ่มแรงงานที่เลือก');
   const current=await one('SELECT * FROM workers WHERE worker_id=:id',{id:workerId}),national=normalizeNationalId(payload.national_id||current?.national_id||'');if(national&&!validNationalId(national))throw apiError('INVALID_NATIONAL_ID','เลขบัตรประชาชนไม่ถูกต้อง');if(national&&await one('SELECT worker_id FROM workers WHERE national_id=:national AND worker_id<>:id',{national,id:workerId}))throw apiError('DUPLICATE_NATIONAL_ID','เลขบัตรประชาชนนี้มีในทะเบียนแล้ว');const timestamp=nowSql();
   await transaction(async connection=>{await connection.execute("INSERT INTO workers (worker_id,full_name,first_name,last_name,national_id,address,nickname,daily_wage,note,wage_effective_date,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?) ON DUPLICATE KEY UPDATE full_name=VALUES(full_name),first_name=VALUES(first_name),last_name=VALUES(last_name),address=VALUES(address),nickname=VALUES(nickname),daily_wage=VALUES(daily_wage),note=VALUES(note),wage_effective_date=VALUES(wage_effective_date),status=VALUES(status),updated_at=VALUES(updated_at)",[workerId,names.fullName,names.firstName,names.lastName,national,address||current?.address||'',nickname,dailyWage,note,effectiveDate,status==='PAUSED'?'PAUSED':'ACTIVE',timestamp,timestamp]);if(groupId){await connection.execute('UPDATE worker_group_members SET active=0,updated_at=? WHERE worker_id=?',[timestamp,workerId]);await connection.execute('INSERT INTO worker_group_members (membership_id,worker_id,group_id,active,created_at,updated_at) VALUES (?,?,?,1,?,?) ON DUPLICATE KEY UPDATE active=1,updated_at=VALUES(updated_at)',[uuid(),workerId,groupId,timestamp,timestamp]);}await connection.execute("UPDATE receipt_registrations SET full_name=?,first_name=?,last_name=?,address=?,nickname=?,daily_wage=?,note=?,group_id=IF(?='',group_id,?),updated_at=? WHERE worker_id=? AND status='SAVED'",[names.fullName,names.firstName,names.lastName,address||current?.address||'',nickname,dailyWage,note,groupId,groupId,timestamp,workerId]);});
   const registry=await getPayrollRegistry();return registry.workers.find(worker=>worker.worker_id===workerId);
@@ -344,4 +377,4 @@ export async function previewReceiptExport(payload={}){const rows=await resolveS
 
 export async function exportReceiptRosterExcel(payload,createTicket){const rows=await resolveSelection(payload,5000),groups=await groupsWithProjects(),map=new Map(groups.map(group=>[group.group_id,group]));const workerIds=[...new Set(rows.map(row=>row.worker_id).filter(Boolean))],workers=new Map();if(workerIds.length){const params={};workerIds.forEach((id,index)=>{params[`id${index}`]=id;});(await select(`SELECT worker_id,nickname,daily_wage,note FROM workers WHERE worker_id IN (${workerIds.map((_,index)=>`:id${index}`).join(',')})`,params)).forEach(worker=>workers.set(worker.worker_id,worker));}const values=rows.map((row,index)=>{const group=map.get(row.group_id)||{},worker=workers.get(row.worker_id)||row;return[index+1,row.worker_id,row.full_name,worker.nickname||'',row.national_id,row.address,Number(worker.daily_wage)||0,worker.note||'',group.group_name||'',group.site_code||group.site_name||'',group.province||'',number(row.include_receipt_item)?row.receipt_item||'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ':'',number(row.include_receipt_item)?'ใส่':'ไม่ใส่',row.updated_at];});const buffer=await createXlsx('รายชื่อแรงงาน',['ลำดับ','รหัสบุคคล','ชื่อ-นามสกุล','ชื่อเล่น','เลขบัตรประชาชน','ที่อยู่','ค่าแรง/วัน','หมายเหตุ','กลุ่มแรงงาน','Site Code','จังหวัด','รายการรับเงิน','ใช้ในเอกสาร','วันที่บันทึก'],values,[8,24,30,18,20,55,14,30,28,22,18,42,14,24]);return createTicket(buffer,`รายชื่อใบรับเงิน_${new Date().toISOString().slice(0,10)}_${rows.length}คน.xlsx`,XLSX_MIME,rows.length,{format:'XLSX',rows,payload});}
 
-export async function exportReceiptDocuments(payload,createTicket){const rows=await resolveSelection(payload,200),templateId=clean(payload.template_id,64)||rows[0].template_id,template=await one('SELECT * FROM receipt_templates WHERE template_id=:id AND active=1',{id:templateId});if(!template)throw apiError('TEMPLATE_NOT_FOUND','ไม่พบ Template ที่เลือก');if(rows.some(row=>row.template_id!==templateId)&&!bool(payload.force_template))throw apiError('MIXED_TEMPLATES','รายการที่เลือกใช้หลาย Template');const registrations=[];for(const row of rows)registrations.push({...row,cardBuffer:await readBuffer(row.card_path)});const buffer=await createReceiptDocx(await readBuffer(template.normalized_path),registrations);return createTicket(buffer,`ใบรับเงิน_${new Date().toISOString().slice(0,10)}_${rows.length}คน.docx`,DOCX_MIME,rows.length,{format:'DOCX',templateId,rows,payload});}
+export async function exportReceiptDocuments(payload,createTicket){const rows=await resolveSelection(payload,200),templateId=clean(payload.template_id,64),template=await one('SELECT * FROM receipt_templates WHERE template_id=:id AND active=1',{id:templateId});if(!template)throw apiError('TEMPLATE_NOT_FOUND','กรุณาเลือก Template ที่ต้องการใช้สร้างเอกสาร');const registrations=[];for(const row of rows)registrations.push({...row,cardBuffer:await readBuffer(row.card_path)});const stamp=new Date().toISOString().slice(0,10),fileName=`ใบรับเงิน_${stamp}_${rows.length}คน.docx`,buffer=await createReceiptDocx(await readBuffer(template.normalized_path),registrations),previewBuffer=await convertDocxToPdf(buffer,fileName);const[file,preview]=await Promise.all([createTicket(buffer,fileName,DOCX_MIME,rows.length,{format:'DOCX',templateId,rows,payload}),createTicket(previewBuffer,`Preview_ใบรับเงิน_${stamp}_${rows.length}คน.pdf`,'application/pdf',rows.length,null)]);return{file,preview,template:{template_id:template.template_id,template_name:template.template_name},count:rows.length};}

@@ -130,23 +130,24 @@ test('bill tables provide image preview, date-band grouping, page sizes, sort co
   assert.match(masters, /aggregateOwners/);
 });
 
-test('secondary navigation exposes protected Main App, Stock App, Database, and Reports access', async () => {
+test('secondary navigation exposes protected Main App, Stock App, AI Usage, and Reports access', async () => {
   const [html, app, css, preview] = await Promise.all([
     read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'), read('scripts/dev-server.mjs'),
   ]);
   assert.match(html, /class="resource-nav"/);
   assert.match(html, /data-external-url="https:\/\/app\.nasgfe1\.synology\.me\/"/);
   assert.match(html, /data-external-url="https:\/\/inv\.nasgfe1\.synology\.me\/login"/);
-  assert.match(html, /data-database-url="http:\/\/nasgfe1\.synology\.me\/phpmyadmin\/index\.php\?route=\/"/);
+  assert.match(html, /data-view="ai-usage"/);
+  assert.match(html, /id="view-ai-usage"/);
   assert.match(html, /id="view-reports"/);
   assert.match(html, /id="report-manager-root"/);
   assert.match(html, /id="expense-subnav"/);
   assert.match(html, /id="external-link-sheet"/);
-  assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports'\]/);
+  assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports','ai-usage'\]/);
   assert.match(app, /ProtectedAccess\.ensure\(\)/);
   assert.match(app, /expense-subnav.*expenseViews\.indexOf\(view\) < 0/);
   assert.match(css, /\.resource-nav\s*\{[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(preview, /action === 'verifyDatabaseAccess'/);
+  assert.match(app, /getAiUsageSummary/);
 });
 
 test('desktop sidebar can collapse, restore, and remember the user preference', async () => {

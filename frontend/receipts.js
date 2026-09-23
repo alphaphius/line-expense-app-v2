@@ -53,7 +53,7 @@
     gate.classList.toggle('hidden', state.enabled);
     $('receipt-workspace').classList.toggle('is-disabled', !state.enabled);
     if (securityMessage) $('receipt-security-message').textContent = securityMessage;
-    ['receipt-template-select','receipt-group-select','receipt-card-files','receipt-template-file','receipt-template-name','receipt-template-manage-btn','receipt-new-group-btn'].forEach(id => {
+    ['receipt-group-select','receipt-card-files','receipt-template-file','receipt-template-name','receipt-template-manage-btn','receipt-new-group-btn'].forEach(id => {
       const element = $(id); if (element) element.disabled = !state.enabled;
     });
     renderOptions();
@@ -62,9 +62,6 @@
   }
 
   function renderOptions() {
-    const templateValue = $('receipt-template-select').value;
-    $('receipt-template-select').innerHTML = '<option value="">เลือก Template</option>' + state.templates.map(row => `<option value="${escapeHtml(row.template_id)}">${escapeHtml(row.template_name)}</option>`).join('');
-    if (state.templates.some(row => row.template_id === templateValue)) $('receipt-template-select').value = templateValue;
     const groupOptions = state.groups.map(row => `<option value="${escapeHtml(row.group_id)}">${escapeHtml(row.group_name)}${row.site_code ? ` · ${escapeHtml(row.site_code)}${row.province?` · ${escapeHtml(row.province)}`:''}` : row.site_name ? ` · ${escapeHtml(row.site_name)}` : ''}</option>`).join('');
     const groupValue = $('receipt-group-select').value;
     $('receipt-group-select').innerHTML = '<option value="">เลือกกลุ่มแรงงาน</option>' + groupOptions;
@@ -94,7 +91,6 @@
     if(!active||!active.batch||!(active.rows||[]).length)return;
     state.batchId=active.batch.batch_id;
     state.draftRows=active.rows.map(serverDraft);
-    $('receipt-template-select').value=active.batch.template_id;
     $('receipt-group-select').value=active.batch.group_id;
     $('receipt-quick-edit-card').classList.remove('hidden');
     renderDraftRows();
@@ -171,7 +167,6 @@
       const result = await gas('saveReceiptTemplate', { template_name:name, file_name:file.name, data_url:await fileToDataUrl(file) });
       state.templates.push(result);
       renderOptions();
-      $('receipt-template-select').value = result.template_id;
       form.reset();
       renderTemplateFileState(null,{saved:true,fileName:file.name,templateName:result.template_name});
       Swal.fire({ icon:'success', title:'บันทึก Template แล้ว', text:'ตรวจพบ Placeholder ครบและพร้อมสร้างเอกสาร', timer:1800, showConfirmButton:false });
@@ -228,16 +223,15 @@
   async function processCards() {
     if (state.processing || !state.selectedFiles.length) return;
     if(state.batchId&&state.draftRows.length)return Swal.fire('มีชุดที่กำลังทำอยู่','กรุณาตรวจสอบ บันทึก หรือกดทำต่อด้วย AI ให้ชุดปัจจุบันเสร็จก่อน','info');
-    const templateId = $('receipt-template-select').value;
     const groupId = $('receipt-group-select').value;
-    if (!templateId || !groupId) return Swal.fire('กรุณาเลือก Template และกลุ่มแรงงาน','','warning');
+    if (!groupId) return Swal.fire('กรุณาเลือกกลุ่มแรงงานที่จะนำเข้า','','warning');
     state.processing = true;
     $('receipt-process-btn').disabled = true;
     $('receipt-quick-edit-card').classList.remove('hidden');
     state.draftRows = state.selectedFiles.map((file,index) => ({ local_id:`local-${index}`, file, preview_url:URL.createObjectURL(file), status:'UPLOAD_QUEUED', full_name:'', national_id:'', address:'', nickname:'', daily_wage:0, note:'', warnings:[], error:'' }));
     renderDraftRows();
     try {
-      const batch = await gas('createReceiptBatch', { template_id:templateId, group_id:groupId, total_count:state.selectedFiles.length, created_by:'WEB' });
+      const batch = await gas('createReceiptBatch', { group_id:groupId, total_count:state.selectedFiles.length, created_by:'WEB' });
       state.batchId = batch.batch_id;
       let next = 0;
       async function uploadWorker() {
@@ -399,12 +393,20 @@
     try {
       const preview = await gas('previewReceiptExport', { registration_ids:ids });
       const groupsHtml = preview.groups.map((group,index) => `<section class="receipt-export-group"><header><span>${String(index+1).padStart(2,'0')}</span><div><strong>${escapeHtml(group.group_name)}</strong><small>${escapeHtml([group.site_code||group.site_name,group.province].filter(Boolean).join(' · ')||'ไม่ระบุไซต์')}</small></div><b>${group.people.length.toLocaleString('th-TH')} คน</b></header><div>${group.people.map(person=>`<p><span>${escapeHtml(person.full_name)}</span><small class="${person.include_receipt_item?'':'is-omitted'}">${person.include_receipt_item?escapeHtml(person.receipt_item):'ไม่ใส่ {รายการรับเงิน}'}</small></p>`).join('')}</div></section>`).join('');
-      const confirm = await Swal.fire({ title:`ตรวจสอบก่อน Export ${format}`, html:`<div class="receipt-export-summary"><p>ทั้งหมด <strong>${preview.total.toLocaleString('th-TH')} คน</strong> แบ่งเป็น <strong>${preview.groups.length.toLocaleString('th-TH')} กลุ่ม</strong></p><div>${groupsHtml}</div></div>`, showCancelButton:true, confirmButtonText:`สร้าง ${format}`, cancelButtonText:'กลับไปแก้ไข', confirmButtonColor:'#8f5f42', width:680 });
+      if(format==='DOCX'&&!state.templates.length)return Swal.fire('ยังไม่มี Template','กรุณาอัปโหลด Template ในส่วน 01 ก่อน Export เอกสาร','warning');
+      const templateField=format==='DOCX'?`<label class="receipt-export-template">Template ที่ใช้สร้างเอกสาร<select id="receipt-export-template" class="swal2-select">${state.templates.map(row=>`<option value="${escapeHtml(row.template_id)}">${escapeHtml(row.template_name)} · ${escapeHtml(row.source_file_name||'DOCX')}</option>`).join('')}</select><small>ระบบจะสร้าง Preview ให้ตรวจสอบก่อนดาวน์โหลดไฟล์จริง</small></label>`:'';
+      const confirm = await Swal.fire({ title:`ตรวจสอบก่อน Export ${format}`, html:`<div class="receipt-export-summary">${templateField}<p>ทั้งหมด <strong>${preview.total.toLocaleString('th-TH')} คน</strong> แบ่งเป็น <strong>${preview.groups.length.toLocaleString('th-TH')} กลุ่ม</strong></p><div>${groupsHtml}</div></div>`, showCancelButton:true, confirmButtonText:format==='DOCX'?'สร้าง Preview':`สร้าง ${format}`, cancelButtonText:'กลับไปแก้ไข', confirmButtonColor:'#8f5f42', width:720,preConfirm:()=>format==='DOCX'?document.getElementById('receipt-export-template')?.value:'' });
       if (!confirm.isConfirmed) return;
       const action = format === 'DOCX' ? 'exportReceiptDocuments' : 'exportReceiptRosterExcel';
-      const file = await gas(action, { registration_ids:ids, template_id:$('receipt-template-select').value, force_template:true, created_by:'WEB' });
-      await showDownload(file, format);
+      Swal.fire({title:'กำลังสร้างเอกสาร',html:'กำลังแทนข้อมูลและจัดหน้า Preview…',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
+      const result = await gas(action, { registration_ids:ids, template_id:confirm.value||'', created_by:'WEB' });
+      if(format==='DOCX')await showDocumentPreview(result);else await showDownload(result,format);
     } catch (error) { Swal.fire(`Export ${format} ไม่สำเร็จ`,error.message,'error'); }
+  }
+
+  async function showDocumentPreview(result){
+    const previewBlob=await fetchExportBlob(result.preview),previewUrl=URL.createObjectURL(previewBlob);let busy=false;
+    try{await Swal.fire({title:'ตรวจสอบเอกสารก่อนดาวน์โหลด',html:`<div class="receipt-document-preview"><div><strong>${escapeHtml(result.template?.template_name||'Template')}</strong><span>${Number(result.count||0).toLocaleString('th-TH')} คน</span></div><iframe src="${previewUrl}#toolbar=1&navpanes=0" title="Preview เอกสารใบรับเงิน"></iframe><p>ตรวจสอบชื่อ ที่อยู่ และรายการรับเงินให้เรียบร้อยก่อนดาวน์โหลด DOCX</p><button type="button" class="receipt-preview-download" data-receipt-preview-download>ดาวน์โหลด DOCX<small data-receipt-preview-progress>ยังไม่ได้ดาวน์โหลด</small></button></div>`,confirmButtonText:'ปิด',confirmButtonColor:'#8f5f42',width:900,didOpen:popup=>popup.querySelector('[data-receipt-preview-download]').addEventListener('click',async event=>{if(busy)return;busy=true;const button=event.currentTarget,progress=popup.querySelector('[data-receipt-preview-progress]');button.disabled=true;try{await downloadExportFile(result.file,percent=>{progress.textContent=`กำลังดาวน์โหลด ${percent}%`;});progress.textContent='ดาวน์โหลดสำเร็จ';}catch(error){Swal.showValidationMessage(error.message);progress.textContent='ดาวน์โหลดไม่สำเร็จ';}finally{button.disabled=false;busy=false;}})});}finally{URL.revokeObjectURL(previewUrl);}
   }
 
   async function showDownload(file, format) {
@@ -423,10 +425,13 @@
   }
 
   function decodeBase64Bytes(base64) { const binary=atob(base64||''); const bytes=new Uint8Array(binary.length); for(let i=0;i<binary.length;i+=1) bytes[i]=binary.charCodeAt(i); return bytes; }
-  async function downloadExportFile(result,onProgress) {
+  async function fetchExportBlob(result,onProgress){
     const chunks=[]; const total=Number(result.sizeBytes)||0; let offset=0;
     while(offset<total){ const chunk=await gas('getExportFileChunk',result.downloadToken,offset); if(!chunk||Number(chunk.offset)!==offset||Number(chunk.nextOffset)<=offset||!chunk.base64) throw new Error('ได้รับข้อมูลไฟล์ไม่ครบ'); chunks.push(decodeBase64Bytes(chunk.base64)); offset=Number(chunk.nextOffset); if(onProgress)onProgress(Math.min(100,Math.round(offset/total*100))); }
-    const url=URL.createObjectURL(new Blob(chunks,{type:result.mimeType||'application/octet-stream'})); const link=document.createElement('a'); link.href=url; link.download=result.fileName||'export-file'; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),30000);
+    return new Blob(chunks,{type:result.mimeType||'application/octet-stream'});
+  }
+  async function downloadExportFile(result,onProgress) {
+    const url=URL.createObjectURL(await fetchExportBlob(result,onProgress)); const link=document.createElement('a'); link.href=url; link.download=result.fileName||'export-file'; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
   function formatFileSize(bytes){ const size=Number(bytes)||0; return size>=1024*1024?`${(size/(1024*1024)).toLocaleString('th-TH',{maximumFractionDigits:1})} MB`:`${Math.max(1,Math.round(size/1024)).toLocaleString('th-TH')} KB`; }
 

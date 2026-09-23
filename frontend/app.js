@@ -1,7 +1,7 @@
   const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 }, activeView:'dashboard' };
-  const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', system: 'สถานะระบบ' };
+  const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', 'ai-usage':'การใช้งาน AI', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
-  const protectedViews = ['receipts','payroll','tasks','reports'];
+  const protectedViews = ['receipts','payroll','tasks','reports','ai-usage'];
   const SIDEBAR_STORAGE_KEY = 'workhub.desktopSidebarCollapsed';
   const LIVE_REFRESH_INTERVAL_MS = 12000;
   let liveRefreshTimer = null;
@@ -203,6 +203,7 @@
     if (view === 'payroll' && window.PayrollModule) window.PayrollModule.activate();
     if (view === 'tasks' && window.TaskManagerModule) window.TaskManagerModule.activate();
     if (view === 'reports' && window.ReportManagerModule) window.ReportManagerModule.activate();
+    if (view === 'ai-usage') loadAiUsage();
   }
 
   let billOwnerRefreshPromise = null;
@@ -1156,29 +1157,16 @@
     }
   }
 
-  async function openDatabase() {
-    if (!await window.ProtectedAccess.ensure()) return;
-    showActivityToast('กำลังตรวจฐานข้อมูล…', 'กำลังตรวจสอบ MariaDB บน NAS');
-    try {
-      const fallbackUrl = document.getElementById('open-database-btn').dataset.databaseUrl || '';
-      const access = await gas('verifyDatabaseAccess');
-      const targetUrl = access.url || fallbackUrl;
-      hideActivityToast();
-      if (targetUrl && targetUrl !== '#') {
-        showExternalLinkSheet('เปิด Database ในแท็บใหม่', 'ระบบจะเปิด phpMyAdmin สำหรับจัดการ MariaDB ในแท็บใหม่', targetUrl, 'เปิด Database');
-      } else {
-        await Swal.fire({
-          icon:'info',
-          title:'MariaDB ทำงานอยู่',
-          text:access.message || 'ปิดการเปิดฐานข้อมูลจากหน้าแอปเพื่อความปลอดภัย',
-          confirmButtonText:'รับทราบ',
-        });
-      }
-    } catch (error) {
-      hideActivityToast();
-      throw error;
-    }
+  function aiNumber(value){return new Intl.NumberFormat('th-TH',{maximumFractionDigits:0}).format(Number(value)||0);}
+  function aiPercent(value){return value==null?null:Math.max(0,Math.min(100,Number(value)||0));}
+  function aiMeter(label,used,limit,percent){const known=Number(limit)>0,p=aiPercent(percent);return `<div class="ai-meter"><div><span>${escapeHtml(label)}</span><strong>${aiNumber(used)}${known?` / ${aiNumber(limit)}`:''}</strong></div><div class="ai-meter__track"><i style="width:${known?p:0}%"></i></div><small>${known?`เหลือ ${aiNumber(Math.max(0,Number(limit)-Number(used)))} · ใช้ไป ${p.toLocaleString('th-TH',{maximumFractionDigits:1})}%`:'ยังไม่ได้ระบุขีดจำกัดจาก AI Studio'}</small></div>`;}
+  function renderAiUsage(data){
+    const root=document.getElementById('ai-usage-root');if(!root)return;
+    const trendMax=Math.max(1,...(data.trend||[]).map(row=>Number(row.requests)||0));
+    root.innerHTML=`<div class="ai-usage-page"><header class="ai-usage-hero"><div><p>WORKHUB · GEMINI API</p><h2>การใช้งาน AI · Free Plan</h2><span>ดูการใช้งานจาก WorkHub แยกส่วนตรวจบิลและเอกสารใบรับเงิน</span></div><div><button type="button" class="module-secondary" data-ai-refresh>รีเฟรช</button><button type="button" class="module-primary" data-ai-quota>ตั้งค่าโควตา</button></div></header><div class="ai-usage-note"><strong>ข้อมูลจริงจาก WorkHub</strong><span>รอบวันนี้อิงเวลา Pacific และรีเซ็ต ${escapeHtml(new Date(data.reset_at).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}))} · โควตาจริงใช้ร่วมกันใน Google Cloud project</span></div><div class="ai-scope-grid">${(data.scopes||[]).map(scope=>`<article class="ai-scope-card"><header><div><span>${scope.scope_key==='BILLS'?'B':'R'}</span><div><h3>${escapeHtml(scope.label)}</h3><p>${escapeHtml(scope.model)}</p></div></div><b class="${scope.configured?'is-ready':'is-off'}">${scope.configured?'API พร้อม':'ยังไม่ตั้ง API'}</b></header><div class="ai-kpis"><div><small>คำขอวันนี้</small><strong>${aiNumber(scope.requests)}</strong></div><div><small>สำเร็จ</small><strong>${scope.requests?Math.round(scope.successful/scope.requests*100):0}%</strong></div><div><small>ผิดพลาด</small><strong>${aiNumber(scope.failed)}</strong></div><div><small>เฉลี่ย</small><strong>${scope.avg_latency_ms?`${(scope.avg_latency_ms/1000).toLocaleString('th-TH',{maximumFractionDigits:1})} วิ`:'-'}</strong></div></div>${aiMeter('Requests',scope.requests,scope.request_limit_day,scope.request_percent)}${aiMeter('Tokens',scope.total_tokens,scope.token_limit_day,scope.token_percent)}<dl class="ai-token-detail"><div><dt>Input</dt><dd>${aiNumber(scope.input_tokens)}</dd></div><div><dt>Output</dt><dd>${aiNumber(scope.output_tokens)}</dd></div><div><dt>Thinking</dt><dd>${aiNumber(scope.thought_tokens)}</dd></div></dl></article>`).join('')}</div><section class="ai-usage-panel"><header><div><h3>คำขอย้อนหลัง 14 วัน</h3><p>นับเฉพาะงานที่เรียกผ่าน WorkHub</p></div></header><div class="ai-trend">${(data.trend||[]).length?(data.trend||[]).map(row=>`<div title="${escapeHtml(row.usage_date)} · ${escapeHtml(row.scope_key)} · ${aiNumber(row.requests)} ครั้ง"><i class="${row.scope_key==='RECEIPTS'?'receipt':''}" style="height:${Math.max(6,Number(row.requests)/trendMax*100)}%"></i><span>${String(row.usage_date||'').slice(5)}</span></div>`).join(''):'<p class="ai-empty">ยังไม่มีการเรียก AI ในช่วง 14 วัน</p>'}</div></section><section class="ai-usage-panel"><header><div><h3>ข้อผิดพลาดล่าสุด</h3><p>ใช้ติดตาม High demand, rate limit และการเชื่อมต่อ</p></div></header><div class="ai-error-list">${(data.errors||[]).length?(data.errors||[]).map(row=>`<div><b>${row.scope_key==='RECEIPTS'?'ใบรับเงิน':'ตรวจบิล'}</b><span>${escapeHtml(row.error||'ไม่ทราบสาเหตุ')}</span><time>${escapeHtml(new Date(String(row.created_at).replace(' ','T')+'Z').toLocaleString('th-TH'))}</time></div>`).join(''):'<p class="ai-empty">ไม่พบข้อผิดพลาดล่าสุด</p>'}</div></section><p class="ai-usage-footnote">${escapeHtml(data.note||'')}</p></div>`;
   }
+  async function loadAiUsage(){const root=document.getElementById('ai-usage-root');if(root)root.innerHTML='<div class="ai-loading">กำลังอ่านข้อมูลการใช้งาน AI…</div>';try{renderAiUsage(await gas('getAiUsageSummary'));}catch(error){if(root)root.innerHTML=`<div class="ai-empty">อ่านข้อมูลไม่สำเร็จ: ${escapeHtml(error.message)}</div>`;}}
+  async function editAiQuota(){const data=await gas('getAiUsageSummary'),byKey=Object.fromEntries((data.scopes||[]).map(scope=>[scope.scope_key,scope]));const result=await Swal.fire({title:'ตั้งค่าโควตา Free Plan',html:`<div class="ai-quota-form"><p>คัดลอกค่าขีดจำกัดที่ใช้งานอยู่จาก Google AI Studio มาใส่ ระบบจะใช้คำนวณเปอร์เซ็นต์และยอดคงเหลือ</p>${[['BILLS','ตรวจบิล'],['RECEIPTS','เอกสารใบรับเงิน']].map(([key,label])=>`<fieldset><legend>${label}</legend><label>Requests ต่อวัน<input id="ai-${key}-requests" class="swal2-input" type="number" min="0" step="1" value="${Number(byKey[key]?.request_limit_day)||0}"></label><label>Tokens ต่อวัน<input id="ai-${key}-tokens" class="swal2-input" type="number" min="0" step="1" value="${Number(byKey[key]?.token_limit_day)||0}"></label></fieldset>`).join('')}<small>ใส่ 0 หากยังไม่ทราบ ระบบจะแสดงเฉพาะยอดที่ WorkHub ใช้จริงและไม่คำนวณคงเหลือ</small></div>`,showCancelButton:true,confirmButtonText:'บันทึกโควตา',cancelButtonText:'ยกเลิก',confirmButtonColor:'#8f5f42',width:680,preConfirm:()=>({scopes:['BILLS','RECEIPTS'].map(key=>({scope_key:key,request_limit_day:Number(document.getElementById(`ai-${key}-requests`).value)||0,token_limit_day:Number(document.getElementById(`ai-${key}-tokens`).value)||0}))})});if(!result.isConfirmed)return;renderAiUsage(await gas('saveAiQuotaSettings',result.value));Swal.fire({icon:'success',title:'บันทึกโควตาแล้ว',timer:1200,showConfirmButton:false});}
 
   function showExternalLinkSheet(title, description, url, buttonLabel) {
     const sheet = document.getElementById('external-link-sheet');
@@ -1417,6 +1405,8 @@
       if (protectedViews.includes(view) && !await window.ProtectedAccess.ensure()) return;
       switchView(view);
     }
+    if(event.target.closest('[data-ai-refresh]'))await loadAiUsage();
+    if(event.target.closest('[data-ai-quota]'))await editAiQuota();
     const add = event.target.closest('[data-add]'); if (add) await openMasterForm(add.dataset.add);
     const edit = event.target.closest('[data-edit]'); if (edit) { const map={project:['projects','project_id'],company:['companies','company_id'],category:['categories','category_id']}; const [list,key]=map[edit.dataset.edit]; await openMasterForm(edit.dataset.edit,state.masters[list].find(x=>String(x[key])===String(edit.dataset.id))||{}); }
     const del = event.target.closest('[data-delete]'); if (del) await deleteMaster(del.dataset.delete,del.dataset.id);
@@ -1449,7 +1439,6 @@
   document.getElementById('export-excel-btn').addEventListener('click', () => exportMonthlyFile('excel'));
   document.getElementById('open-main-app-btn').addEventListener('click', event => openWorkHubApp(event.currentTarget).catch(showFatal));
   document.getElementById('open-stock-app-btn').addEventListener('click', event => openWorkHubApp(event.currentTarget).catch(showFatal));
-  document.getElementById('open-database-btn').addEventListener('click', () => openDatabase().catch(showFatal));
   document.getElementById('external-link-confirm').addEventListener('click', () => {
     const sheet = document.getElementById('external-link-sheet');
     window.setTimeout(() => { if (sheet.open) sheet.close(); }, 0);

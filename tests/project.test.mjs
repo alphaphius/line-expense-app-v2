@@ -41,9 +41,9 @@ const expectedV1Calls = [
   'backfillLineUsernames', 'clearQuickSettings', 'confirmBill', 'deleteBill',
   'deleteMasterData', 'exportMonthlyBillExcel', 'exportMonthlyBillWord',
   'getBillAiJob', 'getBillDetail', 'getBillDetail', 'getBillDetail', 'getBillDetail', 'getBillDocumentPreview', 'getBillOwners', 'getBootstrapData',
-  'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills', 'listBills', 'listBills',
+  'getAiUsageSummary', 'getAiUsageSummary', 'getDashboard', 'getExportFileChunk', 'getSystemStatus', 'listBills', 'listBills', 'listBills',
   'listPendingReviewBills', 'restoreBill', 'retryBillAiJob', 'retryBillAiJob', 'saveBillOwnerName', 'saveBillOwnerName', 'saveMasterData', 'saveQuickSettings',
-  'submitBillPages', 'updateBill', 'verifyDatabaseAccess',
+  'saveAiQuotaSettings', 'submitBillPages', 'updateBill',
 ];
 
 test('GitHub Pages HTML preserves every V1 screen element id', async () => {
@@ -51,7 +51,7 @@ test('GitHub Pages HTML preserves every V1 screen element id', async () => {
   const ids = source => new Set(Array.from(source.matchAll(/\bid="([^"]+)"/g), match => match[1]));
   const actualIds = ids(v2);
   expectedV1Ids.forEach(id => assert.ok(actualIds.has(id), `missing V1 element #${id}`));
-  ['view-receipts','view-payroll','view-tasks','receipt-template-form','receipt-card-files','receipt-quick-edit-list','receipt-registry-list','receipt-export-docx-btn','receipt-export-excel-btn'].forEach(id => assert.ok(actualIds.has(id), `missing WorkHub element #${id}`));
+  ['view-receipts','view-payroll','view-tasks','view-ai-usage','ai-usage-root','receipt-template-form','receipt-card-files','receipt-quick-edit-list','receipt-registry-list','receipt-export-docx-btn','receipt-export-excel-btn'].forEach(id => assert.ok(actualIds.has(id), `missing WorkHub element #${id}`));
   assert.doesNotMatch(v2, /<\?(?:=|!=)/);
   assert.doesNotMatch(v2, /cdn\.tailwindcss\.com/);
   assert.ok(v2.indexOf('ส่วนงานหลัก') < v2.indexOf('เมนูค่าใช้จ่าย'), 'primary WorkHub modules must appear above expense navigation');
@@ -143,7 +143,7 @@ test('protected work areas require a server-issued session while expenses stay o
   assert.match(api, /openProtectedSession/);
   assert.match(api, /localStorage\.setItem\(keys\.protectedSession/);
   assert.match(api, /result && result\.error && result\.error\.message/);
-  assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports'\]/);
+  assert.match(app, /protectedViews = \['receipts','payroll','tasks','reports','ai-usage'\]/);
   assert.match(backend, /function requireProtectedSession_/);
   assert.match(backend, /PROTECTED_MAX_ATTEMPTS/);
   assert.match(backend, /'verifyDatabaseAccess'/);
@@ -231,6 +231,16 @@ test('receipt registry supports durable AI retries, cancellation, card review, m
   assert.match(templateMigration,/source_file_name VARCHAR/);
   assert.match(backend,/export async function downloadReceiptTemplate/);
   assert.match(api,/downloadReceiptTemplate/);
+  assert.doesNotMatch(html,/id="receipt-template-select"/);
+  assert.match(frontend,/สร้าง Preview/);
+  assert.match(frontend,/receipt-export-template/);
+  assert.match(frontend,/showDocumentPreview/);
+  assert.match(backend,/convertDocxToPdf/);
+  assert.match(backend,/export async function setLaborGroupActive/);
+  assert.match(backend,/export async function deletePayrollWorker/);
+  assert.match(payroll,/data-worker-delete/);
+  assert.match(payroll,/data-payroll-group-active/);
+  assert.match(payroll,/data-weekly-group-check/);
 });
 
 test('local preview is isolated from the production API', async () => {
