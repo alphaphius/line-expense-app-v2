@@ -9,6 +9,7 @@ import { confirmBill, deleteBill, normalizeQualityScore, submitBillPages } from 
 const LINE_API = 'https://api.line.me';
 const LINE_DATA_API = 'https://api-data.line.me';
 const ACTIVE_SESSION_STATUSES = ['AWAITING_PAGE_COUNT','COLLECTING_PAGES','AWAITING_PROJECT','AWAITING_COMPANY','PROCESSING'];
+const lineEventQueues = new Map();
 
 export function verifyLineSignature(rawBody, signature, secret = config.lineChannelSecret) {
   if (!secret || !signature || typeof rawBody !== 'string') return false;
@@ -73,13 +74,25 @@ async function acknowledgeImage(replyToken,target) {
   return notifyLine(replyToken,target,[message('ได้รับรูปบิลแล้ว กำลังบันทึกรูป…')]);
 }
 
+export async function serializeLineEvent(event,task) {
+  const source=event.source||{};
+  const key=`${targetOf(source)||'unknown'}:${userOf(source)||'anonymous'}`;
+  const previous=lineEventQueues.get(key)||Promise.resolve();
+  const current=previous.catch(()=>{}).then(task);
+  lineEventQueues.set(key,current);
+  try{return await current;}
+  finally{if(lineEventQueues.get(key)===current)lineEventQueues.delete(key);}
+}
+
 async function reserveEvent(event) {
   const eventId=clean(event.webhookEventId,160)||crypto.createHash('sha256').update(JSON.stringify(event)).digest('hex');
   const source=event.source||{};
   const result=await execute("INSERT IGNORE INTO line_webhook_events (event_id,event_type,source_type,source_id,message_id,status,error,created_at) VALUES (:id,:type,:sourceType,:sourceId,:messageId,'PROCESSING','',:created)",{
     id:eventId,type:clean(event.type,80),sourceType:sourceTypeOf(source),sourceId:targetOf(source),messageId:clean(event.message?.id,160),created:nowSql(),
   });
-  return result.affectedRows===1?eventId:'';
+  if(result.affectedRows===1)return eventId;
+  const retry=await execute("UPDATE line_webhook_events SET status='PROCESSING',error='',completed_at=NULL WHERE event_id=:id AND status='FAILED'",{id:eventId});
+  return retry.affectedRows===1?eventId:'';
 }
 async function finishEvent(eventId,status,error='') { await execute('UPDATE line_webhook_events SET status=:status,error=:error,completed_at=:completed WHERE event_id=:id',{id:eventId,status,error:clean(error,1000),completed:nowSql()}); }
 
@@ -101,13 +114,28 @@ async function requireSession(sessionId,userId,contextId) {
   return row;
 }
 
-async function saveLineImage(session,messageId,pageNo) {
+async function saveLineImage(session,messageId) {
   const downloaded=await lineRequest(`/v2/bot/message/${encodeURIComponent(messageId)}/content`,{binary:true});
   if(!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(downloaded.mime))throw new Error('ชนิดรูปจาก LINE ไม่รองรับ');
   const dataUrl=`data:${downloaded.mime};base64,${downloaded.buffer.toString('base64')}`;
-  const stored=await storeCompressedImage('line-inbox',`${session.session_id.slice(0,8)}-p${pageNo}.jpg`,dataUrl,{maxLongEdge:2000,quality:82});
+  const stored=await storeCompressedImage('line-inbox',`${session.session_id.slice(0,8)}-${messageId.slice(-10)}.jpg`,dataUrl,{maxLongEdge:2000,quality:82});
   try {
-    await execute('INSERT INTO line_upload_pages (session_id,page_no,message_id,file_path,file_name,mime_type,sha256,size_bytes,original_size_bytes,compression,width,height,created_at) VALUES (:session,:page,:message,:path,:name,:mime,:sha,:size,:original,:compression,:width,:height,:created)',{session:session.session_id,page:pageNo,message:messageId,path:stored.relative,name:stored.relative.split('/').pop(),mime:stored.mime,sha:stored.sha256,size:stored.size,original:stored.originalSize,compression:stored.compression,width:stored.width,height:stored.height,created:nowSql()});
+    const result=await transaction(async connection=>{
+      const[sessionRows]=await connection.execute('SELECT * FROM upload_sessions WHERE session_id=? FOR UPDATE',[session.session_id]);
+      const locked=sessionRows[0];
+      if(!locked)throw new Error('ไม่พบชุดรูปที่กำลังอัปโหลด กรุณาส่งรูปใหม่');
+      const[existingRows]=await connection.execute('SELECT session_id,page_no FROM line_upload_pages WHERE message_id=? LIMIT 1',[messageId]);
+      const received=number(locked.received_pages),expected=number(locked.expected_pages);
+      if(existingRows[0])return{duplicate:true,pageNo:number(existingRows[0].page_no),received,expected,status:locked.status,projectId:locked.project_id,companyId:locked.company_id};
+      if(expected&&received>=expected)return{complete:true,received,expected,status:locked.status,projectId:locked.project_id,companyId:locked.company_id};
+      const pageNo=received+1;
+      const status=!expected?'AWAITING_PAGE_COUNT':pageNo>=expected?'AWAITING_PROJECT':'COLLECTING_PAGES';
+      await connection.execute('INSERT INTO line_upload_pages (session_id,page_no,message_id,file_path,file_name,mime_type,sha256,size_bytes,original_size_bytes,compression,width,height,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[locked.session_id,pageNo,messageId,stored.relative,stored.relative.split('/').pop(),stored.mime,stored.sha256,stored.size,stored.originalSize,stored.compression,stored.width,stored.height,nowSql()]);
+      await connection.execute('UPDATE upload_sessions SET received_pages=?,status=?,updated_at=? WHERE session_id=?',[pageNo,status,nowSql(),locked.session_id]);
+      return{duplicate:false,received:pageNo,expected,status,projectId:locked.project_id,companyId:locked.company_id};
+    });
+    if(result.duplicate||result.complete)await removeFile(stored.relative);
+    return result;
   } catch(error) { await removeFile(stored.relative); throw error; }
 }
 
@@ -222,8 +250,10 @@ async function processSession(sessionId,userId,contextId,replyToken,source) {
     await pushWithRetry(contextId,[message(`เก็บรูปบิลครบ ${job.page_count} หน้าแล้ว ✅\nอยู่ในคิวรอ Gemini วิเคราะห์ ระบบจะแจ้งผลกลับมาอัตโนมัติ ไม่ต้องส่งรูปซ้ำ`)]);
   } catch(error) {
     await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-    await push(contextId,[message(`เก็บบิลเข้าคิวไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปต้นฉบับจาก LINE ยังถูกเก็บไว้ ลองเลือกบริษัทอีกครั้งได้โดยไม่ต้องส่งรูปใหม่`)]).catch(()=>{});
-    error.lineNotified=true;
+    try{
+      await pushWithRetry(contextId,[message(`เก็บบิลเข้าคิวไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปต้นฉบับจาก LINE ยังถูกเก็บไว้ ลองเลือกบริษัทอีกครั้งได้โดยไม่ต้องส่งรูปใหม่`)]);
+      error.lineNotified=true;
+    }catch{}
     throw error;
   }
 }
@@ -250,19 +280,19 @@ export async function notifyBillAiJobOutcome(outcome) {
 async function handleImage(event,userId,contextId) {
   if(!userId)throw new Error('ไม่พบ LINE userId ของผู้ส่งรูป');
   let session=await activeSession(userId,contextId);
-  if(session&&['PROCESSING','AWAITING_PROJECT','AWAITING_COMPANY'].includes(session.status)){await reply(event.replyToken,[message('กรุณาทำรายการเดิมให้เสร็จก่อน หรือพิมพ์ “ยกเลิก” เพื่อเริ่มใหม่')]);return;}
+  if(session&&['PROCESSING','AWAITING_PROJECT','AWAITING_COMPANY'].includes(session.status)){await notifyLine(event.replyToken,contextId,[message('กรุณาทำรายการเดิมให้เสร็จก่อน หรือพิมพ์ “ยกเลิก” เพื่อเริ่มใหม่')]);return;}
   if(!session)session=await createSession(userId,contextId);
   const received=number(session.received_pages),expected=number(session.expected_pages);
-  if(session.status==='AWAITING_PAGE_COUNT'&&received>0){await reply(event.replyToken,[pageCountMessage(session.session_id,received,await getQuickSettings())]);return;}
-  if(expected&&received>=expected){await reply(event.replyToken,[message('ได้รับรูปครบแล้ว กรุณาเลือกโครงการ/บริษัท หรือพิมพ์ “ยกเลิก”')]);return;}
+  if(session.status==='AWAITING_PAGE_COUNT'&&received>0){await notifyLine(event.replyToken,contextId,[pageCountMessage(session.session_id,received,await getQuickSettings())]);return;}
+  if(expected&&received>=expected){await notifyLine(event.replyToken,contextId,[message('ได้รับรูปครบแล้ว กรุณาเลือกโครงการ/บริษัท หรือพิมพ์ “ยกเลิก”')]);return;}
   await acknowledgeImage(event.replyToken,contextId);
-  await saveLineImage(session,clean(event.message.id,160),received+1);
-  const next=received+1;
-  const status=!expected?'AWAITING_PAGE_COUNT':next>=expected?'AWAITING_PROJECT':'COLLECTING_PAGES';
-  await execute('UPDATE upload_sessions SET received_pages=:received,status=:status,updated_at=:updated WHERE session_id=:id',{id:session.session_id,received:next,status,updated:nowSql()});
-  if(!expected){await pushWithRetry(contextId,[pageCountMessage(session.session_id,next,await getQuickSettings())]);return;}
-  if(next<expected){await pushWithRetry(contextId,[message(`ได้รับหน้า ${next}/${expected} แล้ว กรุณาส่งหน้าถัดไป`)]);return;}
-  if(session.project_id&&session.company_id)await processSession(session.session_id,userId,contextId,'',event.source);
+  const saved=await saveLineImage(session,clean(event.message.id,160));
+  if(saved.duplicate){await pushWithRetry(contextId,[message(`รูปนี้ถูกเก็บไว้แล้วเป็นหน้า ${saved.pageNo} ไม่ต้องส่งซ้ำครับ`)]);return;}
+  if(saved.complete){await pushWithRetry(contextId,[message('ได้รับรูปครบแล้ว กรุณาเลือกโครงการ/บริษัท หรือพิมพ์ “ยกเลิก”')]);return;}
+  const next=saved.received;
+  if(!saved.expected){await pushWithRetry(contextId,[pageCountMessage(session.session_id,next,await getQuickSettings())]);return;}
+  if(next<saved.expected){await pushWithRetry(contextId,[message(`ได้รับหน้า ${next}/${saved.expected} แล้ว กรุณาส่งหน้าถัดไป`)]);return;}
+  if(saved.projectId&&saved.companyId)await processSession(session.session_id,userId,contextId,'',event.source);
   else await pushWithRetry(contextId,[await projectSelectionMessage(session.session_id)]);
 }
 
@@ -340,15 +370,20 @@ async function handleEvent(event) {
 
 export async function handleLineWebhook(events,logger=console) {
   for(const event of events) {
-    const eventId=await reserveEvent(event);
-    if(!eventId)continue;
-    try { await handleEvent(event); await finishEvent(eventId,'COMPLETED'); }
-    catch(error) {
-      await finishEvent(eventId,'FAILED',error.message).catch(()=>{});
-      logger.error?.({err:error,eventId},'LINE event failed');
-      const target=targetOf(event.source);
-      if(target&&!error.lineNotified)await push(target,[message(`เกิดข้อผิดพลาด: ${clean(error.message,300)}`)]).catch(()=>{});
-    }
+    await serializeLineEvent(event,async()=>{
+      const eventId=await reserveEvent(event);
+      if(!eventId)return;
+      try { await handleEvent(event); await finishEvent(eventId,'COMPLETED'); }
+      catch(error) {
+        await finishEvent(eventId,'FAILED',error.message).catch(()=>{});
+        logger.error?.({err:error,eventId},'LINE event failed');
+        const target=targetOf(event.source);
+        if(target&&!error.lineNotified){
+          try{await pushWithRetry(target,[message(`เกิดข้อผิดพลาด: ${clean(error.message,300)}\nรูปที่รับสำเร็จแล้วจะยังอยู่ในระบบ ไม่ต้องส่งซ้ำ`)]);}
+          catch(notifyError){logger.error?.({err:notifyError,eventId},'LINE failure notification could not be delivered');}
+        }
+      }
+    });
   }
 }
 

@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, inspectTemplate } from '../server/exports.mjs';
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
-import { billConfirmation, billSavedConfirmation, pageCountMessage, verifyLineSignature } from '../server/line.mjs';
+import { billConfirmation, billSavedConfirmation, pageCountMessage, serializeLineEvent, verifyLineSignature } from '../server/line.mjs';
 import { addressesMatch, billAiRetryDelayMs, classifyGeminiFailure, companyNamesMatch, normalizeCurrentYearBillDate, normalizeQualityScore } from '../server/actions/bills.mjs';
 import { buildReceiptAiRequest, normalizeReceiptAiResult } from '../server/actions/receipts.mjs';
 
@@ -57,6 +57,11 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(line, /acknowledgeImage\(event\.replyToken,contextId\)/);
   assert.match(line, /pushWithRetry\(contextId,\[pageCountMessage/);
   assert.match(line, /session\.status==='AWAITING_PAGE_COUNT'&&received>0/);
+  assert.match(line, /const lineEventQueues = new Map\(\)/);
+  assert.match(line, /serializeLineEvent\(event/);
+  assert.match(line, /SELECT \* FROM upload_sessions WHERE session_id=\? FOR UPDATE/);
+  assert.match(line, /รูปนี้ถูกเก็บไว้แล้วเป็นหน้า/);
+  assert.match(line, /LINE failure notification could not be delivered/);
   assert.match(line, /label:'ระบบ WorkHub'/);
   assert.match(line, /openExternalBrowser=1/);
 });
@@ -137,6 +142,15 @@ test('LINE webhook signature validates the exact raw request body', () => {
   assert.equal(verifyLineSignature(raw,signature,secret),true);
   assert.equal(verifyLineSignature(raw+' ',signature,secret),false);
   assert.equal(verifyLineSignature(raw,'invalid',secret),false);
+});
+
+test('LINE image events from the same sender are serialized', async () => {
+  const event={source:{type:'user',userId:'U-test'}};
+  const trace=[];
+  const first=serializeLineEvent(event,async()=>{trace.push('first:start');await new Promise(resolve=>setTimeout(resolve,15));trace.push('first:end');});
+  const second=serializeLineEvent(event,async()=>{trace.push('second:start');trace.push('second:end');});
+  await Promise.all([first,second]);
+  assert.deepEqual(trace,['first:start','first:end','second:start','second:end']);
 });
 
 test('scrypt password hashes verify without storing plaintext', async () => {

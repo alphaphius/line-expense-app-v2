@@ -9,7 +9,7 @@ const int = (name, fallback) => {
 
 export const config = Object.freeze({
   appName: 'WorkHub',
-  appVersion: '4.9.11-nas',
+  appVersion: '4.9.12-nas',
   apiVersion: '2.0',
   schemaVersion: 12,
   host: process.env.HOST || '0.0.0.0',
