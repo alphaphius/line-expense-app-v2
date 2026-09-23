@@ -199,7 +199,11 @@ async function getVendor(connection, ai, timestamp) {
   return id;
 }
 
-export async function submitBillPages(payload = {}) {
+export async function submitBillPages(payload = {}, {lineSessionId=null} = {}) {
+  if(lineSessionId){
+    const existing=await one('SELECT j.job_id FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id WHERE b.line_session_id=:id',{id:lineSessionId});
+    if(existing)return getBillAiJob(existing.job_id);
+  }
   const projectId=clean(payload.project_id,64); const companyId=clean(payload.company_id,64);
   const source=clean(payload.source||'WEB',32).toUpperCase();
   const requestedDateInput=clean(payload.document_date,20);
@@ -228,15 +232,23 @@ export async function submitBillPages(payload = {}) {
     const receivedDate=`${receivedParts.year}-${receivedParts.month}-${receivedParts.day}`;
     const timestamp=nowSql();
     await transaction(async connection=>{
+      if(lineSessionId){
+        const [sessions]=await connection.execute("SELECT session_id FROM upload_sessions WHERE session_id=? AND source='LINE' AND source_user_id=? AND source_context_id=? FOR UPDATE",[lineSessionId,sourceUserId,clean(payload.source_context_id,160)]);
+        if(!sessions.length)throw new Error('ไม่พบชุดรูป LINE ของผู้ส่ง');
+        const [existing]=await connection.execute('SELECT j.job_id FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id WHERE b.line_session_id=?',[lineSessionId]);
+        if(existing.length){const duplicate=new Error('LINE session already submitted');duplicate.existingJobId=existing[0].job_id;throw duplicate;}
+      }
       await connection.execute('INSERT INTO upload_sessions (session_id,project_id,company_id,expected_pages,received_pages,status,source,source_user_id,source_context_id,created_at,expires_at,updated_at) VALUES (?,?,?,?,?,\'AI_QUEUED\',?,?,?,?,DATE_ADD(?,INTERVAL 24 HOUR),?)',[sessionId,projectId,companyId,expected,files.length,source,sourceUserId,clean(payload.source_context_id,160),timestamp,timestamp,timestamp]);
       const values={ bill_id:billId,session_id:sessionId,project_id:projectId,company_id:companyId,category_id:'',doc_type:'',document_no:'',document_date:requestedDate||receivedDate,due_date:null,vendor_id:'',vendor_name:'กำลังรอ AI วิเคราะห์',vendor_tax_id:'',vendor_branch:'',vendor_address:'',buyer_name:'',buyer_tax_id:'',buyer_address:'',currency:'THB',subtotal:0,discount:0,vat_rate:0,vat_amount:0,withholding_tax:0,grand_total:0,payment_method:'',description:'',notes:'',page_count:expected,image_quality:'',quality_score:0,needs_review:1,review_reasons:JSON.stringify(['รูปถูกเก็บแล้ว กำลังรอ Gemini วิเคราะห์']),company_match:null,tax_id_match:null,address_match:null,duplicate_key:'',status:'AI_QUEUED',source,source_user_id:sourceUserId,source_user_name:sourceUserName,source_context_id:clean(payload.source_context_id,160),folder_path:stored[0].relative.split('/').slice(0,-1).join('/'),created_at:timestamp,updated_at:timestamp };
+      values.line_session_id=lineSessionId;
       const columns=Object.keys(values); await connection.execute(`INSERT INTO bills (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`,Object.values(values));
       for(let index=0;index<stored.length;index+=1){const item=stored[index];await connection.execute('INSERT INTO bill_documents (doc_id,bill_id,session_id,page_no,file_path,file_name,mime_type,sha256,size_bytes,original_size_bytes,compression,width,height,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[uuid(),billId,sessionId,index+1,item.relative,item.relative.split('/').pop(),item.mime,item.sha256,item.size,item.originalSize,item.compression,item.width,item.height,timestamp]);}
       await connection.execute("INSERT INTO bill_ai_jobs (job_id,bill_id,requested_document_date,status,attempts,max_attempts,model,fallback_model,error_code,last_error,status_message,next_attempt_at,created_at,updated_at) VALUES (?,?,?,'AI_QUEUED',0,?,?,?,?,?,'เก็บรูปเรียบร้อยแล้ว กำลังรอ Gemini วิเคราะห์',?,?,?)",[jobId,billId,requestedDate||null,config.billAiMaxAttempts,config.geminiModel,config.geminiFallbackModel,'','',timestamp,timestamp,timestamp]);
       await connection.execute('INSERT INTO audit_logs (log_id,entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES (?,?,?,?,?,?,?,?)',[uuid(),'bill',billId,'AI_QUEUED',sourceUserId||'WEB',null,JSON.stringify({job_id:jobId,page_count:expected,status:'AI_QUEUED'}),timestamp]);
+      if(lineSessionId)await connection.execute("UPDATE upload_sessions SET status='COMPLETED',updated_at=? WHERE session_id=?",[timestamp,lineSessionId]);
     });
     return getBillAiJob(jobId);
-  }catch(error){await Promise.all(stored.map(item=>removeFile(item.relative)));throw error;}
+  }catch(error){await Promise.all(stored.map(item=>removeFile(item.relative)));if(error.existingJobId)return getBillAiJob(error.existingJobId);throw error;}
 }
 
 function nextAttemptSql(delayMs) { return new Date(Date.now()+delayMs).toISOString().slice(0,23).replace('T',' '); }

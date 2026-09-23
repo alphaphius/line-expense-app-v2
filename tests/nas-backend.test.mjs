@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { createBillXlsx, createReceiptDocx, createSimpleBillDocx, createXlsx, inspectTemplate } from '../server/exports.mjs';
 import { hashPassword, verifyPassword } from '../server/auth.mjs';
 import crypto from 'node:crypto';
-import { billConfirmation, billSavedConfirmation, pageCountMessage, serializeLineEvent, verifyLineSignature } from '../server/line.mjs';
+import { analysisProgressFlex, billConfirmation, billSavedConfirmation, pageCountMessage, serializeLineEvent, verifyLineSignature } from '../server/line.mjs';
 import { addressesMatch, billAiRetryDelayMs, classifyGeminiFailure, companyNamesMatch, normalizeCurrentYearBillDate, normalizeQualityScore } from '../server/actions/bills.mjs';
 import { buildReceiptAiRequest, normalizeReceiptAiResult } from '../server/actions/receipts.mjs';
 
@@ -53,15 +53,15 @@ test('NAS deployment artifacts keep secrets out of source and use persistent sto
   assert.match(server, /\/webhook\/line/);
   assert.match(server, /repairAddressMatchFlags/);
   assert.match(line, /timingSafeEqual/);
-  assert.match(line, /INSERT IGNORE INTO line_webhook_events/);
-  assert.match(line, /acknowledgeImage\(event\.replyToken,contextId\)/);
-  assert.match(line, /pushWithRetry\(contextId,\[pageCountMessage/);
-  assert.match(line, /session\.status==='AWAITING_PAGE_COUNT'&&received>0/);
+  assert.match(line, /enqueueLineEvents\(events\)/);
+  assert.match(server, /await handleLineWebhook\(events\)/);
+  assert.doesNotMatch(server, /setImmediate\(\(\)=>handleLineWebhook/);
+  assert.match(line, /resumeSession/);
   assert.match(line, /const lineEventQueues = new Map\(\)/);
   assert.match(line, /serializeLineEvent\(event/);
   assert.match(line, /SELECT \* FROM upload_sessions WHERE session_id=\? FOR UPDATE/);
-  assert.match(line, /รูปนี้ถูกเก็บไว้แล้วเป็นหน้า/);
-  assert.match(line, /LINE failure notification could not be delivered/);
+  assert.match(line, /lineSessionId:sessionId/);
+  assert.match(line, /enqueueLineMessage/);
   assert.match(line, /label:'ระบบ WorkHub'/);
   assert.match(line, /openExternalBrowser=1/);
 });
@@ -151,6 +151,13 @@ test('LINE image events from the same sender are serialized', async () => {
   const second=serializeLineEvent(event,async()=>{trace.push('second:start');trace.push('second:end');});
   await Promise.all([first,second]);
   assert.deepEqual(trace,['first:start','first:end','second:start','second:end']);
+});
+
+test('LINE AI progress remains a Flex reply with a manual result button',()=>{
+  const flex=analysisProgressFlex({job_id:'job-1',status:'AI_RETRY',status_message:'Gemini ไม่ว่าง ระบบจะลองใหม่',attempts:2,page_count:1,next_attempt_at:'2026-09-24 03:30:00.000'});
+  assert.equal(flex.type,'flex');
+  assert.match(JSON.stringify(flex),/action=check_bill_ai&job_id=job-1/);
+  assert.match(flex.altText,/กดตรวจผล AI/);
 });
 
 test('scrypt password hashes verify without storing plaintext', async () => {

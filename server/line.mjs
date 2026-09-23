@@ -4,7 +4,9 @@ import { execute, one, select, transaction } from './db.mjs';
 import { readBuffer, removeFile, storeCompressedImage } from './files.mjs';
 import { clean, nowSql, number, uuid } from './utils.mjs';
 import { getQuickSettings } from './actions/masters.mjs';
-import { confirmBill, deleteBill, normalizeQualityScore, submitBillPages } from './actions/bills.mjs';
+import { confirmBill, deleteBill, getBillDetail, normalizeQualityScore, submitBillPages } from './actions/bills.mjs';
+import { bindLineSession, enqueueLineEvents, enqueueLineMessage, lineEventContext, pendingLineInput } from './line-queue.mjs';
+import { LineDeliveryError } from './line-delivery.mjs';
 
 const LINE_API = 'https://api.line.me';
 const LINE_DATA_API = 'https://api-data.line.me';
@@ -21,7 +23,6 @@ export function verifyLineSignature(rawBody, signature, secret = config.lineChan
 
 function targetOf(source = {}) { return clean(source.groupId || source.roomId || source.userId, 160); }
 function userOf(source = {}) { return clean(source.userId, 160); }
-function sourceTypeOf(source = {}) { return clean(source.type, 40); }
 function message(text, quickReply) { const result={type:'text',text:clean(text,5000)};if(quickReply?.length)result.quickReply={items:quickReply};return result; }
 function postback(label, data, displayText) { return {type:'action',action:{type:'postback',label:clean(label,20),data:clean(data,300),displayText:clean(displayText,300)}}; }
 
@@ -35,7 +36,7 @@ async function lineRequest(path, { method='GET', body, binary=false } = {}) {
   });
   if (!response.ok) {
     const detail=clean(await response.text().catch(()=>''),400);
-    throw new Error(`LINE API ${response.status}${detail?`: ${detail}`:''}`);
+    throw new LineDeliveryError(response.status,detail,Number(response.headers.get('retry-after'))||0);
   }
   if (binary) {
     const length=Number(response.headers.get('content-length')||0);
@@ -49,29 +50,12 @@ async function lineRequest(path, { method='GET', body, binary=false } = {}) {
 }
 
 async function reply(replyToken, messages) {
-  if(!replyToken)return;
-  await lineRequest('/v2/bot/message/reply',{method:'POST',body:{replyToken,messages:messages.slice(0,5)}});
-}
-async function push(target, messages) {
-  if(!target)return;
-  await lineRequest('/v2/bot/message/push',{method:'POST',body:{to:target,messages:messages.slice(0,5)}});
-}
-
-async function pushWithRetry(target, messages) {
-  let lastError;
-  for(let attempt=1;attempt<=3;attempt+=1){
-    try{return await push(target,messages);}catch(error){lastError=error;if(attempt<3)await new Promise(resolve=>setTimeout(resolve,attempt*450));}
-  }
-  throw lastError;
+  const event=JSON.parse(lineEventContext()?.row.payload||'{}');
+  return enqueueLineMessage(targetOf(event.source),messages,{replyToken});
 }
 
 async function notifyLine(replyToken,target,messages) {
-  if(replyToken){try{return await reply(replyToken,messages);}catch(error){if(!target)throw error;}}
-  return pushWithRetry(target,messages);
-}
-
-async function acknowledgeImage(replyToken,target) {
-  return notifyLine(replyToken,target,[message('ได้รับรูปบิลแล้ว กำลังบันทึกรูป…')]);
+  return enqueueLineMessage(target,messages,{replyToken});
 }
 
 export async function serializeLineEvent(event,task) {
@@ -83,18 +67,6 @@ export async function serializeLineEvent(event,task) {
   try{return await current;}
   finally{if(lineEventQueues.get(key)===current)lineEventQueues.delete(key);}
 }
-
-async function reserveEvent(event) {
-  const eventId=clean(event.webhookEventId,160)||crypto.createHash('sha256').update(JSON.stringify(event)).digest('hex');
-  const source=event.source||{};
-  const result=await execute("INSERT IGNORE INTO line_webhook_events (event_id,event_type,source_type,source_id,message_id,status,error,created_at) VALUES (:id,:type,:sourceType,:sourceId,:messageId,'PROCESSING','',:created)",{
-    id:eventId,type:clean(event.type,80),sourceType:sourceTypeOf(source),sourceId:targetOf(source),messageId:clean(event.message?.id,160),created:nowSql(),
-  });
-  if(result.affectedRows===1)return eventId;
-  const retry=await execute("UPDATE line_webhook_events SET status='PROCESSING',error='',completed_at=NULL WHERE event_id=:id AND status='FAILED'",{id:eventId});
-  return retry.affectedRows===1?eventId:'';
-}
-async function finishEvent(eventId,status,error='') { await execute('UPDATE line_webhook_events SET status=:status,error=:error,completed_at=:completed WHERE event_id=:id',{id:eventId,status,error:clean(error,1000),completed:nowSql()}); }
 
 function expiresSql() { return new Date(Date.now()+config.lineSessionHours*3600000).toISOString().slice(0,23).replace('T',' '); }
 
@@ -115,6 +87,8 @@ async function requireSession(sessionId,userId,contextId) {
 }
 
 async function saveLineImage(session,messageId) {
+  const existing=await one('SELECT page_no FROM line_upload_pages WHERE message_id=:id',{id:messageId});
+  if(existing)return {duplicate:true,pageNo:existing.page_no};
   const downloaded=await lineRequest(`/v2/bot/message/${encodeURIComponent(messageId)}/content`,{binary:true});
   if(!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(downloaded.mime))throw new Error('ชนิดรูปจาก LINE ไม่รองรับ');
   const dataUrl=`data:${downloaded.mime};base64,${downloaded.buffer.toString('base64')}`;
@@ -125,9 +99,11 @@ async function saveLineImage(session,messageId) {
       const locked=sessionRows[0];
       if(!locked)throw new Error('ไม่พบชุดรูปที่กำลังอัปโหลด กรุณาส่งรูปใหม่');
       const[existingRows]=await connection.execute('SELECT session_id,page_no FROM line_upload_pages WHERE message_id=? LIMIT 1',[messageId]);
+      const[sameImage]=await connection.execute('SELECT page_no FROM line_upload_pages WHERE session_id=? AND sha256=? LIMIT 1',[session.session_id,stored.sha256]);
       const received=number(locked.received_pages),expected=number(locked.expected_pages);
       if(existingRows[0])return{duplicate:true,pageNo:number(existingRows[0].page_no),received,expected,status:locked.status,projectId:locked.project_id,companyId:locked.company_id};
-      if(expected&&received>=expected)return{complete:true,received,expected,status:locked.status,projectId:locked.project_id,companyId:locked.company_id};
+      if(sameImage[0])return{duplicate:true,pageNo:number(sameImage[0].page_no),received,expected,status:locked.status,projectId:locked.project_id,companyId:locked.company_id};
+      if(received>=config.maxPagesPerBill||(expected&&received>=expected))return{complete:true,received,expected,status:locked.status,projectId:locked.project_id,companyId:locked.company_id};
       const pageNo=received+1;
       const status=!expected?'AWAITING_PAGE_COUNT':pageNo>=expected?'AWAITING_PROJECT':'COLLECTING_PAGES';
       await connection.execute('INSERT INTO line_upload_pages (session_id,page_no,message_id,file_path,file_name,mime_type,sha256,size_bytes,original_size_bytes,compression,width,height,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[locked.session_id,pageNo,messageId,stored.relative,stored.relative.split('/').pop(),stored.mime,stored.sha256,stored.size,stored.originalSize,stored.compression,stored.width,stored.height,nowSql()]);
@@ -140,10 +116,10 @@ async function saveLineImage(session,messageId) {
 }
 
 function pageCountMessage(sessionId,received,quick) {
-  const configured=(quick?.slots||[]).filter(item=>item.configured);
+  const configured=(quick?.slots||[]).filter(item=>item.configured&&item.page_count>=received);
   const body=[
     {type:'box',layout:'vertical',cornerRadius:'18px',backgroundColor:'#F8EADB',paddingAll:'16px',contents:[
-      {type:'text',text:'บิลทั่วไปเลือก “1 หน้า (ใบเดียว)”',color:'#7C4D3A',weight:'bold',size:'sm',wrap:true},
+      {type:'text',text:received>1?`เก็บรูปแล้ว ${received} หน้า กรุณาเลือกจำนวนหน้ารวม`:'เก็บรูปแล้ว 1 หน้า · บิลทั่วไปเลือก “1 หน้า (ใบเดียว)”',color:'#7C4D3A',weight:'bold',size:'sm',wrap:true},
       {type:'text',text:'หากเป็นเอกสารต่อเนื่องหลายหน้า ให้เลือกจำนวนหน้ารวมทั้งหมด',color:'#8C756A',size:'xs',margin:'md',wrap:true},
     ]},
   ];
@@ -154,7 +130,7 @@ function pageCountMessage(sessionId,received,quick) {
       {type:'box',layout:'baseline',contents:[{type:'text',text:'โครงการ',color:'#8C756A',size:'sm',flex:3},{type:'text',text:clean(slot.project_name,100),color:'#44312A',weight:'bold',size:'sm',align:'end',wrap:true,flex:4}]},
       {type:'box',layout:'baseline',contents:[{type:'text',text:'บริษัท',color:'#8C756A',size:'sm',flex:3},{type:'text',text:clean(slot.company_name,100),color:'#44312A',weight:'bold',size:'sm',align:'end',wrap:true,flex:4}]},
     ]});
-    body.push({type:'button',style:'primary',height:'sm',color:'#A1603D',margin:'md',action:{type:'postback',label:`ใช้${slot.label}`,data:`action=use_quick_settings&session_id=${sessionId}&slot=${slot.slot}`,displayText:`ใช้${slot.label} สำหรับบิลนี้`}});
+    body.push({type:'button',style:'primary',height:'sm',color:'#A1603D',margin:'md',action:{type:'postback',label:clean(`ใช้${slot.label}`,20),data:`action=use_quick_settings&session_id=${sessionId}&slot=${slot.slot}`,displayText:`ใช้${slot.label} สำหรับบิลนี้`}});
   }
   body.push({type:'separator',margin:'xl',color:'#E1CDBD'},{type:'text',text:'หรือกำหนดจำนวนหน้าเอง',color:'#795442',weight:'bold',size:'sm',margin:'lg'});
   const counts=[];
@@ -226,6 +202,28 @@ function billConfirmation(bill) {
   ]},footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'sm',contents:buttons}}};
 }
 
+function analysisProgressFlex(job) {
+  const status=clean(job.status,40);
+  const actionRequired=status==='AI_ACTION_REQUIRED';
+  const title=actionRequired?'ต้องให้ผู้ดูแลตรวจสอบ':'กำลังวิเคราะห์บิล';
+  const detail=clean(job.status_message,500)||(status==='AI_RETRY'?'Gemini ไม่ว่าง ระบบจะลองใหม่อัตโนมัติ':'รูปถูกเก็บแล้วและอยู่ในคิว AI');
+  const contents=[
+    {type:'text',text:'WORKHUB · BILL AI',color:'#E3BE72',weight:'bold',size:'sm'},
+    {type:'text',text:title,color:'#FFFFFF',weight:'bold',size:'xl',margin:'md',wrap:true},
+    {type:'text',text:'ไม่ต้องส่งรูปซ้ำ',color:'#E1D4CD',size:'sm',margin:'sm'},
+  ];
+  const body=[
+    {type:'text',text:detail,color:'#44312A',size:'sm',wrap:true},
+    row('จำนวนหน้า',`${number(job.page_count)||1} หน้า`),
+    row('ลองวิเคราะห์แล้ว',`${number(job.attempts)} ครั้ง`),
+  ];
+  if(job.next_attempt_at)body.push(row('ระบบลองใหม่',new Date(String(job.next_attempt_at).replace(' ','T')+'Z').toLocaleString('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'short',timeStyle:'short'})));
+  return {type:'flex',altText:`${title} · กดตรวจผล AI`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:actionRequired?'#7A3E32':'#2D211C',paddingAll:'20px',contents},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'md',contents:body},footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'sm',contents:[
+    {type:'button',style:'primary',color:'#31473A',action:{type:'postback',label:'ตรวจผล AI',data:`action=check_bill_ai&job_id=${job.job_id}`,displayText:'ตรวจผลวิเคราะห์บิล'}},
+    ...(config.publicBaseUrl?[{type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'เปิด WorkHub',uri:`${config.publicBaseUrl}/?openExternalBrowser=1`}}]:[]),
+  ]}}};
+}
+
 async function cleanupSessionFiles(sessionId) {
   const pages=await select('SELECT file_path FROM line_upload_pages WHERE session_id=:id',{id:sessionId});
   await Promise.all(pages.map(row=>removeFile(row.file_path)));
@@ -233,72 +231,83 @@ async function cleanupSessionFiles(sessionId) {
 }
 
 async function processSession(sessionId,userId,contextId,replyToken,source) {
+  const existing=await one('SELECT j.*,b.page_count FROM bills b JOIN bill_ai_jobs j ON j.bill_id=b.bill_id WHERE b.line_session_id=:id AND b.source_user_id=:user AND b.source_context_id=:context',{id:sessionId,user:userId,context:contextId});
+  if(existing){await enqueueLineMessage(contextId,[analysisProgressFlex(existing)],{replyToken});return;}
   const session=await requireSession(sessionId,userId,contextId);
   if(number(session.received_pages)!==number(session.expected_pages))throw new Error('จำนวนรูปยังไม่ครบตามที่ระบุ');
   if(!session.project_id||!session.company_id)throw new Error('กรุณาเลือกโครงการและบริษัทให้ครบ');
   if(!config.geminiApiKey){await notifyLine(replyToken,contextId,[message('ยังวิเคราะห์ไม่ได้ เพราะ NAS ยังไม่ได้ตั้งค่า GEMINI_API_KEY รูปยังถูกเก็บไว้และเลือกตัวเลือกเดิมซ้ำได้หลังตั้งค่าแล้ว')]);return;}
   await execute("UPDATE upload_sessions SET status='PROCESSING',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-  await notifyLine(replyToken,contextId,[message('รับข้อมูลครบแล้ว กำลังเก็บรูปบน WorkHub กรุณารอสักครู่…')]);
   const pages=await select('SELECT * FROM line_upload_pages WHERE session_id=:id ORDER BY page_no',{id:sessionId});
+  let job;
   try {
     const profile=await lineProfile(userId,source);
     await rememberLineUser(userId,profile);
     const files=await Promise.all(pages.map(async page=>({name:page.file_name,dataUrl:`data:${page.mime_type};base64,${(await readBuffer(page.file_path)).toString('base64')}`})));
-    const job=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_user_name:profile.displayName,source_context_id:contextId});
-    await execute("UPDATE upload_sessions SET status='COMPLETED',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-    await cleanupSessionFiles(sessionId);
-    await pushWithRetry(contextId,[message(`เก็บรูปบิลครบ ${job.page_count} หน้าแล้ว ✅\nอยู่ในคิวรอ Gemini วิเคราะห์ ระบบจะแจ้งผลกลับมาอัตโนมัติ ไม่ต้องส่งรูปซ้ำ`)]);
+    job=await submitBillPages({project_id:session.project_id,company_id:session.company_id,expected_pages:session.expected_pages,files,source:'LINE',source_user_id:userId,source_user_name:profile.displayName,source_context_id:contextId},{lineSessionId:sessionId});
   } catch(error) {
     await execute("UPDATE upload_sessions SET status='AWAITING_COMPANY',updated_at=:updated WHERE session_id=:id",{id:sessionId,updated:nowSql()});
-    try{
-      await pushWithRetry(contextId,[message(`เก็บบิลเข้าคิวไม่สำเร็จ: ${clean(error.message,300)}\n\nรูปต้นฉบับจาก LINE ยังถูกเก็บไว้ ลองเลือกบริษัทอีกครั้งได้โดยไม่ต้องส่งรูปใหม่`)]);
-      error.lineNotified=true;
-    }catch{}
     throw error;
   }
-}
-
-export async function notifyBillAiJobOutcome(outcome) {
-  const job=outcome?.job;
-  if(!job||job.source!=='LINE'||!job.source_context_id||job.last_notified_status===job.status)return false;
-  if(job.status==='AI_COMPLETED'&&outcome.bill){
-    await pushWithRetry(job.source_context_id,[billConfirmation(outcome.bill)]);
-    return true;
-  }
-  if(job.status==='AI_RETRY'){
-    const when=job.next_attempt_at?new Date(String(job.next_attempt_at).replace(' ','T')+'Z').toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',minute:'2-digit'}):'อีกสักครู่';
-    await pushWithRetry(job.source_context_id,[message(`${job.status_message}\nระบบจะลองอีกครั้งประมาณ ${when} น. รูปถูกเก็บไว้อย่างปลอดภัย ไม่ต้องส่งซ้ำ`)]);
-    return true;
-  }
-  if(job.status==='AI_ACTION_REQUIRED'){
-    await pushWithRetry(job.source_context_id,[message(`${job.status_message}\nรูปยังอยู่ใน WorkHub กรุณาแจ้งผู้ดูแลให้ตรวจการตั้งค่า แล้วกด “ลองวิเคราะห์ใหม่” จากหน้าบิลทั้งหมด`)]);
-    return true;
-  }
-  return false;
+  // A notification/file-cleanup failure must never reopen an already committed bill.
+  await enqueueLineMessage(contextId,[analysisProgressFlex(job)],{replyToken});
+  await cleanupSessionFiles(sessionId).catch(()=>{});
 }
 
 async function handleImage(event,userId,contextId) {
   if(!userId)throw new Error('ไม่พบ LINE userId ของผู้ส่งรูป');
-  let session=await activeSession(userId,contextId);
-  if(session&&['PROCESSING','AWAITING_PROJECT','AWAITING_COMPANY'].includes(session.status)){await notifyLine(event.replyToken,contextId,[message('กรุณาทำรายการเดิมให้เสร็จก่อน หรือพิมพ์ “ยกเลิก” เพื่อเริ่มใหม่')]);return;}
+  const bound=lineEventContext()?.row.session_id;
+  let session=bound?await one('SELECT * FROM upload_sessions WHERE session_id=:id',{id:bound}):await activeSession(userId,contextId);
+  const prior=await one('SELECT session_id FROM line_upload_pages WHERE message_id=:id',{id:clean(event.message.id,160)});
+  if(prior){session=await one('SELECT * FROM upload_sessions WHERE session_id=:id',{id:prior.session_id});await resumeSession(session,event,userId,contextId);return;}
+  if(bound&&session&&['COMPLETED','CANCELLED'].includes(session.status))return;
+  if(!bound&&session&&['PROCESSING','AWAITING_PROJECT','AWAITING_COMPANY'].includes(session.status)){
+    await notifyLine(event.replyToken,contextId,[message('รูปใหม่นี้ยังไม่ได้เพิ่มเข้าบิล เพราะรายการเดิมรอเลือกโครงการ/บริษัท กรุณาทำรายการเดิมให้เสร็จ หรือพิมพ์ “ยกเลิก” แล้วส่งรูปใหม่'),await sessionPrompt(session)]);return;
+  }
   if(!session)session=await createSession(userId,contextId);
+  await bindLineSession(session.session_id);
   const received=number(session.received_pages),expected=number(session.expected_pages);
-  if(session.status==='AWAITING_PAGE_COUNT'&&received>0){await notifyLine(event.replyToken,contextId,[pageCountMessage(session.session_id,received,await getQuickSettings())]);return;}
-  if(expected&&received>=expected){await notifyLine(event.replyToken,contextId,[message('ได้รับรูปครบแล้ว กรุณาเลือกโครงการ/บริษัท หรือพิมพ์ “ยกเลิก”')]);return;}
-  await acknowledgeImage(event.replyToken,contextId);
-  const saved=await saveLineImage(session,clean(event.message.id,160));
-  if(saved.duplicate){await pushWithRetry(contextId,[message(`รูปนี้ถูกเก็บไว้แล้วเป็นหน้า ${saved.pageNo} ไม่ต้องส่งซ้ำครับ`)]);return;}
-  if(saved.complete){await pushWithRetry(contextId,[message('ได้รับรูปครบแล้ว กรุณาเลือกโครงการ/บริษัท หรือพิมพ์ “ยกเลิก”')]);return;}
-  const next=saved.received;
-  if(!saved.expected){await pushWithRetry(contextId,[pageCountMessage(session.session_id,next,await getQuickSettings())]);return;}
-  if(next<saved.expected){await pushWithRetry(contextId,[message(`ได้รับหน้า ${next}/${saved.expected} แล้ว กรุณาส่งหน้าถัดไป`)]);return;}
-  if(saved.projectId&&saved.companyId)await processSession(session.session_id,userId,contextId,'',event.source);
-  else await pushWithRetry(contextId,[await projectSelectionMessage(session.session_id)]);
+  if(received>=config.maxPagesPerBill||(expected&&received>=expected)){await notifyLine(event.replyToken,contextId,[message('รูปใหม่นี้ยังไม่ได้เพิ่ม เพราะได้รับรูปครบแล้ว กรุณาทำรายการเดิมให้เสร็จ'),await sessionPrompt(session)]);return;}
+  // Keep the free reply token for the actionable next-step message after saving.
+  await saveLineImage(session,clean(event.message.id,160));
+  session=await one('SELECT * FROM upload_sessions WHERE session_id=:id',{id:session.session_id});
+  await resumeSession(session,event,userId,contextId);
+}
+
+async function sessionPrompt(session){
+  if(session.status==='AWAITING_PAGE_COUNT')return pageCountMessage(session.session_id,number(session.received_pages)||1,await getQuickSettings());
+  if(session.status==='AWAITING_PROJECT')return projectSelectionMessage(session.session_id);
+  if(session.status==='AWAITING_COMPANY')return companySelectionMessage(session.session_id);
+  return message(`สถานะชุดรูป: ${session.status==='COMPLETED'?'เก็บบิลเข้าคิว AI แล้ว':session.status==='PROCESSING'?'กำลังเก็บบิลเข้าคิว':session.status==='CANCELLED'?'ยกเลิกแล้ว':'รอรูปเพิ่มเติม'}\nได้รับแล้ว ${session.received_pages}/${session.expected_pages||'?'} หน้า\nพิมพ์ “สถานะ” เพื่อติดตาม หรือ “ยกเลิก” เพื่อยกเลิกชุดรูป`);
+}
+
+async function resumeSession(session,event,userId,contextId){
+  if(session&&number(session.expected_pages)>0&&number(session.received_pages)>=number(session.expected_pages)&&session.project_id&&session.company_id&&ACTIVE_SESSION_STATUSES.includes(session.status))return processSession(session.session_id,userId,contextId,event.replyToken,event.source);
+  if(session)await notifyLine(event.replyToken,contextId,[await sessionPrompt(session)]);
 }
 
 async function handlePostback(event,userId,contextId) {
   const data=Object.fromEntries(new URLSearchParams(clean(event.postback?.data,1000)));
   const action=clean(data.action,80);
+  if(action==='check_bill_ai'){
+    const job=await one(`SELECT j.*,b.bill_id,b.status AS bill_status,b.page_count FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
+      WHERE j.job_id=:id AND b.source='LINE' AND b.source_user_id=:user AND b.source_context_id=:context`,{id:clean(data.job_id,64),user:userId,context:contextId});
+    if(!job)throw new Error('ไม่พบคิววิเคราะห์นี้ หรือผู้ส่งไม่มีสิทธิ์ตรวจสอบ');
+    if(job.status==='AI_COMPLETED'&&job.bill_status!=='REJECTED'){
+      const bill=await getBillDetail(job.bill_id);
+      return reply(event.replyToken,[job.bill_status==='CONFIRMED'?billSavedConfirmation(bill):billConfirmation(bill)]);
+    }
+    if(job.status==='AI_CANCELLED'||job.bill_status==='REJECTED')return reply(event.replyToken,[message('รายการบิลนี้ถูกยกเลิกแล้ว สามารถส่งรูปใหม่ได้ครับ')]);
+    return reply(event.replyToken,[analysisProgressFlex(job)]);
+  }
+  if(action==='cancel_session'){
+    const cancelled=await one("SELECT session_id FROM upload_sessions WHERE session_id=:id AND source_user_id=:user AND source_context_id=:context AND status='CANCELLED'",{id:clean(data.session_id,64),user:userId,context:contextId});
+    if(cancelled){await cleanupSessionFiles(cancelled.session_id);return reply(event.replyToken,[message('ยกเลิกรูปชุดนี้แล้ว ส่งรูปใหม่ได้เลยครับ')]);}
+  }
+  if(['select_company','use_quick_settings'].includes(action)&&data.session_id){
+    const committed=await one('SELECT bill_id FROM bills WHERE line_session_id=:id AND source_user_id=:user AND source_context_id=:context',{id:clean(data.session_id,64),user:userId,context:contextId});
+    if(committed)return processSession(data.session_id,userId,contextId,event.replyToken,event.source);
+  }
   if(action==='cancel_session'){
     const session=await requireSession(data.session_id,userId,contextId);
     await execute("UPDATE upload_sessions SET status='CANCELLED',updated_at=:updated WHERE session_id=:id",{id:session.session_id,updated:nowSql()});
@@ -350,17 +359,25 @@ async function cancelSession(userId,contextId) {
   return true;
 }
 
-async function handleEvent(event) {
+export async function handleEvent(event) {
   const source=event.source||{},userId=userOf(source),contextId=targetOf(source);
   if(event.type==='message'&&event.message?.type==='image')return handleImage(event,userId,contextId);
   if(event.type==='postback')return handlePostback(event,userId,contextId);
   if(event.type==='message'&&event.message?.type==='text'){
     const text=clean(event.message.text,500);
     if(/^(ยกเลิก|cancel)$/i.test(text)){const cancelled=await cancelSession(userId,contextId);return reply(event.replyToken,[message(cancelled?'ยกเลิกรายการที่กำลังทำแล้ว ส่งรูปใหม่ได้เลยครับ':'ไม่พบรายการที่กำลังทำครับ')]);}
-    if(/^(สถานะ|status)$/i.test(text)){
-      const latest=await one(`SELECT j.status,j.status_message,j.next_attempt_at FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
+    if(/^(สถานะ|status|ต่อ)$/i.test(text)){
+      const pending=await pendingLineInput(userId,contextId);
+      if(pending&&['RETRY','PROCESSING'].includes(pending.status))return reply(event.replyToken,[message(`ระบบกำลังรับรูปของคุณ (ลองแล้ว ${pending.attempts} ครั้ง) ยังไม่ต้องส่งซ้ำครับ\nกดหรือพิมพ์ “สถานะ” อีกครั้งเพื่อทำรายการต่อ`)]);
+      const session=await activeSession(userId,contextId);
+      if(session)return reply(event.replyToken,[...(pending?.status==='FAILED'?[message('มีรูปที่รับไม่สำเร็จ กรุณาส่งเฉพาะรูปที่ขาดอีกครั้ง หรือติดต่อผู้ดูแล')]:[]),await sessionPrompt(session)]);
+      const latest=await one(`SELECT j.*,b.bill_id,b.page_count,b.status AS bill_status FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
         WHERE b.source_user_id=:user AND b.source_context_id=:context ORDER BY j.created_at DESC LIMIT 1`,{user:userId,context:contextId});
-      if(latest&&latest.status!=='AI_COMPLETED')return reply(event.replyToken,[message(`${latest.status_message||'ระบบกำลังดำเนินการ'}\nรูปบิลถูกเก็บไว้แล้ว ไม่ต้องส่งซ้ำ`)]);
+      if(latest&&latest.status!=='AI_COMPLETED')return reply(event.replyToken,[analysisProgressFlex(latest)]);
+      if(latest?.status==='AI_COMPLETED'&&latest.bill_status!=='REJECTED'){
+        const bill=await getBillDetail(latest.bill_id);
+        return reply(event.replyToken,[latest.bill_status==='CONFIRMED'?billSavedConfirmation(bill):billConfirmation(bill)]);
+      }
       return reply(event.replyToken,[message(`WorkHub พร้อมรับบิล${config.geminiApiKey?' และ Gemini พร้อมวิเคราะห์':' แต่ยังไม่ได้ตั้งค่า Gemini บน NAS'}\nส่งรูปบิลเพื่อเริ่มใช้งาน`)]);
     }
     return reply(event.replyToken,[message('ส่งรูปบิลเข้ามาได้เลยครับ ระบบจะถามจำนวนหน้า โครงการ และบริษัทก่อนวิเคราะห์\nพิมพ์ “ยกเลิก” เพื่อยกเลิกรายการ')]);
@@ -368,23 +385,8 @@ async function handleEvent(event) {
   if(['follow','join'].includes(event.type)&&event.replyToken)return reply(event.replyToken,[message('ยินดีต้อนรับสู่ WorkHub\nส่งรูปบิลเพื่อเริ่มบันทึกค่าใช้จ่ายได้เลยครับ')]);
 }
 
-export async function handleLineWebhook(events,logger=console) {
-  for(const event of events) {
-    await serializeLineEvent(event,async()=>{
-      const eventId=await reserveEvent(event);
-      if(!eventId)return;
-      try { await handleEvent(event); await finishEvent(eventId,'COMPLETED'); }
-      catch(error) {
-        await finishEvent(eventId,'FAILED',error.message).catch(()=>{});
-        logger.error?.({err:error,eventId},'LINE event failed');
-        const target=targetOf(event.source);
-        if(target&&!error.lineNotified){
-          try{await pushWithRetry(target,[message(`เกิดข้อผิดพลาด: ${clean(error.message,300)}\nรูปที่รับสำเร็จแล้วจะยังอยู่ในระบบ ไม่ต้องส่งซ้ำ`)]);}
-          catch(notifyError){logger.error?.({err:notifyError,eventId},'LINE failure notification could not be delivered');}
-        }
-      }
-    });
-  }
+export async function handleLineWebhook(events) {
+  return enqueueLineEvents(events);
 }
 
 export async function backfillLineUsernames(){
@@ -401,4 +403,4 @@ export async function backfillLineUsernames(){
   return{updated,skipped,message:`อัปเดตชื่อผู้ส่งแล้ว ${updated} บิล${skipped?` · อ่านชื่อไม่ได้ ${skipped} คน`:''}`};
 }
 
-export { billConfirmation, billSavedConfirmation, pageCountMessage };
+export { analysisProgressFlex, billConfirmation, billSavedConfirmation, pageCountMessage };

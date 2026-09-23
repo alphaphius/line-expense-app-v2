@@ -1,0 +1,39 @@
+CREATE TABLE IF NOT EXISTS line_inbox (
+  seq BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  event_id VARCHAR(160) NOT NULL UNIQUE,
+  lane CHAR(64) NOT NULL,
+  payload LONGTEXT NOT NULL,
+  session_id VARCHAR(64) NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+  attempts INT NOT NULL DEFAULT 0,
+  available_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  lease_until DATETIME(3) NULL,
+  lease_token CHAR(36) NULL,
+  last_error VARCHAR(1000) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX idx_line_inbox_due (status,available_at),
+  INDEX idx_line_inbox_lane (lane,status,seq)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS line_outbox (
+  seq BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  dedupe_key CHAR(64) NOT NULL UNIQUE,
+  target VARCHAR(160) NOT NULL,
+  messages LONGTEXT NOT NULL,
+  reply_token VARCHAR(160) NOT NULL DEFAULT '',
+  reply_until DATETIME(3) NULL,
+  retry_key CHAR(36) NOT NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+  attempts INT NOT NULL DEFAULT 0,
+  available_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  lease_until DATETIME(3) NULL,
+  lease_token CHAR(36) NULL,
+  last_error VARCHAR(1000) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX idx_line_outbox_due (status,available_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE bills ADD COLUMN IF NOT EXISTS line_session_id VARCHAR(64) NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bill_line_session ON bills (line_session_id);

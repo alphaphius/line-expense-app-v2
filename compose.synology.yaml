@@ -3,9 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: workhub:4.9.12
+    image: workhub:4.9.13
     container_name: workhub
     restart: unless-stopped
+    stop_grace_period: 4m
     env_file:
       - .env.nas
       - workhub-line.env
