@@ -132,7 +132,7 @@ export async function listReceiptRegistrations(filters = {}) {
 }
 
 export async function getReceiptWorkspace(filters = {}) {
-  const [templates,groups,projects,sites,registrations,activeBatch]=await Promise.all([select('SELECT template_id,template_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE active=1 ORDER BY updated_at DESC'),groupsWithProjects(),select('SELECT * FROM projects WHERE active=1 ORDER BY project_name'),reportSites(),listReceiptRegistrations(filters),latestActiveReceiptBatch()]);
+  const [templates,groups,projects,sites,registrations,activeBatch]=await Promise.all([select('SELECT template_id,template_name,source_file_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE active=1 ORDER BY updated_at DESC'),groupsWithProjects(),select('SELECT * FROM projects WHERE active=1 ORDER BY project_name'),reportSites(),listReceiptRegistrations(filters),latestActiveReceiptBatch()]);
   const enabled=!!config.passwordHash&&!!config.receiptGeminiApiKey;
   const securityMessage=!config.passwordHash?'ผู้ดูแลยังไม่ได้ตั้งรหัสผ่าน WorkHub':!config.receiptGeminiApiKey?'ยังไม่ได้ตั้งค่า Gemini API สำหรับเอกสารใบรับเงิน':'';
   return { enabled, securityMessage, aiConfigured:!!config.receiptGeminiApiKey, aiModel:config.receiptGeminiModel, templates:templates.map(publicRow), groups, projects:projects.map(publicRow), reportSites:sites, registrations, activeBatch };
@@ -158,7 +158,14 @@ export async function saveReceiptTemplate(payload={}) {
   if(!['.doc','.docx'].includes(extension))throw apiError('TEMPLATE_FORMAT','รองรับ Template เฉพาะไฟล์ DOC และ DOCX');
   const parsed=parseDataUrl(payload.data_url,['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/octet-stream']);if(parsed.buffer.length>8*1024*1024)throw apiError('TEMPLATE_TOO_LARGE','Template ต้องมีขนาดไม่เกิน 8 MB');
   const source=await storeBuffer('templates',fileName,parsed.buffer);let normalized=null;
-  try{const docx=extension==='.doc'?await convertDoc(parsed.buffer,fileName):parsed.buffer;const validation=await inspectTemplate(docx);normalized=await storeBuffer('templates',`${name}-normalized.docx`,docx);const id=uuid();const timestamp=nowSql();await execute('INSERT INTO receipt_templates (template_id,template_name,source_path,normalized_path,source_format,page_count,placeholders,active,created_at,updated_at) VALUES (:id,:name,:source,:normalized,:format,:pages,:holders,1,:created,:updated)',{id,name,source:source.relative,normalized:normalized.relative,format:extension.slice(1).toUpperCase(),pages:validation.pageCount,holders:JSON.stringify(validation.placeholders),created:timestamp,updated:timestamp});return publicRow(await one('SELECT template_id,template_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE template_id=:id',{id}));}catch(error){await removeFile(source.relative);if(normalized)await removeFile(normalized.relative);throw error;}
+  try{const docx=extension==='.doc'?await convertDoc(parsed.buffer,fileName):parsed.buffer;const validation=await inspectTemplate(docx);normalized=await storeBuffer('templates',`${name}-normalized.docx`,docx);const id=uuid();const timestamp=nowSql();await execute('INSERT INTO receipt_templates (template_id,template_name,source_file_name,source_path,normalized_path,source_format,page_count,placeholders,active,created_at,updated_at) VALUES (:id,:name,:fileName,:source,:normalized,:format,:pages,:holders,1,:created,:updated)',{id,name,fileName,source:source.relative,normalized:normalized.relative,format:extension.slice(1).toUpperCase(),pages:validation.pageCount,holders:JSON.stringify(validation.placeholders),created:timestamp,updated:timestamp});return publicRow(await one('SELECT template_id,template_name,source_file_name,source_format,page_count,placeholders,active,created_at,updated_at FROM receipt_templates WHERE template_id=:id',{id}));}catch(error){await removeFile(source.relative);if(normalized)await removeFile(normalized.relative);throw error;}
+}
+
+export async function downloadReceiptTemplate(payload={},createTicket) {
+  const id=clean(payload.template_id,64),template=await one('SELECT * FROM receipt_templates WHERE template_id=:id AND active=1',{id});
+  if(!template)throw apiError('TEMPLATE_NOT_FOUND','ไม่พบ Template ที่ต้องการดาวน์โหลด');
+  const format=clean(template.source_format,12).toUpperCase()==='DOC'?'DOC':'DOCX',mime=format==='DOC'?'application/msword':DOCX_MIME,fileName=safeName(template.source_file_name||`${template.template_name}.${format.toLowerCase()}`,`template.${format.toLowerCase()}`);
+  return createTicket(await readBuffer(template.source_path),fileName,mime,1,null);
 }
 
 export async function deleteReceiptTemplate(payload={}) {

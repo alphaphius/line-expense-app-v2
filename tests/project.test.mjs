@@ -195,8 +195,8 @@ test('service worker caches only same-origin static GET assets', async () => {
 });
 
 test('receipt registry supports durable AI retries, cancellation, card review, multi-group export, and payroll sync', async () => {
-  const [frontend,html,styles,backend,server,api,migration,exportMigration,payroll,exports]=await Promise.all([
-    read('frontend/receipts.js'),read('frontend/index.html'),read('frontend/styles.css'),read('server/actions/receipts.mjs'),read('server/server.mjs'),read('server/api.mjs'),read('server/migrations/009_receipt_payroll_sync.sql'),read('server/migrations/010_receipt_template_export_options.sql'),read('frontend/payroll.js'),read('server/exports.mjs'),
+  const [frontend,html,styles,backend,server,api,migration,exportMigration,templateMigration,payroll,exports]=await Promise.all([
+    read('frontend/receipts.js'),read('frontend/index.html'),read('frontend/styles.css'),read('server/actions/receipts.mjs'),read('server/server.mjs'),read('server/api.mjs'),read('server/migrations/009_receipt_payroll_sync.sql'),read('server/migrations/010_receipt_template_export_options.sql'),read('server/migrations/011_receipt_template_file_names.sql'),read('frontend/payroll.js'),read('server/exports.mjs'),
   ]);
   assert.match(server,/processNextReceiptAiJob/);
   assert.match(backend,/ai_next_attempt_at/);
@@ -224,6 +224,13 @@ test('receipt registry supports durable AI retries, cancellation, card review, m
   assert.match(backend,/export async function saveReceiptExportOption/);
   assert.match(api,/deleteReceiptTemplate/);
   assert.match(exports,/\{รายการรับเงิน\}/);
+  assert.match(frontend,/renderTemplateFileState/);
+  assert.match(frontend,/downloadReceiptTemplate/);
+  assert.match(html,/receipt-template-upload-state/);
+  assert.match(styles,/\.template-file-field\.is-ready/);
+  assert.match(templateMigration,/source_file_name VARCHAR/);
+  assert.match(backend,/export async function downloadReceiptTemplate/);
+  assert.match(api,/downloadReceiptTemplate/);
 });
 
 test('local preview is isolated from the production API', async () => {

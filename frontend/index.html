@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.9 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.10 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -398,9 +398,10 @@
                 <summary>อัปโหลด Template ใหม่ (DOC/DOCX)</summary>
                 <form id="receipt-template-form" class="template-uploader__form">
                   <label class="label">ชื่อ Template<input id="receipt-template-name" class="field mt-2" maxlength="150" placeholder="เช่น ใบรับเงินค่าแรงรายวัน"></label>
-                  <label class="template-file-field"><input id="receipt-template-file" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><span>เลือกไฟล์ DOC หรือ DOCX</span><small>{ชื่อสกุล} · {เลขบัตร} · {ที่อยู่} · {รายการรับเงิน}</small></label>
+                  <label id="receipt-template-file-field" class="template-file-field"><input id="receipt-template-file" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><span id="receipt-template-file-title">เลือกไฟล์ DOC หรือ DOCX</span><small id="receipt-template-file-help">{ชื่อสกุล} · {เลขบัตร} · {ที่อยู่} · {รายการรับเงิน}</small></label>
                   <button class="primary-btn" type="submit">บันทึก Template</button>
                 </form>
+                <div id="receipt-template-upload-state" class="receipt-template-upload-state hidden" aria-live="polite"></div>
               </details>
             </article>
 
