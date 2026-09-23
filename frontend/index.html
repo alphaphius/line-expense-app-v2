@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.8 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.9 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -389,7 +389,7 @@
 
           <div id="receipt-workspace" class="space-y-5">
             <article class="card receipt-setup-card">
-              <div class="receipt-section-head"><div><span class="step-kicker">01 · เตรียมชุดเอกสาร</span><h3>Template และกลุ่มแรงงาน</h3></div><button id="receipt-new-group-btn" class="secondary-btn" type="button">+ สร้างกลุ่ม</button></div>
+              <div class="receipt-section-head"><div><span class="step-kicker">01 · เตรียมชุดเอกสาร</span><h3>Template และกลุ่มแรงงาน</h3></div><div class="receipt-setup-actions"><button id="receipt-template-manage-btn" class="secondary-btn" type="button">จัดการ Template</button><button id="receipt-new-group-btn" class="secondary-btn" type="button">+ สร้างกลุ่ม</button></div></div>
               <div class="receipt-setup-grid">
                 <label class="label">Template ที่ใช้<select id="receipt-template-select" class="field mt-2"><option value="">เลือก Template</option></select></label>
                 <label class="label">กลุ่มแรงงาน / ไซต์งาน<select id="receipt-group-select" class="field mt-2"><option value="">เลือกกลุ่มแรงงาน</option></select></label>
@@ -398,7 +398,7 @@
                 <summary>อัปโหลด Template ใหม่ (DOC/DOCX)</summary>
                 <form id="receipt-template-form" class="template-uploader__form">
                   <label class="label">ชื่อ Template<input id="receipt-template-name" class="field mt-2" maxlength="150" placeholder="เช่น ใบรับเงินค่าแรงรายวัน"></label>
-                  <label class="template-file-field"><input id="receipt-template-file" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><span>เลือกไฟล์ DOC หรือ DOCX</span><small>{ชื่อสกุล} · {เลขบัตร} · {ที่อยู่}</small></label>
+                  <label class="template-file-field"><input id="receipt-template-file" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><span>เลือกไฟล์ DOC หรือ DOCX</span><small>{ชื่อสกุล} · {เลขบัตร} · {ที่อยู่} · {รายการรับเงิน}</small></label>
                   <button class="primary-btn" type="submit">บันทึก Template</button>
                 </form>
               </details>
@@ -408,7 +408,7 @@
               <div class="receipt-section-head"><div><span class="step-kicker">02 · อ่านข้อมูล</span><h3>อัปโหลดรูปบัตรประชาชน</h3><p>สูงสุด 40 รูปต่อชุด · เก็บรูปบน NAS ก่อนอ่าน · Gemini ประมวลผลหลายรูปต่อคำขอเพื่อลด token</p></div></div>
               <label id="receipt-card-dropzone" class="receipt-dropzone">
                 <input id="receipt-card-files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-                <span class="receipt-dropzone__icon" aria-hidden="true">＋</span><strong>เลือกรูปบัตรประชาชน</strong><small>JPG, PNG, WEBP · บีบอัดและบันทึกบน NAS ก่อนส่งให้ Gemini</small>
+                <span id="receipt-dropzone-icon" class="receipt-dropzone__icon" aria-hidden="true">＋</span><strong id="receipt-dropzone-title">เลือกรูปบัตรประชาชน</strong><small id="receipt-dropzone-help">JPG, PNG, WEBP · บีบอัดและบันทึกบน NAS ก่อนส่งให้ Gemini</small>
               </label>
               <div id="receipt-upload-summary" class="receipt-upload-summary hidden" aria-live="polite"></div>
               <button id="receipt-process-btn" class="primary-btn receipt-process-btn" type="button" disabled>เริ่มอ่านข้อมูล <span id="receipt-selected-count">0</span> รูป</button>

@@ -53,11 +53,12 @@
     gate.classList.toggle('hidden', state.enabled);
     $('receipt-workspace').classList.toggle('is-disabled', !state.enabled);
     if (securityMessage) $('receipt-security-message').textContent = securityMessage;
-    ['receipt-template-select','receipt-group-select','receipt-card-files','receipt-template-file','receipt-template-name','receipt-new-group-btn'].forEach(id => {
+    ['receipt-template-select','receipt-group-select','receipt-card-files','receipt-template-file','receipt-template-name','receipt-template-manage-btn','receipt-new-group-btn'].forEach(id => {
       const element = $(id); if (element) element.disabled = !state.enabled;
     });
     renderOptions();
     renderRegistry();
+    renderSelectedFiles();
   }
 
   function renderOptions() {
@@ -106,16 +107,19 @@
   function renderRegistry() {
     $('receipt-total-count').textContent = Number(state.registrations.length).toLocaleString('th-TH');
     const groupMap = Object.fromEntries(state.groups.map(group => [group.group_id, group]));
-    $('receipt-registry-list').innerHTML = state.registrations.length ? state.registrations.map(row => {
-      const group = groupMap[row.group_id] || {};
-      return `<label class="receipt-registry-row">
-        <input type="checkbox" data-receipt-select value="${escapeHtml(row.registration_id)}">
-        <span class="receipt-person"><strong>${escapeHtml(row.full_name || '-')}</strong><small>${escapeHtml(row.nickname?`ชื่อเล่น ${row.nickname}`:'ยังไม่ระบุชื่อเล่น')}</small></span>
-        <span>${escapeHtml(row.national_id_masked || '-')}</span>
-        <span>${escapeHtml(group.group_name || row.group_name || '-')}<small>${Number(row.daily_wage||0).toLocaleString('th-TH')} บาท/วัน</small></span>
-        <small>${escapeHtml([group.site_code||row.site_code,group.province||row.province].filter(Boolean).join(' · ')||row.updated_at||'')}</small>
-      </label>`;
-    }).join('') : '<div class="receipt-registry-empty">ยังไม่มีรายชื่อที่บันทึก เมื่อ OCR และตรวจสอบแล้ว รายชื่อจะปรากฏที่นี่</div>';
+    const grouped = new Map();
+    state.registrations.forEach(row=>{const group=groupMap[row.group_id]||{},key=row.group_id||'ungrouped',entry=grouped.get(key)||{group,rows:[]};entry.rows.push(row);grouped.set(key,entry);});
+    $('receipt-registry-list').innerHTML = state.registrations.length ? [...grouped.entries()].map(([groupId,entry]) => {
+      const groupName=entry.group.group_name||entry.rows[0]?.group_name||'ไม่ระบุกลุ่ม',siteDetail=[entry.group.site_code||entry.rows[0]?.site_code,entry.group.province||entry.rows[0]?.province].filter(Boolean).join(' · ');
+      const rows=entry.rows.map(row=>`<div class="receipt-registry-row ${Number(row.include_receipt_item)===0?'is-item-omitted':''}" data-registry-id="${escapeHtml(row.registration_id)}">
+        <label class="receipt-registry-check" aria-label="เลือก ${escapeHtml(row.full_name||'รายชื่อนี้')}"><input type="checkbox" data-receipt-select value="${escapeHtml(row.registration_id)}"></label>
+        <span class="receipt-person"><strong>${escapeHtml(row.full_name || '-')}</strong><small>${escapeHtml(row.nickname?`ชื่อเล่น ${row.nickname}`:'ยังไม่ระบุชื่อเล่น')} · ${escapeHtml(row.national_id_masked||'-')}</small></span>
+        <span class="receipt-registry-wage">${Number(row.daily_wage||0).toLocaleString('th-TH')} บาท/วัน<small>${escapeHtml(row.note||'ไม่มีหมายเหตุ')}</small></span>
+        <label class="receipt-item-choice"><input type="checkbox" data-receipt-item-toggle="${escapeHtml(row.registration_id)}" ${Number(row.include_receipt_item)!==0?'checked':''}><span>ใส่รายการรับเงิน<small>${escapeHtml(row.receipt_item||'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ')}</small></span></label>
+        <button type="button" class="receipt-row-edit-btn" data-receipt-edit="${escapeHtml(row.registration_id)}">แก้ไข</button>
+      </div>`).join('');
+      return `<section class="receipt-registry-group" data-group-id="${escapeHtml(groupId)}"><header><div><span>กลุ่มแรงงาน</span><strong>${escapeHtml(groupName)}</strong>${siteDetail?`<small>${escapeHtml(siteDetail)}</small>`:''}</div><b>${entry.rows.length.toLocaleString('th-TH')} คน</b></header><div class="receipt-registry-group__rows">${rows}</div></section>`;
+    }).join('') : '<div class="receipt-registry-empty">ยังไม่มีรายชื่อที่บันทึก เมื่อ AI อ่านและตรวจสอบแล้ว รายชื่อจะปรากฏที่นี่</div>';
     updateSelection();
   }
 
@@ -174,6 +178,13 @@
     finally { button.disabled = false; }
   }
 
+  function templatePlaceholders(row){try{return Array.isArray(row.placeholders)?row.placeholders:JSON.parse(row.placeholders||'[]');}catch{return[];}}
+
+  async function showTemplateManager() {
+    const list=state.templates.length?state.templates.map(row=>`<div class="receipt-template-manager__row"><div><strong>${escapeHtml(row.template_name)}</strong><small>${escapeHtml(row.source_format||'DOCX')} · ${Number(row.page_count||1).toLocaleString('th-TH')} หน้า</small><p>${templatePlaceholders(row).map(escapeHtml).join(' · ')}</p></div><button type="button" data-template-delete="${escapeHtml(row.template_id)}">ลบ</button></div>`).join(''):'<p class="receipt-template-manager__empty">ยังไม่มี Template</p>';
+    await Swal.fire({title:'จัดการ Template',html:`<div class="receipt-template-manager">${list}</div>`,confirmButtonText:'ปิด',confirmButtonColor:'#8f5f42',width:680,didOpen:popup=>popup.addEventListener('click',async event=>{const button=event.target.closest('[data-template-delete]');if(!button)return;const template=state.templates.find(row=>row.template_id===button.dataset.templateDelete);const confirmed=await Swal.fire({icon:'warning',title:'ลบ Template นี้?',text:template?.template_name||'',showCancelButton:true,confirmButtonText:'ลบ Template',cancelButtonText:'ยกเลิก',confirmButtonColor:'#b64d3e'});if(!confirmed.isConfirmed)return;try{await protectedCallWithRequestId('deleteReceiptTemplate',window.V2Api.newRequestId(),{template_id:button.dataset.templateDelete});state.templates=state.templates.filter(row=>row.template_id!==button.dataset.templateDelete);renderOptions();await Swal.fire({icon:'success',title:'ลบ Template แล้ว',timer:1200,showConfirmButton:false});showTemplateManager();}catch(error){await Swal.fire('ลบ Template ไม่สำเร็จ',error.message,'error');showTemplateManager();}})});
+  }
+
   async function createGroup() {
     if (!state.enabled) return;
     const projectOptions = state.projects.map(row => `<option value="${escapeHtml(row.project_id)}">${escapeHtml(row.project_name)}</option>`).join('');
@@ -198,14 +209,16 @@
     if (files.length > 40) {
       event.target.value = '';
       state.selectedFiles = [];
+      renderSelectedFiles();
       return Swal.fire('เลือกได้สูงสุด 40 รูปต่อชุด','','warning');
     }
     state.selectedFiles = files;
-    $('receipt-selected-count').textContent = files.length.toLocaleString('th-TH');
-    $('receipt-process-btn').disabled = !state.enabled || !files.length;
-    $('receipt-upload-summary').classList.toggle('hidden', !files.length);
-    $('receipt-upload-summary').textContent = files.length ? `เลือกแล้ว ${files.length.toLocaleString('th-TH')} รูป · ${(files.reduce((sum,file)=>sum+file.size,0)/(1024*1024)).toLocaleString('th-TH',{maximumFractionDigits:1})} MB ก่อนบีบอัด` : '';
+    renderSelectedFiles();
   }
+
+  function renderSelectedFiles(){const files=state.selectedFiles,total=files.reduce((sum,file)=>sum+file.size,0),ready=files.length>0,dropzone=$('receipt-card-dropzone');$('receipt-selected-count').textContent=files.length.toLocaleString('th-TH');$('receipt-process-btn').disabled=!state.enabled||!ready;dropzone.classList.toggle('is-ready',ready);$('receipt-dropzone-icon').textContent=ready?'✓':'＋';$('receipt-dropzone-title').textContent=ready?`เตรียมอัปโหลดแล้ว ${files.length.toLocaleString('th-TH')} รูป`:'เลือกรูปบัตรประชาชน';$('receipt-dropzone-help').textContent=ready?'แตะบริเวณนี้เพื่อเลือกไฟล์ใหม่':'JPG, PNG, WEBP · บีบอัดและบันทึกบน NAS ก่อนส่งให้ Gemini';const summary=$('receipt-upload-summary');summary.classList.toggle('hidden',!ready);summary.innerHTML=ready?`<div class="receipt-upload-summary__head"><span><strong>พร้อมอัปโหลด</strong><small>${(total/(1024*1024)).toLocaleString('th-TH',{maximumFractionDigits:1})} MB ก่อนบีบอัด</small></span><button type="button" data-clear-receipt-files>ล้างรายการ</button></div><div class="receipt-upload-files">${files.map((file,index)=>`<span><b>${index+1}</b><em>${escapeHtml(file.name)}</em><small>${formatFileSize(file.size)}</small></span>`).join('')}</div>`:'';}
+
+  function clearSelectedFiles(){state.selectedFiles=[];$('receipt-card-files').value='';renderSelectedFiles();}
 
   async function processCards() {
     if (state.processing || !state.selectedFiles.length) return;
@@ -340,8 +353,8 @@
       const result = await gas('saveReceiptRegistrations', { batch_id:state.batchId, rows });
       window.PayrollModule?.invalidate?.();
       await refreshRegistry();
-      state.draftRows.forEach(row=>{if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);});state.draftRows = []; state.selectedFiles = []; state.batchId=''; state.activeBatch=null; $('receipt-card-files').value = '';
-      $('receipt-quick-edit-card').classList.add('hidden'); $('receipt-upload-summary').classList.add('hidden'); $('receipt-selected-count').textContent = '0';
+      state.draftRows.forEach(row=>{if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);});state.draftRows = []; state.batchId=''; state.activeBatch=null;
+      $('receipt-quick-edit-card').classList.add('hidden');clearSelectedFiles();
       Swal.fire({ icon:'success', title:`บันทึกแล้ว ${result.count.toLocaleString('th-TH')} คน`, text:'worker_id พร้อมเชื่อมระบบเช็กชื่อและค่าแรง', timer:2200, showConfirmButton:false });
     } catch (error) { Swal.fire('บันทึกไม่สำเร็จ',error.message,'error'); }
     finally { updateBatchProgress(); }
@@ -367,17 +380,21 @@
 
   async function deleteCard(index){const row=state.draftRows[index];if(!row?.registration_id)return;const confirm=await Swal.fire({icon:'warning',title:'ลบรายการนี้ออกจาก Quick Edit?',text:'รูปบัตรและข้อมูลที่ยังไม่บันทึกของรายการนี้จะถูกลบ',showCancelButton:true,confirmButtonText:'ลบรายการ',cancelButtonText:'กลับ',confirmButtonColor:'#b64d3e'});if(!confirm.isConfirmed)return;try{await protectedCallWithRequestId('deleteReceiptRegistration',window.V2Api.newRequestId(),{registration_id:row.registration_id});if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);state.previewCache.delete(row.registration_id);state.draftRows.splice(index,1);if(!state.draftRows.length){state.batchId='';state.activeBatch=null;$('receipt-quick-edit-card').classList.add('hidden');}renderDraftRows();}catch(error){Swal.fire('ลบรายการไม่สำเร็จ',error.message,'error');}}
 
-  async function cancelBatch(){if(!state.batchId)return;const confirm=await Swal.fire({icon:'warning',title:'ยกเลิกชุดอัปโหลดนี้?',text:'รายการ Quick Edit และรูปบัตรในชุดที่ยังไม่บันทึกจะถูกลบทั้งหมด',showCancelButton:true,confirmButtonText:'ยกเลิกชุดงาน',cancelButtonText:'ทำงานต่อ',confirmButtonColor:'#b64d3e'});if(!confirm.isConfirmed)return;try{await protectedCallWithRequestId('cancelReceiptBatch',window.V2Api.newRequestId(),{batch_id:state.batchId});state.draftRows.forEach(row=>{if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);});state.draftRows=[];state.selectedFiles=[];state.batchId='';state.activeBatch=null;$('receipt-card-files').value='';$('receipt-quick-edit-card').classList.add('hidden');$('receipt-upload-summary').classList.add('hidden');$('receipt-selected-count').textContent='0';Swal.fire({icon:'success',title:'ยกเลิกชุดงานแล้ว',timer:1400,showConfirmButton:false});}catch(error){Swal.fire('ยกเลิกไม่สำเร็จ',error.message,'error');}}
+  async function cancelBatch(){if(!state.batchId)return;const confirm=await Swal.fire({icon:'warning',title:'ยกเลิกชุดอัปโหลดนี้?',text:'รายการ Quick Edit และรูปบัตรในชุดที่ยังไม่บันทึกจะถูกลบทั้งหมด',showCancelButton:true,confirmButtonText:'ยกเลิกชุดงาน',cancelButtonText:'ทำงานต่อ',confirmButtonColor:'#b64d3e'});if(!confirm.isConfirmed)return;try{await protectedCallWithRequestId('cancelReceiptBatch',window.V2Api.newRequestId(),{batch_id:state.batchId});state.draftRows.forEach(row=>{if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);});state.draftRows=[];state.batchId='';state.activeBatch=null;$('receipt-quick-edit-card').classList.add('hidden');clearSelectedFiles();Swal.fire({icon:'success',title:'ยกเลิกชุดงานแล้ว',timer:1400,showConfirmButton:false});}catch(error){Swal.fire('ยกเลิกไม่สำเร็จ',error.message,'error');}}
 
-  function showCardPreview(index){const row=state.draftRows[index];if(!row?.preview_url)return;Swal.fire({title:`รูปบัตร · รายการ ${index+1}`,imageUrl:row.preview_url,imageAlt:'รูปบัตรประชาชนสำหรับตรวจสอบ',width:720,confirmButtonText:'ปิด',confirmButtonColor:'#8f5f42'});}
+  function showCardPreview(index){const row=state.draftRows[index];if(!row?.preview_url)return;Swal.fire({title:`รูปบัตร · รายการ ${index+1}`,imageUrl:row.preview_url,imageAlt:'รูปบัตรประชาชนสำหรับตรวจสอบ',width:720,confirmButtonText:'ปิด',confirmButtonColor:'#8f5f42',customClass:{popup:'receipt-card-preview-modal'}});}
+
+  async function toggleReceiptItem(input){const row=state.registrations.find(item=>item.registration_id===input.dataset.receiptItemToggle);if(!row)return;input.disabled=true;const previous=Number(row.include_receipt_item)!==0,rowNode=input.closest('.receipt-registry-row');row.include_receipt_item=input.checked?1:0;rowNode?.classList.toggle('is-item-omitted',!input.checked);try{await protectedCallWithRequestId('saveReceiptExportOption',window.V2Api.newRequestId(),{registration_id:row.registration_id,receipt_item:row.receipt_item||'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ',include_receipt_item:input.checked});}catch(error){row.include_receipt_item=previous?1:0;input.checked=previous;rowNode?.classList.toggle('is-item-omitted',!previous);Swal.fire('บันทึกตัวเลือกไม่สำเร็จ',error.message,'error');}finally{input.disabled=false;}}
+
+  async function editRegistryRow(registrationId){const row=state.registrations.find(item=>item.registration_id===registrationId);if(!row)return;const result=await Swal.fire({title:'แก้ไขข้อมูลสำหรับ Export',html:`<div class="receipt-registry-editor"><label>ชื่อ-นามสกุล<input id="re-full-name" class="swal2-input" value="${escapeHtml(row.full_name||'')}"></label><label>ชื่อเล่น<input id="re-nickname" class="swal2-input" value="${escapeHtml(row.nickname||'')}"></label><label>เลขบัตรประชาชน<input id="re-national-id" class="swal2-input" inputmode="numeric" value="${escapeHtml(row.national_id||'')}"></label><label>ค่าแรง/วัน<input id="re-daily-wage" class="swal2-input" type="number" min="0" step="1" value="${Number(row.daily_wage)||0}"></label><label class="is-wide">ที่อยู่<textarea id="re-address" class="swal2-textarea">${escapeHtml(row.address||'')}</textarea></label><label class="is-wide">หมายเหตุ<input id="re-note" class="swal2-input" value="${escapeHtml(row.note||'')}"></label><label class="is-wide">ข้อความ {รายการรับเงิน}<textarea id="re-receipt-item" class="swal2-textarea">${escapeHtml(row.receipt_item||'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ')}</textarea></label><label class="receipt-registry-editor__check is-wide"><input id="re-include-item" type="checkbox" ${Number(row.include_receipt_item)!==0?'checked':''}> ใส่ข้อความรายการรับเงินในเอกสาร</label></div>`,showCancelButton:true,confirmButtonText:'บันทึกการแก้ไข',cancelButtonText:'ยกเลิก',confirmButtonColor:'#8f5f42',width:720,focusConfirm:false,preConfirm:()=>({registration_id:row.registration_id,full_name:document.getElementById('re-full-name').value.trim(),nickname:document.getElementById('re-nickname').value.trim(),national_id:document.getElementById('re-national-id').value.trim(),daily_wage:Number(document.getElementById('re-daily-wage').value)||0,address:document.getElementById('re-address').value.trim(),note:document.getElementById('re-note').value.trim(),receipt_item:document.getElementById('re-receipt-item').value.trim()||'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ',include_receipt_item:document.getElementById('re-include-item').checked})});if(!result.isConfirmed)return;try{const saved=await protectedCallWithRequestId('saveReceiptRegistrationEntry',window.V2Api.newRequestId(),result.value);const index=state.registrations.findIndex(item=>item.registration_id===registrationId);if(index>=0)state.registrations[index]=saved;window.PayrollModule?.invalidate?.();renderRegistry();Swal.fire({icon:'success',title:'บันทึกการแก้ไขแล้ว',timer:1300,showConfirmButton:false});}catch(error){Swal.fire('แก้ไขข้อมูลไม่สำเร็จ',error.message,'error');}}
 
   async function exportSelected(format) {
     const ids = selectedRegistrationIds();
     if (!ids.length) return;
     try {
       const preview = await gas('previewReceiptExport', { registration_ids:ids });
-      const groupsHtml = preview.groups.map(group => `<section class="mb-3 rounded-xl border border-slate-200 p-3 text-left"><strong class="text-sm">${escapeHtml(group.group_name)}</strong>${group.site_name?`<p class="text-xs text-slate-500">ไซต์งาน: ${escapeHtml(group.site_name)}</p>`:''}<p class="mt-2 text-xs text-slate-600">${group.people.map(person=>escapeHtml(person.full_name)).join(' · ')}</p></section>`).join('');
-      const confirm = await Swal.fire({ title:`ตรวจสอบก่อน Export ${format}`, html:`<p class="mb-4 text-left text-sm">ทั้งหมด <strong>${preview.total.toLocaleString('th-TH')} คน</strong> จาก ${preview.groups.length.toLocaleString('th-TH')} กลุ่ม</p><div class="max-h-80 overflow-auto">${groupsHtml}</div>`, showCancelButton:true, confirmButtonText:`สร้าง ${format}`, cancelButtonText:'กลับไปแก้ไข', confirmButtonColor:'#8f5f42', width:620 });
+      const groupsHtml = preview.groups.map((group,index) => `<section class="receipt-export-group"><header><span>${String(index+1).padStart(2,'0')}</span><div><strong>${escapeHtml(group.group_name)}</strong><small>${escapeHtml([group.site_code||group.site_name,group.province].filter(Boolean).join(' · ')||'ไม่ระบุไซต์')}</small></div><b>${group.people.length.toLocaleString('th-TH')} คน</b></header><div>${group.people.map(person=>`<p><span>${escapeHtml(person.full_name)}</span><small class="${person.include_receipt_item?'':'is-omitted'}">${person.include_receipt_item?escapeHtml(person.receipt_item):'ไม่ใส่ {รายการรับเงิน}'}</small></p>`).join('')}</div></section>`).join('');
+      const confirm = await Swal.fire({ title:`ตรวจสอบก่อน Export ${format}`, html:`<div class="receipt-export-summary"><p>ทั้งหมด <strong>${preview.total.toLocaleString('th-TH')} คน</strong> แบ่งเป็น <strong>${preview.groups.length.toLocaleString('th-TH')} กลุ่ม</strong></p><div>${groupsHtml}</div></div>`, showCancelButton:true, confirmButtonText:`สร้าง ${format}`, cancelButtonText:'กลับไปแก้ไข', confirmButtonColor:'#8f5f42', width:680 });
       if (!confirm.isConfirmed) return;
       const action = format === 'DOCX' ? 'exportReceiptDocuments' : 'exportReceiptRosterExcel';
       const file = await gas(action, { registration_ids:ids, template_id:$('receipt-template-select').value, force_template:true, created_by:'WEB' });
@@ -410,8 +427,10 @@
 
   function bind() {
     $('receipt-template-form').addEventListener('submit',saveTemplate);
+    $('receipt-template-manage-btn').addEventListener('click',showTemplateManager);
     $('receipt-new-group-btn').addEventListener('click',createGroup);
     $('receipt-card-files').addEventListener('change',chooseCardFiles);
+    $('receipt-upload-summary').addEventListener('click',event=>{if(event.target.closest('[data-clear-receipt-files]'))clearSelectedFiles();});
     $('receipt-process-btn').addEventListener('click',processCards);
     $('receipt-cancel-batch-btn').addEventListener('click',cancelBatch);
     $('receipt-resume-ai-btn').addEventListener('click',()=>resumeBatchAI(true));
@@ -421,7 +440,8 @@
     $('receipt-filter-group').addEventListener('change',event=>{if(!event.target.matches('[data-group-filter-check]'))return;const checked=[...document.querySelectorAll('[data-group-filter-check]:checked')].map(input=>input.value);state.groupFilterNone=checked.length===0;state.selectedGroupIds=new Set(checked.length===state.groups.length?[]:checked);renderGroupFilter();refreshRegistry().catch(()=>{});});
     $('receipt-filter-group').addEventListener('click',event=>{if(event.target.closest('[data-group-filter-all]')){event.preventDefault();state.groupFilterNone=false;state.selectedGroupIds.clear();renderGroupFilter();refreshRegistry().catch(()=>{});}if(event.target.closest('[data-group-filter-none]')){event.preventDefault();state.groupFilterNone=true;state.selectedGroupIds.clear();renderGroupFilter();refreshRegistry().catch(()=>{});}});
     $('receipt-select-all').addEventListener('change',event=>{document.querySelectorAll('[data-receipt-select]').forEach(input=>{input.checked=event.target.checked;});updateSelection();});
-    $('receipt-registry-list').addEventListener('change',event=>{if(event.target.matches('[data-receipt-select]'))updateSelection();});
+    $('receipt-registry-list').addEventListener('change',event=>{if(event.target.matches('[data-receipt-select]'))updateSelection();else if(event.target.matches('[data-receipt-item-toggle]'))toggleReceiptItem(event.target);});
+    $('receipt-registry-list').addEventListener('click',event=>{const edit=event.target.closest('[data-receipt-edit]');if(edit)editRegistryRow(edit.dataset.receiptEdit);});
     $('receipt-quick-edit-list').addEventListener('click',event=>{const retry=event.target.closest('[data-retry-card]'),remove=event.target.closest('[data-delete-card]'),preview=event.target.closest('[data-card-preview]');if(retry)retryCard(Number(retry.dataset.retryCard));else if(remove)deleteCard(Number(remove.dataset.deleteCard));else if(preview)showCardPreview(Number(preview.dataset.cardPreview));});
     $('receipt-export-docx-btn').addEventListener('click',()=>exportSelected('DOCX'));
     $('receipt-export-excel-btn').addEventListener('click',()=>exportSelected('Excel'));

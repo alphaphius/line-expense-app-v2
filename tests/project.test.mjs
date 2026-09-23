@@ -195,8 +195,8 @@ test('service worker caches only same-origin static GET assets', async () => {
 });
 
 test('receipt registry supports durable AI retries, cancellation, card review, multi-group export, and payroll sync', async () => {
-  const [frontend,html,styles,backend,server,api,migration,payroll]=await Promise.all([
-    read('frontend/receipts.js'),read('frontend/index.html'),read('frontend/styles.css'),read('server/actions/receipts.mjs'),read('server/server.mjs'),read('server/api.mjs'),read('server/migrations/009_receipt_payroll_sync.sql'),read('frontend/payroll.js'),
+  const [frontend,html,styles,backend,server,api,migration,exportMigration,payroll,exports]=await Promise.all([
+    read('frontend/receipts.js'),read('frontend/index.html'),read('frontend/styles.css'),read('server/actions/receipts.mjs'),read('server/server.mjs'),read('server/api.mjs'),read('server/migrations/009_receipt_payroll_sync.sql'),read('server/migrations/010_receipt_template_export_options.sql'),read('frontend/payroll.js'),read('server/exports.mjs'),
   ]);
   assert.match(server,/processNextReceiptAiJob/);
   assert.match(backend,/ai_next_attempt_at/);
@@ -215,6 +215,15 @@ test('receipt registry supports durable AI retries, cancellation, card review, m
   assert.match(payroll,/scheduleRegistrySync/);
   assert.match(api,/getPayrollRegistry/);
   assert.match(frontend,/report_site_id/);
+  assert.match(frontend,/showTemplateManager/);
+  assert.match(frontend,/data-receipt-item-toggle/);
+  assert.match(frontend,/saveReceiptRegistrationEntry/);
+  assert.match(html,/receipt-template-manage-btn/);
+  assert.match(exportMigration,/include_receipt_item TINYINT/);
+  assert.match(backend,/export async function deleteReceiptTemplate/);
+  assert.match(backend,/export async function saveReceiptExportOption/);
+  assert.match(api,/deleteReceiptTemplate/);
+  assert.match(exports,/\{รายการรับเงิน\}/);
 });
 
 test('local preview is isolated from the production API', async () => {

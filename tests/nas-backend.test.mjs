@@ -17,7 +17,7 @@ const read = relative => fs.readFile(path.join(root, relative), 'utf8');
 async function templateDocx() {
   const zip = new JSZip();
   zip.file('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
-  zip.file('word/document.xml', '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{ชื่อ</w:t></w:r><w:r><w:t>สกุล}</w:t></w:r></w:p><w:p><w:r><w:t>{เลขบัตร}</w:t></w:r></w:p><w:p><w:r><w:t>{ที่อยู่}</w:t></w:r></w:p><w:sectPr/></w:body></w:document>');
+  zip.file('word/document.xml', '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{ชื่อ</w:t></w:r><w:r><w:t>สกุล}</w:t></w:r></w:p><w:p><w:r><w:t>{เลขบัตร}</w:t></w:r></w:p><w:p><w:r><w:t>{ที่อยู่}</w:t></w:r></w:p><w:p><w:r><w:t>{รายการรับเงิน}</w:t></w:r></w:p><w:sectPr/></w:body></w:document>');
   zip.file('word/_rels/document.xml.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
   return zip.generateAsync({ type:'nodebuffer' });
 }
@@ -251,12 +251,17 @@ test('bill owner aliases preserve LINE identity and drive old and future bill la
 
 test('receipt DOCX clones templates, replaces split placeholders, and adds compressed cards', async () => {
   const template = await templateDocx();
-  assert.deepEqual((await inspectTemplate(template)).placeholders, ['{ชื่อสกุล}', '{เลขบัตร}', '{ที่อยู่}']);
+  assert.deepEqual((await inspectTemplate(template)).placeholders, ['{ชื่อสกุล}', '{เลขบัตร}', '{ที่อยู่}', '{รายการรับเงิน}']);
   const cardBuffer = await sharp({ create:{ width:1200, height:760, channels:3, background:'#eee7dd' } }).jpeg().toBuffer();
-  const result = await createReceiptDocx(template, [{ full_name:'สมชาย ทดสอบ', national_id:'1234567890123', address:'กรุงเทพมหานคร', cardBuffer }]);
+  const result = await createReceiptDocx(template, [{ full_name:'สมชาย ทดสอบ', national_id:'1234567890123', address:'กรุงเทพมหานคร', receipt_item:'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ', include_receipt_item:true, cardBuffer }]);
   const zip = await JSZip.loadAsync(result);
   const documentXml = await zip.file('word/document.xml').async('string');
   assert.match(documentXml, /สมชาย ทดสอบ/);
+  assert.match(documentXml, /เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ/);
   assert.doesNotMatch(documentXml, /\{ชื่อสกุล\}/);
+  assert.doesNotMatch(documentXml, /\{รายการรับเงิน\}/);
   assert.ok(zip.file('word/media/receipt-card-1.jpg'));
+  const omitted = await createReceiptDocx(template, [{ full_name:'สมชาย ทดสอบ', national_id:'1234567890123', address:'กรุงเทพมหานคร', receipt_item:'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ', include_receipt_item:false, cardBuffer }]);
+  const omittedXml = await (await JSZip.loadAsync(omitted)).file('word/document.xml').async('string');
+  assert.doesNotMatch(omittedXml, /เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ|\{รายการรับเงิน\}/);
 });

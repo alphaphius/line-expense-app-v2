@@ -132,8 +132,10 @@ export async function inspectTemplate(buffer) {
   const required = ['{ชื่อสกุล}', '{เลขบัตร}', '{ที่อยู่}'];
   const missing = required.filter(item => !text.includes(item));
   if (missing.length) throw new Error(`Template ขาด Placeholder: ${missing.join(', ')}`);
+  const supported = [...required, '{รายการรับเงิน}'];
+  const placeholders = supported.filter(item => text.includes(item));
   const pageBreaks = (documentXml.match(/<w:br\b[^>]*w:type=["']page["'][^>]*\/>/g) || []).length;
-  return { placeholders: required, pageCount: Math.max(1, pageBreaks + 1) };
+  return { placeholders, pageCount: Math.max(1, pageBreaks + 1) };
 }
 
 export async function createReceiptDocx(templateBuffer, registrations) {
@@ -159,6 +161,7 @@ export async function createReceiptDocx(templateBuffer, registrations) {
     const row = registrations[index];
     bodies.push(replacePlaceholders(templateBody, {
       '{ชื่อสกุล}': clean(row.full_name, 200), '{เลขบัตร}': normalizeNationalId(row.national_id), '{ที่อยู่}': clean(row.address, 700),
+      '{รายการรับเงิน}': row.include_receipt_item === false || Number(row.include_receipt_item) === 0 ? '' : clean(row.receipt_item || 'เป็นค่าจ้างแรงงานติดตั้งเครื่องมือ', 500),
     }));
     bodies.push(pageBreak());
     const image = await sharp(row.cardBuffer).rotate().jpeg({ quality: 78, mozjpeg: true }).toBuffer();
