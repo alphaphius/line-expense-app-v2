@@ -2,8 +2,8 @@
   'use strict';
 
   const state = {
-    loaded: false, enabled: false, templates: [], groups: [], projects: [], registrations: [],
-    selectedFiles: [], batchId: '', draftRows: [], processing: false, activeBatch: null, aiModel: '',
+    loaded: false, enabled: false, templates: [], groups: [], projects: [], reportSites: [], registrations: [],
+    selectedFiles: [], batchId: '', draftRows: [], processing: false, activeBatch: null, aiModel: '', selectedGroupIds:new Set(), groupFilterNone:false, previewCache:new Map(),
   };
 
   const $ = id => document.getElementById(id);
@@ -35,6 +35,7 @@
       state.templates = workspace.templates || [];
       state.groups = workspace.groups || [];
       state.projects = workspace.projects || [];
+      state.reportSites = workspace.reportSites || [];
       state.registrations = (workspace.registrations && workspace.registrations.rows) || [];
       state.aiModel = workspace.aiModel || '';
       state.activeBatch = workspace.activeBatch || null;
@@ -63,17 +64,26 @@
     const templateValue = $('receipt-template-select').value;
     $('receipt-template-select').innerHTML = '<option value="">เลือก Template</option>' + state.templates.map(row => `<option value="${escapeHtml(row.template_id)}">${escapeHtml(row.template_name)}</option>`).join('');
     if (state.templates.some(row => row.template_id === templateValue)) $('receipt-template-select').value = templateValue;
-    const groupOptions = state.groups.map(row => `<option value="${escapeHtml(row.group_id)}">${escapeHtml(row.group_name)}${row.site_name ? ` · ${escapeHtml(row.site_name)}` : ''}</option>`).join('');
+    const groupOptions = state.groups.map(row => `<option value="${escapeHtml(row.group_id)}">${escapeHtml(row.group_name)}${row.site_code ? ` · ${escapeHtml(row.site_code)}${row.province?` · ${escapeHtml(row.province)}`:''}` : row.site_name ? ` · ${escapeHtml(row.site_name)}` : ''}</option>`).join('');
     const groupValue = $('receipt-group-select').value;
     $('receipt-group-select').innerHTML = '<option value="">เลือกกลุ่มแรงงาน</option>' + groupOptions;
-    $('receipt-filter-group').innerHTML = '<option value="">ทุกกลุ่มแรงงาน</option>' + groupOptions;
     if (state.groups.some(row => row.group_id === groupValue)) $('receipt-group-select').value = groupValue;
+    renderGroupFilter();
+  }
+
+  function renderGroupFilter() {
+    const options=$('receipt-filter-group-options');if(!options)return;
+    state.selectedGroupIds=new Set([...state.selectedGroupIds].filter(id=>state.groups.some(group=>group.group_id===id)));
+    const all=!state.groupFilterNone&&state.selectedGroupIds.size===0;
+    options.innerHTML=`<div class="receipt-group-filter__tools"><button type="button" data-group-filter-all>เลือกทั้งหมด</button><button type="button" data-group-filter-none>ไม่เลือกทั้งหมด</button></div>${state.groups.map(group=>`<label><input type="checkbox" value="${escapeHtml(group.group_id)}" data-group-filter-check ${all||state.selectedGroupIds.has(group.group_id)?'checked':''}><span><strong>${escapeHtml(group.group_name)}</strong><small>${escapeHtml([group.site_code,group.province].filter(Boolean).join(' · '))}</small></span></label>`).join('')}`;
+    const summary=$('receipt-filter-group').querySelector('summary');
+    summary.textContent=all?'ทุกกลุ่มแรงงาน':state.groupFilterNone?'ยังไม่เลือกกลุ่ม':`เลือก ${state.selectedGroupIds.size.toLocaleString('th-TH')} กลุ่ม`;
   }
 
   function serverDraft(row) {
     return Object.assign({}, row, {
       status:row.status || 'AI_QUEUED',
-      full_name:row.full_name || '', national_id:row.national_id || '', address:row.address || '',
+      full_name:row.full_name || '', national_id:row.national_id || '', address:row.address || '', nickname:row.nickname||'', daily_wage:Number(row.daily_wage)||0, note:row.note||'', preview_url:row.preview_url||'',
       warnings:String(row.ocr_warnings || '').split(' | ').filter(Boolean), error:row.ai_last_error || '', file:null,
     });
   }
@@ -90,7 +100,7 @@
   }
 
   function readFilters() {
-    return { search: $('receipt-search') ? $('receipt-search').value.trim() : '', group_id: $('receipt-filter-group') ? $('receipt-filter-group').value : '', status: 'SAVED' };
+    return { search: $('receipt-search') ? $('receipt-search').value.trim() : '', group_ids:state.groupFilterNone?['__none__']:[...state.selectedGroupIds], status: 'SAVED' };
   }
 
   function renderRegistry() {
@@ -100,10 +110,10 @@
       const group = groupMap[row.group_id] || {};
       return `<label class="receipt-registry-row">
         <input type="checkbox" data-receipt-select value="${escapeHtml(row.registration_id)}">
-        <strong>${escapeHtml(row.full_name || '-')}</strong>
+        <span class="receipt-person"><strong>${escapeHtml(row.full_name || '-')}</strong><small>${escapeHtml(row.nickname?`ชื่อเล่น ${row.nickname}`:'ยังไม่ระบุชื่อเล่น')}</small></span>
         <span>${escapeHtml(row.national_id_masked || '-')}</span>
-        <span>${escapeHtml(group.group_name || '-')}</span>
-        <small>${escapeHtml(group.site_name || row.updated_at || '')}</small>
+        <span>${escapeHtml(group.group_name || row.group_name || '-')}<small>${Number(row.daily_wage||0).toLocaleString('th-TH')} บาท/วัน</small></span>
+        <small>${escapeHtml([group.site_code||row.site_code,group.province||row.province].filter(Boolean).join(' · ')||row.updated_at||'')}</small>
       </label>`;
     }).join('') : '<div class="receipt-registry-empty">ยังไม่มีรายชื่อที่บันทึก เมื่อ OCR และตรวจสอบแล้ว รายชื่อจะปรากฏที่นี่</div>';
     updateSelection();
@@ -116,7 +126,8 @@
   }
 
   async function refresh() {
-    if (!state.loaded || state.processing || state.selectedFiles.length || state.draftRows.length || document.querySelector('#view-receipts dialog[open]')) return;
+    if (!state.loaded || state.processing || document.querySelector('#view-receipts dialog[open]')) return;
+    if(state.batchId&&state.draftRows.length){syncDraftInputs();const workspace=await gas('getReceiptWorkspace',readFilters());state.registrations=workspace.registrations?.rows||[];if(workspace.activeBatch?.batch?.batch_id===state.batchId){const local=new Map(state.draftRows.map(row=>[row.registration_id,row]));workspace.activeBatch.rows=(workspace.activeBatch.rows||[]).map(row=>Object.assign(serverDraft(row),local.get(row.registration_id)&&{full_name:local.get(row.registration_id).full_name,national_id:local.get(row.registration_id).national_id,address:local.get(row.registration_id).address,nickname:local.get(row.registration_id).nickname,daily_wage:local.get(row.registration_id).daily_wage,note:local.get(row.registration_id).note}));state.activeBatch=workspace.activeBatch;state.draftRows=workspace.activeBatch.rows;renderDraftRows();}renderRegistry();return;}
     await refreshRegistry();
   }
 
@@ -166,12 +177,13 @@
   async function createGroup() {
     if (!state.enabled) return;
     const projectOptions = state.projects.map(row => `<option value="${escapeHtml(row.project_id)}">${escapeHtml(row.project_name)}</option>`).join('');
+    const reportSiteOptions=state.reportSites.map(site=>`<option value="${escapeHtml(site.report_site_id)}">${escapeHtml(`${site.site_id}-${site.site_code}-${site.province||'ไม่ระบุจังหวัด'}`)}</option>`).join('');
     const result = await Swal.fire({
       title:'สร้างกลุ่มแรงงาน',
-      html:`<div class="grid gap-3 text-left"><label class="text-sm">ชื่อกลุ่ม<input id="rg-name" class="swal2-input !m-0 !mt-1 !w-full" placeholder="เช่น ทีมเสาเข็ม ไซต์ A"></label><label class="text-sm">ประเภท<select id="rg-type" class="swal2-select !m-0 !mt-1 !w-full"><option value="SITE">แรงงานตามไซต์</option><option value="PERMANENT">แรงงานประจำ</option><option value="OTHER">กลุ่มอื่น</option></select></label><label id="rg-project-label" class="text-sm">ไซต์งาน<select id="rg-project" class="swal2-select !m-0 !mt-1 !w-full"><option value="">เลือกไซต์งาน</option>${projectOptions}</select></label></div>`,
+      html:`<div class="grid gap-3 text-left"><label class="text-sm">ประเภท<select id="rg-type" class="swal2-select !m-0 !mt-1 !w-full"><option value="SITE">แรงงานตามไซต์</option><option value="PERMANENT">แรงงานประจำ</option><option value="OTHER">กลุ่มอื่น</option></select></label><label id="rg-source-label" class="text-sm">วิธีสร้าง<select id="rg-source" class="swal2-select !m-0 !mt-1 !w-full"><option value="REPORT">เลือกไซต์จากส่วนรายงาน</option><option value="PROJECT">เลือกโครงการเดิม</option><option value="MANUAL">กรอกชื่อเอง</option></select></label><label id="rg-report-label" class="text-sm">ไซต์จากรายงาน<select id="rg-report" class="swal2-select !m-0 !mt-1 !w-full"><option value="">เลือก SiteID-SiteCode-จังหวัด</option>${reportSiteOptions}</select></label><label id="rg-project-label" class="text-sm hidden">โครงการเดิม<select id="rg-project" class="swal2-select !m-0 !mt-1 !w-full"><option value="">เลือกไซต์งาน</option>${projectOptions}</select></label><label id="rg-name-label" class="text-sm hidden">ชื่อกลุ่ม<input id="rg-name" class="swal2-input !m-0 !mt-1 !w-full" placeholder="เช่น ทีมเสาเข็ม ไซต์ A"></label></div>`,
       showCancelButton:true, confirmButtonText:'สร้างกลุ่ม', cancelButtonText:'ยกเลิก', confirmButtonColor:'#8f5f42',
-      didOpen:popup => popup.querySelector('#rg-type').addEventListener('change', event => popup.querySelector('#rg-project-label').classList.toggle('hidden', event.target.value !== 'SITE')),
-      preConfirm:() => ({ group_name:document.getElementById('rg-name').value.trim(), group_type:document.getElementById('rg-type').value, project_id:document.getElementById('rg-project').value }),
+      didOpen:popup => {const sync=()=>{const site=popup.querySelector('#rg-type').value==='SITE',source=popup.querySelector('#rg-source').value;popup.querySelector('#rg-source-label').classList.toggle('hidden',!site);popup.querySelector('#rg-report-label').classList.toggle('hidden',!site||source!=='REPORT');popup.querySelector('#rg-project-label').classList.toggle('hidden',!site||source!=='PROJECT');popup.querySelector('#rg-name-label').classList.toggle('hidden',site&&source!=='MANUAL');};popup.querySelector('#rg-type').addEventListener('change',sync);popup.querySelector('#rg-source').addEventListener('change',sync);sync();},
+      preConfirm:() => ({ group_name:document.getElementById('rg-name').value.trim(), group_type:document.getElementById('rg-type').value, project_id:document.getElementById('rg-source').value==='PROJECT'?document.getElementById('rg-project').value:'',report_site_id:document.getElementById('rg-source').value==='REPORT'?document.getElementById('rg-report').value:'' }),
     });
     if (!result.isConfirmed) return;
     try {
@@ -204,7 +216,7 @@
     state.processing = true;
     $('receipt-process-btn').disabled = true;
     $('receipt-quick-edit-card').classList.remove('hidden');
-    state.draftRows = state.selectedFiles.map((file,index) => ({ local_id:`local-${index}`, file, status:'UPLOAD_QUEUED', full_name:'', national_id:'', address:'', warnings:[], error:'' }));
+    state.draftRows = state.selectedFiles.map((file,index) => ({ local_id:`local-${index}`, file, preview_url:URL.createObjectURL(file), status:'UPLOAD_QUEUED', full_name:'', national_id:'', address:'', nickname:'', daily_wage:0, note:'', warnings:[], error:'' }));
     renderDraftRows();
     try {
       const batch = await gas('createReceiptBatch', { template_id:templateId, group_id:groupId, total_count:state.selectedFiles.length, created_by:'WEB' });
@@ -223,7 +235,7 @@
               batch_id:state.batchId, file_name:optimized.name, data_url:optimized.dataUrl,
               original_size:optimized.originalSize, optimized_size:optimized.optimizedSize,
             });
-            Object.assign(row,serverDraft(result),{file:null});
+            Object.assign(row,serverDraft(result),{file:null,preview_url:row.preview_url});
           } catch (error) { Object.assign(row, { status:'UPLOAD_ERROR', error:error.message }); }
           renderDraftRow(index); updateBatchProgress();
         }
@@ -274,31 +286,37 @@
   function draftRowHtml(row, index) {
     const loading = ['UPLOAD_QUEUED','COMPRESSING','UPLOADING','AI_QUEUED','AI_PROCESSING'].includes(row.status);
     const duplicate = !!row.duplicate_type;
-    const failed = ['UPLOAD_ERROR','AI_RETRY'].includes(row.status);
+    const failed = ['UPLOAD_ERROR','AI_RETRY','AI_FAILED'].includes(row.status);
     const statusClass = failed ? 'is-error' : duplicate ? 'is-duplicate' : loading ? 'is-loading' : '';
-    const statusText = ({ UPLOAD_QUEUED:'รออัปโหลด',COMPRESSING:'กำลังบีบอัด',UPLOADING:'กำลังเก็บบน NAS',AI_QUEUED:'รอ Gemini',AI_PROCESSING:'Gemini กำลังอ่าน',AI_RETRY:'รอทำต่อ',OCR_READY:'พร้อมตรวจสอบ',UPLOAD_ERROR:'อัปโหลดไม่สำเร็จ' })[row.status] || row.status;
+    const statusText = ({ UPLOAD_QUEUED:'รออัปโหลด',COMPRESSING:'กำลังบีบอัด',UPLOADING:'กำลังเก็บบน NAS',AI_QUEUED:'รอ AI',AI_PROCESSING:'AI กำลังอ่าน',AI_RETRY:'ระบบจะลองใหม่',AI_FAILED:'ต้องตรวจหรือกรอกเอง',OCR_READY:'พร้อมตรวจสอบ',UPLOAD_ERROR:'อัปโหลดไม่สำเร็จ' })[row.status] || row.status;
     const warning = row.error || (row.warnings || []).join(' · ') || (duplicate ? `พบข้อมูลซ้ำ (${row.duplicate_type})` : '');
     return `<div class="receipt-edit-row" data-draft-index="${index}">
       <span class="receipt-edit-row__index">${String(index+1).padStart(2,'0')}</span>
+      <button type="button" class="receipt-card-thumb" data-card-preview="${index}" aria-label="เปิดดูรูปบัตร"><span>${row.preview_url?`<img src="${escapeHtml(row.preview_url)}" alt="รูปบัตรของรายการ ${index+1}">`:'กำลังโหลดรูป'}</span><small>แตะเพื่อดูรูป</small></button>
       <label>ชื่อ-นามสกุล<input class="field" data-draft-field="full_name" value="${escapeHtml(row.full_name)}" ${loading?'disabled':''}></label>
+      <label>ชื่อเล่น (ไม่บังคับ)<input class="field" data-draft-field="nickname" value="${escapeHtml(row.nickname)}" ${loading?'disabled':''}></label>
       <label>เลขบัตรประชาชน<input class="field" data-draft-field="national_id" inputmode="numeric" maxlength="17" value="${escapeHtml(row.national_id)}" ${loading?'disabled':''}></label>
       <label>ที่อยู่<textarea class="field" data-draft-field="address" ${loading?'disabled':''}>${escapeHtml(row.address)}</textarea></label>
-      <div class="receipt-row-state"><span class="receipt-status-pill ${statusClass}">${escapeHtml(statusText)}</span>${warning?`<small class="receipt-row-warning">${escapeHtml(warning)}</small>`:''}${duplicate?'<label class="receipt-existing-check"><input type="checkbox" data-allow-existing> เชื่อมกับบุคคลเดิมที่พบ</label>':''}${failed?`<button type="button" class="secondary-btn" data-retry-card="${index}">ลองใหม่</button>`:''}</div>
+      <label>ค่าแรง/วัน<input class="field" data-draft-field="daily_wage" inputmode="decimal" type="number" min="0" step="1" value="${Number(row.daily_wage)||0}" ${loading?'disabled':''}></label>
+      <label>หมายเหตุ (ไม่บังคับ)<input class="field" data-draft-field="note" value="${escapeHtml(row.note)}" ${loading?'disabled':''}></label>
+      <div class="receipt-row-state"><span class="receipt-status-pill ${statusClass}">${escapeHtml(statusText)}</span>${warning?`<small class="receipt-row-warning">${escapeHtml(warning)}</small>`:''}${duplicate?'<label class="receipt-existing-check"><input type="checkbox" data-allow-existing> เชื่อมกับบุคคลเดิมที่พบ</label>':''}${failed?`<button type="button" class="secondary-btn" data-retry-card="${index}">ลองใหม่</button>`:''}${row.registration_id?`<button type="button" class="receipt-delete-row" data-delete-card="${index}">ลบรายการ</button>`:''}</div>
     </div>`;
   }
 
-  function renderDraftRows() { $('receipt-quick-edit-list').innerHTML = state.draftRows.map(draftRowHtml).join(''); updateBatchProgress(); }
+  function renderDraftRows() { $('receipt-quick-edit-list').innerHTML = state.draftRows.map(draftRowHtml).join(''); updateBatchProgress(); hydrateCardPreviews(); }
   function renderDraftRow(index) {
     const current = document.querySelector(`[data-draft-index="${index}"]`);
     if (current) current.outerHTML = draftRowHtml(state.draftRows[index], index);
     else renderDraftRows();
+    hydrateCardPreviews();
   }
+  async function hydrateCardPreviews(){for(const row of state.draftRows){if(!row.registration_id||row.preview_url)continue;try{if(state.previewCache.has(row.registration_id))row.preview_url=state.previewCache.get(row.registration_id);else{const result=await gas('getReceiptCardPreview',{registration_id:row.registration_id});row.preview_url=result.data_url;state.previewCache.set(row.registration_id,row.preview_url);}const index=state.draftRows.indexOf(row),node=document.querySelector(`[data-draft-index="${index}"] .receipt-card-thumb span`);if(node)node.innerHTML=`<img src="${escapeHtml(row.preview_url)}" alt="รูปบัตรของรายการ ${index+1}">`;}catch(_){}}}
   function updateBatchProgress() {
-    const ready = state.draftRows.filter(row => row.status === 'OCR_READY').length;
-    const errors = state.draftRows.filter(row => ['UPLOAD_ERROR','AI_RETRY'].includes(row.status)).length;
+    const ready = state.draftRows.filter(row => ['OCR_READY','AI_FAILED'].includes(row.status)).length;
+    const errors = state.draftRows.filter(row => ['UPLOAD_ERROR','AI_RETRY','AI_FAILED'].includes(row.status)).length;
     const queued = state.draftRows.filter(row => ['AI_QUEUED','AI_PROCESSING'].includes(row.status)).length;
     $('receipt-batch-progress').textContent = `${ready.toLocaleString('th-TH')} พร้อมตรวจสอบ · ${queued.toLocaleString('th-TH')} รอ AI · ${errors.toLocaleString('th-TH')} รอทำต่อ · ทั้งหมด ${state.draftRows.length.toLocaleString('th-TH')}`;
-    $('receipt-save-all-btn').disabled = state.processing || !ready || errors > 0;
+    $('receipt-save-all-btn').disabled = state.processing || !ready || state.draftRows.some(row=>['UPLOAD_ERROR','AI_RETRY','AI_QUEUED','AI_PROCESSING'].includes(row.status));
     $('receipt-resume-ai-btn').classList.toggle('hidden',!state.batchId||(!queued&&!errors));
   }
 
@@ -312,16 +330,17 @@
 
   async function saveAll() {
     syncDraftInputs();
-    const rows = state.draftRows.filter(row => row.status === 'OCR_READY').map(row => ({
+    const rows = state.draftRows.filter(row => ['OCR_READY','AI_FAILED'].includes(row.status)).map(row => ({
       registration_id:row.registration_id, full_name:row.full_name, national_id:row.national_id,
-      address:row.address, allow_existing_worker:row.allow_existing_worker,
+      address:row.address, nickname:row.nickname, daily_wage:Number(row.daily_wage)||0, note:row.note, allow_existing_worker:row.allow_existing_worker,
     }));
     if (!rows.length) return;
     $('receipt-save-all-btn').disabled = true;
     try {
       const result = await gas('saveReceiptRegistrations', { batch_id:state.batchId, rows });
+      window.PayrollModule?.invalidate?.();
       await refreshRegistry();
-      state.draftRows = []; state.selectedFiles = []; state.batchId=''; state.activeBatch=null; $('receipt-card-files').value = '';
+      state.draftRows.forEach(row=>{if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);});state.draftRows = []; state.selectedFiles = []; state.batchId=''; state.activeBatch=null; $('receipt-card-files').value = '';
       $('receipt-quick-edit-card').classList.add('hidden'); $('receipt-upload-summary').classList.add('hidden'); $('receipt-selected-count').textContent = '0';
       Swal.fire({ icon:'success', title:`บันทึกแล้ว ${result.count.toLocaleString('th-TH')} คน`, text:'worker_id พร้อมเชื่อมระบบเช็กชื่อและค่าแรง', timer:2200, showConfirmButton:false });
     } catch (error) { Swal.fire('บันทึกไม่สำเร็จ',error.message,'error'); }
@@ -341,10 +360,16 @@
         Object.assign(row,serverDraft(result),{file:null});
       }
       state.processing=false;
-      await resumeBatchAI(true,row.registration_id?[row.registration_id]:[]);
+      if(row.registration_id){const result=await protectedCallWithRequestId('retryReceiptRegistration',window.V2Api.newRequestId(),{registration_id:row.registration_id});mergeBatchRows(result);}else await resumeBatchAI(true,[]);
     } catch (error) { row.status=row.registration_id?'AI_RETRY':'UPLOAD_ERROR'; row.error=error.message; }
     finally{state.processing=false;renderDraftRow(index);updateBatchProgress();}
   }
+
+  async function deleteCard(index){const row=state.draftRows[index];if(!row?.registration_id)return;const confirm=await Swal.fire({icon:'warning',title:'ลบรายการนี้ออกจาก Quick Edit?',text:'รูปบัตรและข้อมูลที่ยังไม่บันทึกของรายการนี้จะถูกลบ',showCancelButton:true,confirmButtonText:'ลบรายการ',cancelButtonText:'กลับ',confirmButtonColor:'#b64d3e'});if(!confirm.isConfirmed)return;try{await protectedCallWithRequestId('deleteReceiptRegistration',window.V2Api.newRequestId(),{registration_id:row.registration_id});if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);state.previewCache.delete(row.registration_id);state.draftRows.splice(index,1);if(!state.draftRows.length){state.batchId='';state.activeBatch=null;$('receipt-quick-edit-card').classList.add('hidden');}renderDraftRows();}catch(error){Swal.fire('ลบรายการไม่สำเร็จ',error.message,'error');}}
+
+  async function cancelBatch(){if(!state.batchId)return;const confirm=await Swal.fire({icon:'warning',title:'ยกเลิกชุดอัปโหลดนี้?',text:'รายการ Quick Edit และรูปบัตรในชุดที่ยังไม่บันทึกจะถูกลบทั้งหมด',showCancelButton:true,confirmButtonText:'ยกเลิกชุดงาน',cancelButtonText:'ทำงานต่อ',confirmButtonColor:'#b64d3e'});if(!confirm.isConfirmed)return;try{await protectedCallWithRequestId('cancelReceiptBatch',window.V2Api.newRequestId(),{batch_id:state.batchId});state.draftRows.forEach(row=>{if(row.preview_url?.startsWith('blob:'))URL.revokeObjectURL(row.preview_url);});state.draftRows=[];state.selectedFiles=[];state.batchId='';state.activeBatch=null;$('receipt-card-files').value='';$('receipt-quick-edit-card').classList.add('hidden');$('receipt-upload-summary').classList.add('hidden');$('receipt-selected-count').textContent='0';Swal.fire({icon:'success',title:'ยกเลิกชุดงานแล้ว',timer:1400,showConfirmButton:false});}catch(error){Swal.fire('ยกเลิกไม่สำเร็จ',error.message,'error');}}
+
+  function showCardPreview(index){const row=state.draftRows[index];if(!row?.preview_url)return;Swal.fire({title:`รูปบัตร · รายการ ${index+1}`,imageUrl:row.preview_url,imageAlt:'รูปบัตรประชาชนสำหรับตรวจสอบ',width:720,confirmButtonText:'ปิด',confirmButtonColor:'#8f5f42'});}
 
   async function exportSelected(format) {
     const ids = selectedRegistrationIds();
@@ -388,14 +413,16 @@
     $('receipt-new-group-btn').addEventListener('click',createGroup);
     $('receipt-card-files').addEventListener('change',chooseCardFiles);
     $('receipt-process-btn').addEventListener('click',processCards);
+    $('receipt-cancel-batch-btn').addEventListener('click',cancelBatch);
     $('receipt-resume-ai-btn').addEventListener('click',()=>resumeBatchAI(true));
     $('receipt-save-all-btn').addEventListener('click',saveAll);
     $('receipt-search-btn').addEventListener('click',()=>refreshRegistry().catch(error=>Swal.fire('ค้นหาไม่สำเร็จ',error.message,'error')));
     $('receipt-search').addEventListener('keydown',event=>{if(event.key==='Enter')refreshRegistry().catch(()=>{});});
-    $('receipt-filter-group').addEventListener('change',()=>refreshRegistry().catch(()=>{}));
+    $('receipt-filter-group').addEventListener('change',event=>{if(!event.target.matches('[data-group-filter-check]'))return;const checked=[...document.querySelectorAll('[data-group-filter-check]:checked')].map(input=>input.value);state.groupFilterNone=checked.length===0;state.selectedGroupIds=new Set(checked.length===state.groups.length?[]:checked);renderGroupFilter();refreshRegistry().catch(()=>{});});
+    $('receipt-filter-group').addEventListener('click',event=>{if(event.target.closest('[data-group-filter-all]')){event.preventDefault();state.groupFilterNone=false;state.selectedGroupIds.clear();renderGroupFilter();refreshRegistry().catch(()=>{});}if(event.target.closest('[data-group-filter-none]')){event.preventDefault();state.groupFilterNone=true;state.selectedGroupIds.clear();renderGroupFilter();refreshRegistry().catch(()=>{});}});
     $('receipt-select-all').addEventListener('change',event=>{document.querySelectorAll('[data-receipt-select]').forEach(input=>{input.checked=event.target.checked;});updateSelection();});
     $('receipt-registry-list').addEventListener('change',event=>{if(event.target.matches('[data-receipt-select]'))updateSelection();});
-    $('receipt-quick-edit-list').addEventListener('click',event=>{const button=event.target.closest('[data-retry-card]');if(button)retryCard(Number(button.dataset.retryCard));});
+    $('receipt-quick-edit-list').addEventListener('click',event=>{const retry=event.target.closest('[data-retry-card]'),remove=event.target.closest('[data-delete-card]'),preview=event.target.closest('[data-card-preview]');if(retry)retryCard(Number(retry.dataset.retryCard));else if(remove)deleteCard(Number(remove.dataset.deleteCard));else if(preview)showCardPreview(Number(preview.dataset.cardPreview));});
     $('receipt-export-docx-btn').addEventListener('click',()=>exportSelected('DOCX'));
     $('receipt-export-excel-btn').addEventListener('click',()=>exportSelected('Excel'));
   }

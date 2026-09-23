@@ -194,6 +194,29 @@ test('service worker caches only same-origin static GET assets', async () => {
   assert.match(worker, /Response\.error\(\)/);
 });
 
+test('receipt registry supports durable AI retries, cancellation, card review, multi-group export, and payroll sync', async () => {
+  const [frontend,html,styles,backend,server,api,migration,payroll]=await Promise.all([
+    read('frontend/receipts.js'),read('frontend/index.html'),read('frontend/styles.css'),read('server/actions/receipts.mjs'),read('server/server.mjs'),read('server/api.mjs'),read('server/migrations/009_receipt_payroll_sync.sql'),read('frontend/payroll.js'),
+  ]);
+  assert.match(server,/processNextReceiptAiJob/);
+  assert.match(backend,/ai_next_attempt_at/);
+  assert.match(backend,/receiptGeminiFallbackModel/);
+  assert.match(backend,/export async function cancelReceiptBatch/);
+  assert.match(backend,/export async function deleteReceiptRegistration/);
+  assert.match(backend,/export async function getReceiptCardPreview/);
+  assert.match(frontend,/data-card-preview/);
+  assert.match(frontend,/data-delete-card/);
+  assert.match(html,/receipt-cancel-batch-btn/);
+  assert.match(html,/receipt-filter-group-options/);
+  assert.match(styles,/\.receipt-card-thumb/);
+  assert.match(migration,/daily_wage DECIMAL/);
+  assert.match(backend,/export async function getPayrollRegistry/);
+  assert.match(backend,/export async function savePayrollWorker/);
+  assert.match(payroll,/scheduleRegistrySync/);
+  assert.match(api,/getPayrollRegistry/);
+  assert.match(frontend,/report_site_id/);
+});
+
 test('local preview is isolated from the production API', async () => {
   const server = await read('scripts/dev-server.mjs');
   assert.match(server, /apiEndpoint:location\.origin\+'\/__mock_api__'/);

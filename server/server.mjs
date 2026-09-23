@@ -6,7 +6,7 @@ import { closeDb, migrate, ping } from './db.mjs';
 import { ensureDataDirs } from './files.mjs';
 import { ensureDefaults } from './actions/masters.mjs';
 import { getPendingBillAiNotification, markBillAiJobNotified, processNextBillAiJob, recoverBillAiJobs, repairAddressMatchFlags } from './actions/bills.mjs';
-import { recoverReceiptAiJobs } from './actions/receipts.mjs';
+import { processNextReceiptAiJob, recoverReceiptAiJobs } from './actions/receipts.mjs';
 import { captureScheduledModuleSnapshots } from './actions/modules.mjs';
 import { apiErrorEnvelope, handleApi } from './api.mjs';
 import { handleLineWebhook, notifyBillAiJobOutcome, verifyLineSignature } from './line.mjs';
@@ -39,6 +39,16 @@ const runBillAiWorker=async()=>{
 const billAiTimer=setInterval(runBillAiWorker,3000);
 billAiTimer.unref();
 setImmediate(runBillAiWorker);
+let receiptAiWorkerBusy=false;
+const runReceiptAiWorker=async()=>{
+  if(receiptAiWorkerBusy)return;
+  receiptAiWorkerBusy=true;
+  try{await processNextReceiptAiJob();}catch(error){app.log.error({err:error},'Receipt AI queue worker failed');}
+  finally{receiptAiWorkerBusy=false;}
+};
+const receiptAiTimer=setInterval(runReceiptAiWorker,4000);
+receiptAiTimer.unref();
+setImmediate(runReceiptAiWorker);
 
 app.addHook('onSend',async(request,reply,payload)=>{reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','same-origin').header('Permissions-Policy','camera=(), microphone=(), geolocation=(self)').header('X-Frame-Options','SAMEORIGIN');return payload;});
 app.post('/api',async(request,reply)=>{try{reply.header('Cache-Control','no-store');return await handleApi(request.body||{});}catch(error){request.log.error({err:error,action:request.body?.action},'API request failed');reply.code(Number(error.statusCode)||500);return apiErrorEnvelope(error,request.body?.requestId||request.id);}});
@@ -48,6 +58,6 @@ app.get('/config.js',async(request,reply)=>{reply.type('text/javascript; charset
 await app.register(fastifyStatic,{root:config.publicDir,prefix:'/',maxAge:'1h',immutable:false,index:['index.html'],setHeaders(reply,filePath){if(/\.(?:html|js|css|webmanifest)$/i.test(filePath))reply.header('Cache-Control','no-cache, no-store, must-revalidate');else if(/\.(wasm|gz)$/i.test(filePath))reply.header('Cache-Control','public, max-age=31536000, immutable');}});
 app.setNotFoundHandler((request,reply)=>{if(request.method==='GET'&&!path.extname(request.url.split('?')[0]))return reply.sendFile('index.html');return reply.code(404).send({error:'Not found'});});
 
-const shutdown=async signal=>{app.log.info({signal},'Shutting down');clearInterval(snapshotTimer);clearInterval(billAiTimer);await app.close();await closeDb();process.exit(0);};
+const shutdown=async signal=>{app.log.info({signal},'Shutting down');clearInterval(snapshotTimer);clearInterval(billAiTimer);clearInterval(receiptAiTimer);await app.close();await closeDb();process.exit(0);};
 process.on('SIGTERM',()=>shutdown('SIGTERM'));process.on('SIGINT',()=>shutdown('SIGINT'));
 await app.listen({host:config.host,port:config.port});

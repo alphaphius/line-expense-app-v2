@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.7 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.8 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -415,7 +415,7 @@
             </article>
 
             <article id="receipt-quick-edit-card" class="card receipt-quick-edit-card hidden">
-              <div class="receipt-section-head"><div><span class="step-kicker">03 · ตรวจสอบ</span><h3>Quick Edit</h3><p id="receipt-batch-progress">รอประมวลผล</p></div><div class="receipt-batch-actions"><button id="receipt-resume-ai-btn" class="secondary-btn hidden" type="button">ทำต่อด้วย AI</button><button id="receipt-save-all-btn" class="primary-btn" type="button" disabled>บันทึกทั้งหมด</button></div></div>
+              <div class="receipt-section-head"><div><span class="step-kicker">03 · ตรวจสอบ</span><h3>Quick Edit</h3><p id="receipt-batch-progress">รอประมวลผล</p></div><div class="receipt-batch-actions"><button id="receipt-cancel-batch-btn" class="secondary-btn receipt-danger-btn" type="button">ยกเลิกชุดนี้</button><button id="receipt-resume-ai-btn" class="secondary-btn hidden" type="button">ทำต่อด้วย AI</button><button id="receipt-save-all-btn" class="primary-btn" type="button" disabled>บันทึกทั้งหมด</button></div></div>
               <div id="receipt-quick-edit-list" class="receipt-quick-edit-list"></div>
             </article>
 
@@ -423,7 +423,7 @@
               <div class="receipt-section-head"><div><span class="step-kicker">04 · ค้นหาและส่งออก</span><h3>ทะเบียนเอกสารรับเงิน</h3></div><div class="receipt-export-actions"><button id="receipt-export-docx-btn" class="export-btn export-btn--docx" type="button" disabled><span>Export DOCX</span><small>เอกสาร + รูปบัตร</small></button><button id="receipt-export-excel-btn" class="export-btn export-btn--excel" type="button" disabled><span>Export Excel</span><small>รายชื่อที่เลือก</small></button></div></div>
               <div class="receipt-filter-bar">
                 <input id="receipt-search" class="field" type="search" placeholder="ค้นหาชื่อ เลขบัตร หรือที่อยู่…">
-                <select id="receipt-filter-group" class="field"><option value="">ทุกกลุ่มแรงงาน</option></select>
+                <details id="receipt-filter-group" class="receipt-group-filter"><summary>ทุกกลุ่มแรงงาน</summary><div id="receipt-filter-group-options" class="receipt-group-filter__menu"></div></details>
                 <button id="receipt-search-btn" class="secondary-btn" type="button">ค้นหา</button>
               </div>
               <div class="receipt-select-toolbar"><label><input id="receipt-select-all" type="checkbox"> เลือกทั้งหมดที่แสดง</label><span id="receipt-selection-count">เลือก 0 คน</span></div>

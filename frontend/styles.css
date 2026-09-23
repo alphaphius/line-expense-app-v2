@@ -496,18 +496,33 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .receipt-process-btn { width:100%; margin-top:13px; }
 .receipt-batch-actions { display:flex; align-items:center; gap:8px; }
 .receipt-quick-edit-list { display:grid; gap:12px; margin-top:18px; }
-.receipt-edit-row { display:grid; grid-template-columns:54px minmax(170px,.8fr) minmax(170px,.8fr) minmax(260px,1.3fr) auto; align-items:start; gap:10px; border:1px solid #e3d5c7; border-radius:14px; background:#fffdf9; padding:13px; }
+.receipt-edit-row { display:grid; grid-template-columns:44px 150px repeat(2,minmax(155px,1fr)) minmax(145px,.8fr) 130px; grid-template-areas:"index image name nickname state state" ". image national wage state state" ". image address note state state"; align-items:start; gap:10px; border:1px solid #e3d5c7; border-radius:14px; background:#fffdf9; padding:13px; }
 .receipt-edit-row__index { display:grid; width:42px; height:42px; place-items:center; border-radius:12px; background:#f0e4d8; color:#795442; font-size:12px; font-weight:700; }
+.receipt-edit-row__index { grid-area:index; }
+.receipt-card-thumb { grid-area:image; min-height:142px; overflow:hidden; border:1px solid #ddcabb; border-radius:12px; background:#f7efe7; padding:5px; color:#856756; cursor:zoom-in; }
+.receipt-card-thumb span { display:grid; height:112px; place-items:center; overflow:hidden; border-radius:8px; background:#e9ddd2; font-size:9px; }
+.receipt-card-thumb img { width:100%; height:100%; object-fit:contain; background:#fff; }
+.receipt-card-thumb small { display:block; margin-top:6px; font-size:8px; font-weight:650; }
 .receipt-edit-row label { color:#8b786d; font-size:9px; }
+.receipt-edit-row > label:nth-of-type(1) { grid-area:name; }.receipt-edit-row > label:nth-of-type(2) { grid-area:nickname; }.receipt-edit-row > label:nth-of-type(3) { grid-area:national; }.receipt-edit-row > label:nth-of-type(4) { grid-area:address; }.receipt-edit-row > label:nth-of-type(5) { grid-area:wage; }.receipt-edit-row > label:nth-of-type(6) { grid-area:note; }
 .receipt-edit-row .field { min-height:42px; margin-top:4px; padding:8px 10px; font-size:12px; }
 .receipt-edit-row textarea.field { min-height:64px; resize:vertical; }
-.receipt-row-state { display:flex; min-width:112px; flex-direction:column; align-items:flex-end; gap:5px; padding-top:2px; }
+.receipt-row-state { grid-area:state; display:flex; min-width:112px; flex-direction:column; align-items:flex-end; gap:7px; padding-top:2px; }
 .receipt-status-pill { border-radius:999px; background:#e8f2ec; padding:5px 9px; color:#3f6f58; font-size:9px; font-weight:700; }
 .receipt-status-pill.is-loading { background:#f4eadc; color:#86613e; }
 .receipt-status-pill.is-error,.receipt-status-pill.is-duplicate { background:#fbe7e1; color:#a04836; }
 .receipt-row-warning { max-width:180px; color:#a25b3f; font-size:9px; line-height:1.45; text-align:right; }
 .receipt-existing-check { display:flex; align-items:flex-start; gap:6px; color:#7b5745; font-size:9px; text-align:left; }
+.receipt-delete-row { min-height:32px; border:0; background:transparent; color:#a94b3b; font-size:9px; font-weight:700; text-decoration:underline; }
+.receipt-danger-btn { border-color:#e3b5ac!important; color:#a74435!important; }
 .receipt-filter-bar { display:grid; grid-template-columns:minmax(240px,1.4fr) minmax(190px,.7fr) auto; gap:10px; margin-top:20px; }
+.receipt-group-filter { position:relative; min-height:44px; border:1px solid #ded1c5; border-radius:10px; background:#fff; color:#4c382f; }
+.receipt-group-filter summary { display:flex; min-height:44px; align-items:center; justify-content:space-between; padding:9px 12px; font-size:12px; cursor:pointer; list-style:none; }
+.receipt-group-filter summary::after { content:'⌄'; color:#8f5f42; }.receipt-group-filter summary::-webkit-details-marker { display:none; }
+.receipt-group-filter__menu { position:absolute; z-index:35; top:calc(100% + 6px); right:0; width:min(360px,calc(100vw - 40px)); max-height:320px; overflow:auto; border:1px solid #dbc8b8; border-radius:13px; background:#fffdf9; padding:8px; box-shadow:0 18px 44px rgba(57,38,30,.2); }
+.receipt-group-filter__menu label { display:flex; min-height:46px; align-items:center; gap:10px; border-radius:9px; padding:7px 9px; cursor:pointer; }.receipt-group-filter__menu label:hover { background:#f7eee5; }
+.receipt-group-filter__menu input { width:18px; height:18px; accent-color:#8f5f42; }.receipt-group-filter__menu span { display:flex; min-width:0; flex-direction:column; }.receipt-group-filter__menu strong { font-size:11px; }.receipt-group-filter__menu small { color:#8f7a6f; font-size:9px; }
+.receipt-group-filter__tools { display:flex; gap:7px; border-bottom:1px solid #eadfd4; padding:3px 3px 8px; }.receipt-group-filter__tools button { min-height:34px; flex:1; border:1px solid #dbc9ba; border-radius:8px; background:#fbf5ee; color:#76503e; font-size:9px; font-weight:700; }
 .receipt-export-actions { display:flex; gap:8px; }
 .receipt-select-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; border-radius:11px; background:#f7efe6; padding:10px 13px; color:#745d50; font-size:11px; }
 .receipt-select-toolbar label { display:flex; align-items:center; gap:7px; }
@@ -515,6 +530,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .receipt-registry-list { display:grid; gap:8px; margin-top:12px; }
 .receipt-registry-row { display:grid; grid-template-columns:28px minmax(190px,1fr) minmax(160px,.75fr) minmax(160px,.75fr) auto; align-items:center; gap:12px; border:1px solid #e7dbcf; border-radius:12px; padding:12px 14px; }
 .receipt-registry-row strong,.receipt-registry-row span,.receipt-registry-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.receipt-registry-row > span { display:flex; min-width:0; flex-direction:column; }.receipt-registry-row > span small { margin-top:2px; }
 .receipt-registry-row strong { color:#4c382f; font-size:12px; }
 .receipt-registry-row span { color:#766158; font-size:11px; }
 .receipt-registry-row small { color:#9a887c; font-size:9px; }
@@ -540,9 +556,8 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 }
 @media (max-width:900px) {
   .template-uploader__form { grid-template-columns:1fr; }
-  .receipt-edit-row { grid-template-columns:44px minmax(0,1fr) minmax(0,1fr); }
-  .receipt-edit-row > label:nth-of-type(3) { grid-column:2/4; }
-  .receipt-row-state { grid-column:1/4; align-items:flex-start; }
+  .receipt-edit-row { grid-template-columns:44px 130px repeat(2,minmax(0,1fr)); grid-template-areas:"index image name nickname" ". image national wage" ". image address note" ". state state state"; }
+  .receipt-row-state { align-items:flex-start; }
   .receipt-row-warning { max-width:none; text-align:left; }
   .receipt-registry-row { grid-template-columns:28px minmax(170px,1fr) minmax(130px,.7fr); }
   .receipt-registry-row > :nth-child(4),.receipt-registry-row > :nth-child(5) { display:none; }
@@ -567,9 +582,8 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   .receipt-batch-actions > button { flex:1; }
   .receipt-setup-grid,.receipt-filter-bar { grid-template-columns:1fr; }
   .receipt-dropzone { min-height:155px; padding:18px; text-align:center; }
-  .receipt-edit-row { grid-template-columns:36px minmax(0,1fr); }
-  .receipt-edit-row > label,.receipt-edit-row > label:nth-of-type(3) { grid-column:2; }
-  .receipt-row-state { grid-column:2; }
+  .receipt-edit-row { grid-template-columns:36px minmax(0,1fr); grid-template-areas:"index image" ". state" "name name" "nickname nickname" "national national" "wage wage" "address address" "note note"; }
+  .receipt-card-thumb { min-height:128px; }.receipt-card-thumb span { height:98px; }
   .receipt-export-actions { width:100%; }
   .receipt-export-actions .export-btn { flex:1; }
   .receipt-select-toolbar { align-items:flex-start; flex-direction:column; }
