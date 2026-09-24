@@ -89,3 +89,14 @@ test('LINE webhook commits before 200 and bill flow contains no automatic Push w
   assert.match(bills,/source_context_id=\? FOR UPDATE/);
   assert.match(bills,/if\(error.existingJobId\)return getBillAiJob/);
 });
+
+test('LINE durable queues are stamped and compared using the same UTC clock',async()=>{
+  const queue=await fs.readFile(new URL('../server/line-queue.mjs',import.meta.url),'utf8');
+  const migration=await fs.readFile(new URL('../server/migrations/014_line_queue_utc_due.sql',import.meta.url),'utf8');
+  assert.match(queue,/line_inbox[\s\S]*available_at,created_at,updated_at[\s\S]*UTC_TIMESTAMP\(3\)/);
+  assert.match(queue,/line_outbox[\s\S]*available_at,created_at,updated_at[\s\S]*UTC_TIMESTAMP\(3\)/);
+  assert.match(queue,/eventTimestamp:Number\(event\.timestamp\)/);
+  assert.match(migration,/UPDATE line_inbox/);
+  assert.match(migration,/UPDATE line_outbox/);
+  assert.match(migration,/UTC_TIMESTAMP\(3\)/);
+});

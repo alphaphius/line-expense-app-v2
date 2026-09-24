@@ -21,7 +21,11 @@ export async function enqueueLineEvents(events) {
       // Status queries must still respond while an image download is backing off.
       const statusQuery=event.type==='message'&&/^(สถานะ|status|ต่อ)$/i.test(event.message?.text||'');
       const lane=notificationKey(`${target}:${source.userId||''}${statusQuery?':status':''}`);
-      await db.execute('INSERT IGNORE INTO line_inbox (event_id,lane,payload) VALUES (?,?,?)',[id,lane,JSON.stringify(event)]);
+      // MariaDB on the NAS runs in Asia/Bangkok while queue comparisons use
+      // UTC_TIMESTAMP(). Stamp queue rows in UTC so new work is due immediately.
+      await db.execute(`INSERT IGNORE INTO line_inbox
+        (event_id,lane,payload,available_at,created_at,updated_at)
+        VALUES (?,?,?,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,[id,lane,JSON.stringify(event)]);
     }
   });
 }
@@ -30,10 +34,13 @@ export async function enqueueLineMessage(target,messages,{replyToken='',key}={})
   if(!target)throw new Error('Missing LINE notification target');
   const ctx=context.getStore();
   const identity=key||(ctx?`${ctx.row.event_id}:message:${ctx.sequence++}`:crypto.randomUUID());
-  await execute(`INSERT IGNORE INTO line_outbox (dedupe_key,target,messages,reply_token,reply_until,retry_key)
-    VALUES (:key,:target,:messages,:reply,:until,:retry)`,{
+  const eventTimestamp=Number(ctx?.eventTimestamp);
+  const replyBase=Number.isFinite(eventTimestamp)&&eventTimestamp>0?eventTimestamp:Date.now();
+  await execute(`INSERT IGNORE INTO line_outbox
+    (dedupe_key,target,messages,reply_token,reply_until,retry_key,available_at,created_at,updated_at)
+    VALUES (:key,:target,:messages,:reply,:until,:retry,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,{
     key:notificationKey(identity),target,messages:JSON.stringify(messages.slice(0,5)),reply:replyToken,
-    until:replyToken?sqlDate(new Date(String(ctx?.row.created_at||sqlDate(Date.now())).replace(' ','T')+'Z').getTime()+50000):null,
+    until:replyToken?sqlDate(replyBase+55000):null,
     retry:crypto.randomUUID(),
   });
 }
@@ -83,7 +90,7 @@ export function startLineWorkers({handleEvent,logger=console}) {
           const loading=event.message?.type==='image'&&event.source?.type==='user'&&row.attempts===1
             ? fetch('https://api.line.me/v2/bot/chat/loading/start',{method:'POST',headers:{Authorization:`Bearer ${config.lineChannelAccessToken}`,'Content-Type':'application/json'},body:JSON.stringify({chatId:target,loadingSeconds:60}),signal:AbortSignal.timeout(3000)}).catch(()=>{})
             : Promise.resolve();
-          await Promise.all([loading,context.run({row,sequence:0},()=>handleEvent(event))]);return;
+          await Promise.all([loading,context.run({row,sequence:0,eventTimestamp:Number(event.timestamp)||0},()=>handleEvent(event))]);return;
         }
         await deliverLineMessage(row,{token:config.lineChannelAccessToken,disableReply:()=>execute("UPDATE line_outbox SET reply_token='' WHERE seq=:seq AND lease_token=:lease",{seq:row.seq,lease:row.lease_token})});
       },
