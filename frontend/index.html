@@ -97,7 +97,7 @@
           <button class="nav-btn" data-view="system">สถานะระบบ</button>
         </nav>
       </div>
-      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.13 · NAS Production</div>
+      <div class="sidebar-version hidden px-5 text-xs text-slate-500 lg:absolute lg:bottom-5 lg:block">v4.9.15 · NAS Production</div>
     </aside>
 
     <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label="ซ่อนแถบเมนู" title="ซ่อนแถบเมนู">
@@ -126,6 +126,16 @@
             </div>
             <button id="open-review-queue" class="review-inbox__button">เปิดรายการค้าง</button>
           </div>
+          <section class="dashboard-new-bill" aria-label="เพิ่มบิลใหม่">
+            <div class="dashboard-new-bill__copy">
+              <span>บันทึกค่าใช้จ่าย</span>
+              <div><h3>มีบิลใหม่?</h3><p>อัปโหลดรูปหรือเอกสารเพื่อเพิ่มบิลเข้าสู่ WorkHub</p></div>
+            </div>
+            <button type="button" class="dashboard-new-bill__button" data-view="upload" aria-label="เพิ่มบิลใหม่">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path><rect x="3" y="3" width="18" height="18" rx="5"></rect></svg>
+              <span>เพิ่มบิลใหม่</span>
+            </button>
+          </section>
           <article class="card dashboard-filter-card" aria-label="ตัวกรองภาพรวม">
             <div class="dashboard-filter-toolbar">
               <div class="dashboard-filter-group">
