@@ -25,6 +25,7 @@ function targetOf(source = {}) { return clean(source.groupId || source.roomId ||
 function userOf(source = {}) { return clean(source.userId, 160); }
 function message(text, quickReply) { const result={type:'text',text:clean(text,5000)};if(quickReply?.length)result.quickReply={items:quickReply};return result; }
 function postback(label, data, displayText) { return {type:'action',action:{type:'postback',label:clean(label,20),data:clean(data,300),displayText:clean(displayText,300)}}; }
+function workHubFlexHero() { return config.publicBaseUrl ? { hero:{ type:'image', url:`${config.publicBaseUrl}/assets/line-bill-header.jpg`, size:'full', aspectRatio:'20:7', aspectMode:'cover' } } : {}; }
 
 async function lineRequest(path, { method='GET', body, binary=false } = {}) {
   if (!config.lineChannelAccessToken) throw new Error('ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN บน NAS');
@@ -140,7 +141,7 @@ function pageCountMessage(sessionId,received,quick) {
     body.push({type:'box',layout:'horizontal',spacing:'sm',margin:counts.length?'sm':'md',contents:columns});counts.push(count);
   }
   body.push({type:'button',style:'secondary',height:'sm',margin:'xl',color:'#B84C3F',action:{type:'postback',label:'ยกเลิกรูปนี้',data:`action=cancel_session&session_id=${sessionId}`,displayText:'ยกเลิกรูปที่ส่งล่าสุด'}});
-  return {type:'flex',altText:'เลือกวิธีรับบิลหรือยกเลิก',contents:{type:'bubble',size:'mega',header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md'},{type:'text',text:'ใช้ค่าลัดเพื่อข้ามการเลือกโครงการและบริษัท',color:'#D8C8C0',size:'sm',margin:'sm',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:body}}};
+  return {type:'flex',altText:'เลือกวิธีรับบิลหรือยกเลิก',contents:{type:'bubble',size:'mega',...workHubFlexHero(),header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md'},{type:'text',text:'ใช้ค่าลัดเพื่อข้ามการเลือกโครงการและบริษัท',color:'#D8C8C0',size:'sm',margin:'sm',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:body}}};
 }
 
 async function projectSelectionMessage(sessionId) {
@@ -178,7 +179,7 @@ function billSavedConfirmation(bill){
     {type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'เปิดและแก้ไขบิล',uri:`${config.publicBaseUrl}/?bill_id=${encodeURIComponent(bill.bill_id)}&edit=1`}},
     {type:'button',style:'primary',color:'#31473A',action:{type:'uri',label:'ระบบ WorkHub',uri:`${config.publicBaseUrl}/?openExternalBrowser=1`}},
   ]:[];
-  return{type:'flex',altText:`บันทึกบิล ${bill.vendor_name||''} เรียบร้อยแล้ว`,contents:{type:'bubble',header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'บันทึกบิลเรียบร้อย',color:'#FFFFFF',weight:'bold',size:'xl'},{type:'text',text:'ข้อมูลถูกเพิ่มเข้า WorkHub แล้ว',color:'#DCE9DF',size:'sm',margin:'sm'}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[row('ชื่อร้าน',bill.vendor_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),row('เจ้าของบิล',bill.source_user_name||'ผู้ส่งผ่าน LINE'),row('ยอดสุทธิ',`${moneyText(bill.grand_total)} บาท`)]},...(buttons.length?{footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:buttons}}:{})}};
+  return{type:'flex',altText:`บันทึกบิล ${bill.vendor_name||''} เรียบร้อยแล้ว`,contents:{type:'bubble',...workHubFlexHero(),header:{type:'box',layout:'vertical',backgroundColor:'#31473A',paddingAll:'20px',contents:[{type:'text',text:'บันทึกบิลเรียบร้อย',color:'#FFFFFF',weight:'bold',size:'xl'},{type:'text',text:'ข้อมูลถูกเพิ่มเข้า WorkHub แล้ว',color:'#DCE9DF',size:'sm',margin:'sm'}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[row('ชื่อร้าน',bill.vendor_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),row('เจ้าของบิล',bill.source_user_name||'ผู้ส่งผ่าน LINE'),row('ยอดสุทธิ',`${moneyText(bill.grand_total)} บาท`)]},...(buttons.length?{footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:buttons}}:{})}};
 }
 
 function billConfirmation(bill) {
@@ -191,7 +192,7 @@ function billConfirmation(bill) {
     {type:'button',style:'secondary',color:'#B84C3F',action:{type:'postback',label:'ยกเลิกบิล',data:`action=cancel_bill&bill_id=${bill.bill_id}`,displayText:'ยกเลิกบิลนี้'}},
   ];
   const verificationColor=bill.needs_review?'#A15A34':'#77703F';
-  return {type:'flex',altText:`อ่านบิลแล้ว ${bill.vendor_name||'ไม่ทราบผู้ขาย'} ${total} บาท`,contents:{type:'bubble',size:'mega',header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'AI BILL CAPTURE',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:clean(bill.vendor_name,200)||'ไม่ทราบชื่อร้าน',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md',wrap:true},{type:'text',text:clean(bill.category_name,120)||'ไม่ระบุหมวดหมู่',color:'#E1D4CD',weight:'bold',size:'md',margin:'sm',wrap:true},{type:'text',text:bill.needs_review?'! มีข้อมูลที่ต้องตรวจสอบ':'✓ ข้อมูลสำคัญผ่านการตรวจสอบแล้ว',color:bill.needs_review?'#F4C67A':'#E6D88F',weight:'bold',size:'sm',margin:'lg',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[
+  return {type:'flex',altText:`อ่านบิลแล้ว ${bill.vendor_name||'ไม่ทราบผู้ขาย'} ${total} บาท`,contents:{type:'bubble',size:'mega',...workHubFlexHero(),header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'AI BILL CAPTURE',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:clean(bill.vendor_name,200)||'ไม่ทราบชื่อร้าน',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md',wrap:true},{type:'text',text:clean(bill.category_name,120)||'ไม่ระบุหมวดหมู่',color:'#E1D4CD',weight:'bold',size:'md',margin:'sm',wrap:true},{type:'text',text:bill.needs_review?'! มีข้อมูลที่ต้องตรวจสอบ':'✓ ข้อมูลสำคัญผ่านการตรวจสอบแล้ว',color:bill.needs_review?'#F4C67A':'#E6D88F',weight:'bold',size:'sm',margin:'lg',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:[
     {type:'text',text:'ข้อมูลที่ AI อ่านได้',color:'#8A4B36',weight:'bold',size:'lg'},
     {type:'separator',margin:'md',color:'#DECBBB'},
     row('โครงการ',bill.project_name),row('บริษัท',bill.company_name),row('หมวดของบิล',bill.category_name),row('วันที่',thaiLongDate(bill.document_date)),

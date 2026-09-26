@@ -433,6 +433,11 @@ async function billsForExport(input={}){
     if(!ownerIds.length)where.push('1=0');
     else{const placeholders=ownerIds.map((value,index)=>{params[`owner${index}`]=value;return`:owner${index}`;});where.push(`b.source_user_id IN (${placeholders.join(',')})`);}
   }
+  if(Array.isArray(selection.owner_names)&&!Array.isArray(selection.owner_ids)){
+    const names=[...new Set(selection.owner_names.map(value=>clean(value,255)).filter(Boolean))].slice(0,100);
+    if(!names.length)where.push('1=0');
+    else{const placeholders=names.map((value,index)=>{params[`ownerName${index}`]=value;return`:ownerName${index}`;});where.push(`COALESCE(NULLIF(lu.workhub_name,''),NULLIF(b.source_user_name,''),NULLIF(lu.display_name,'')) IN (${placeholders.join(',')})`);}
+  }
   if(selection.query){where.push("LOWER(CONCAT_WS(' ',b.vendor_name,b.vendor_tax_id,b.buyer_name,b.description,b.notes,b.source_user_name,lu.display_name,lu.workhub_name,p.project_name,co.company_name,c.category_name)) LIKE :query");params.query=`%${clean(selection.query,180).toLowerCase()}%`;}
   if(selection.month){where.push("DATE_FORMAT(COALESCE(b.document_date,b.created_at),'%Y-%m')=:month");params.month=normalizePeriod(selection.month);}
   const rows=await select(`SELECT b.*,p.project_name,co.company_name,c.category_name,COALESCE(NULLIF(lu.workhub_name,''),NULLIF(b.source_user_name,''),NULLIF(lu.display_name,''),IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_name,items.item_descriptions FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id LEFT JOIN (SELECT bill_id,GROUP_CONCAT(NULLIF(description,'') ORDER BY line_no SEPARATOR ', ') AS item_descriptions FROM bill_items GROUP BY bill_id) items ON items.bill_id=b.bill_id WHERE ${where.join(' AND ')} ORDER BY COALESCE(b.document_date,DATE(b.created_at)),b.created_at`,params);

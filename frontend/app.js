@@ -126,6 +126,11 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
   }
 
+  window.addEventListener('popstate', event => {
+    const view = event.state?.workhubView;
+    if (view && viewTitles[view] && view !== state.activeView) switchView(view, { history:false });
+  });
+
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   }
@@ -145,14 +150,18 @@
 
   function thaiDateTime(value) {
     const text = String(value || '');
-    const match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(text);
-    if (!match) return '-';
-    return `${match[3]}/${match[2]}/${Number(match[1]) + 543} ${match[4]}:${match[5]} น.`;
+    if (!text) return '-';
+    const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text) ? text : `${text.replace(' ', 'T')}Z`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return '-';
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone:'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).formatToParts(date);
+    const valueOf = type => parts.find(part => part.type === type)?.value || '';
+    return `${valueOf('day')}/${valueOf('month')}/${Number(valueOf('year')) + 543} ${valueOf('hour')}:${valueOf('minute')} น.`;
   }
 
   function billPreviewButton(bill) {
     const docId = String(bill && bill.preview_doc_id || '');
-    const attrs = docId ? `data-preview-doc="${escapeHtml(docId)}"` : 'disabled';
+    const attrs = docId ? `data-preview-doc="${escapeHtml(docId)}" data-preview-bill="${escapeHtml(bill.bill_id || '')}"` : 'disabled';
     const label = docId ? 'แสดงรูปบิล' : 'ไม่มีรูปบิล';
     return `<button type="button" class="bill-preview-btn" ${attrs} title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="m5.5 17 4.1-4 3.1 2.8 2.4-2.2 3.4 3.4"></path></svg></button>`;
   }
@@ -177,14 +186,18 @@
     state.quickSettings = data.quickSettings || { slots:[], configured_count:0, any_configured:false, message:'ยังไม่ได้ตั้งค่าลัด' };
     state.pendingReviews = Array.isArray(data.pendingReviews) ? data.pendingReviews : [];
     renderMasters(); renderFilters(); renderDashboard();
+    if (!window.history.state?.workhubView) window.history.replaceState({ ...(window.history.state || {}), workhubView:state.activeView }, '', window.location.href);
     document.getElementById('loading-screen').classList.add('hidden');
   }
 
-  function switchView(view) {
+  function switchView(view, options = {}) {
     document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
     const target = document.getElementById('view-' + view);
     if (!target) return;
     state.activeView = view;
+    if (options.history !== false && window.history && window.history.state?.workhubView !== view) {
+      window.history.pushState({ ...(window.history.state || {}), workhubView:view }, '', window.location.href);
+    }
     target.classList.remove('hidden');
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.toggle('active', el.dataset.view === view));
     const product = expenseViews.indexOf(view) >= 0 ? 'expenses' : view;
@@ -435,7 +448,7 @@
       </div>
       <div id="owner-bills-feedback" class="mb-2 text-xs text-slate-500" aria-live="polite">กำลังโหลดรายการ…</div>
       <div class="owner-bills-table-wrap"><table class="owner-bills-table"><thead><tr><th>รูป</th><th>เวลาอัปโหลด</th><th>วันที่ในบิล</th><th>ร้านค้า</th><th>โครงการ</th><th>ยอดรวม</th><th>สถานะ</th></tr></thead><tbody id="owner-bills-rows"><tr><td colspan="7" class="text-center">กำลังโหลด…</td></tr></tbody></table></div>
-      <div class="owner-bills-footer"><div class="owner-bills-footer__pages"><button id="owner-bills-prev" type="button">ก่อนหน้า</button><span id="owner-bills-page">หน้า 1/1</span><button id="owner-bills-next" type="button">ถัดไป</button></div><button id="owner-bills-all" type="button" class="owner-bills-all">ดูบิลทั้งหมดของชื่อนี้</button></div>`,
+      <div class="owner-bills-footer"><div class="owner-bills-footer__pages"><button id="owner-bills-prev" type="button">ก่อนหน้า</button><span id="owner-bills-page">หน้า 1/1</span><button id="owner-bills-next" type="button">ถัดไป</button></div><div class="owner-bills-export"><button type="button" data-owner-export="word">Export DOCX</button><button type="button" data-owner-export="excel">Export Excel</button><button id="owner-bills-all" type="button" class="owner-bills-all">ดูบิลทั้งหมดของชื่อนี้</button></div></div>`,
       didOpen:popup => {
         let currentPage = 1;
         let currentData = { page:1, pages:1 };
@@ -493,6 +506,10 @@
           Swal.close();
           switchView('bills');
         });
+        popup.querySelectorAll('[data-owner-export]').forEach(button => button.addEventListener('click', () => {
+          const period = monthInput.value || initialPeriod;
+          exportBillSelection(button.dataset.ownerExport, { month:period, ...(safeOwnerIds.length ? { owner_ids:safeOwnerIds } : { owner_names:[label] }) }, [`เจ้าของบิล: ${label}`, `เดือน: ${thaiMonthPeriod(period)}`]);
+        }));
         load(1);
       },
     });
@@ -881,9 +898,16 @@
 
   function previewFiles() {
     const files = [...document.getElementById('bill-files').files];
+    const batchMode = document.getElementById('upload-batch-mode').checked;
     state.uploadRequestId = '';
-    document.getElementById('expected-pages').value = files.length || 1;
-    document.getElementById('file-list').innerHTML = files.map((file, index) => `<div class="rounded-xl bg-slate-100 p-3 text-sm"><span class="font-medium">หน้า ${index + 1}</span><p class="truncate text-xs text-slate-500">${escapeHtml(file.name)} · ${(file.size/1048576).toFixed(2)} MB</p></div>`).join('');
+    const expectedInput = document.getElementById('expected-pages');
+    if (batchMode) expectedInput.value = files.length || 1;
+    const expected = Math.max(1, Math.min(5, Number(expectedInput.value) || 1));
+    document.getElementById('file-list').innerHTML = Array.from({ length:batchMode ? Math.max(files.length, 1) : expected }, (_, index) => {
+      const file = files[index];
+      const label = batchMode ? `บิล ${index + 1}` : `หน้า ${index + 1}`;
+      return `<div class="upload-page-slot ${file ? 'has-file' : ''}"><span>${label}</span><div>${file ? `<strong>${escapeHtml(file.name)}</strong><small>${(file.size / 1048576).toFixed(2)} MB · เตรียมอัปโหลดแล้ว</small>` : `<strong>รอเลือกรูป${label}</strong><small>ยังไม่มีไฟล์ในตำแหน่งนี้</small>`}</div><i>${file ? '✓' : index + 1}</i></div>`;
+    }).join('');
   }
 
   function billAiStatusText(job) {
@@ -923,17 +947,18 @@
   async function submitUpload(event) {
     event.preventDefault();
     const files = [...document.getElementById('bill-files').files];
+    const batchMode = document.getElementById('upload-batch-mode').checked;
     const expected = Number(document.getElementById('expected-pages').value);
     const ownerId = document.getElementById('upload-owner').value;
     if (!ownerId) return Swal.fire('กรุณาเลือกเจ้าของบิล', 'รายชื่อจะสร้างเมื่อบุคคลนั้นเคยส่งบิลผ่าน LINE อย่างน้อยหนึ่งครั้ง', 'warning');
-    if (files.length !== expected) return Swal.fire('จำนวนหน้าไม่ตรงกัน', `เลือก ${files.length} ไฟล์ แต่ระบุ ${expected} หน้า`, 'warning');
+    if (files.length > 5) return Swal.fire('เลือกไฟล์เกินกำหนด', 'อัปโหลดได้สูงสุด 5 รูปต่อครั้ง', 'warning');
+    if (!batchMode && files.length !== expected) return Swal.fire('จำนวนหน้าไม่ตรงกัน', `เลือก ${files.length} ไฟล์ แต่ระบุ ${expected} หน้า`, 'warning');
     if (files.some(file => file.size > 8 * 1024 * 1024)) return Swal.fire('ไฟล์ใหญ่เกินไป', 'ไฟล์ละไม่เกิน 8 MB', 'warning');
     const submitButton = event.submitter || event.currentTarget.querySelector('[type="submit"]');
     if (submitButton && submitButton.disabled) return;
     if (submitButton) { submitButton.disabled = true; submitButton.dataset.originalText = submitButton.textContent; submitButton.textContent = 'กำลังเตรียมรูป…'; }
     showActivityToast('กำลังบีบอัดรูป…', 'เตรียมไฟล์ให้เล็กลงก่อนอัปโหลด');
     try {
-      if (!state.uploadRequestId) state.uploadRequestId = window.V2Api.newRequestId();
       const encodedFiles = await window.ImageOptimizer.prepareFiles(files, progress => {
         const detail = `เตรียมแล้ว ${progress.completed}/${progress.total} หน้า · ลดขนาด ${progress.savedPercent}%`;
         showActivityToast('กำลังบีบอัดรูป…', detail);
@@ -941,16 +966,22 @@
       });
       showActivityToast('กำลังเก็บรูปบิล…', 'เมื่อเก็บสำเร็จแล้วสามารถปิดหน้านี้ได้ ระบบจะวิเคราะห์ต่อเอง');
       if (submitButton) submitButton.textContent = 'กำลังเก็บรูป…';
-      const job = await window.V2Api.callWithRequestId('submitBillPages', state.uploadRequestId, {
-        project_id: document.getElementById('upload-project').value,
-        company_id: document.getElementById('upload-company').value,
-        document_date: document.getElementById('upload-document-date').value,
-        expected_pages: expected, files: encodedFiles, source: 'WEB', source_user_id: ownerId,
-      });
-      state.uploadRequestId = '';
+      const sharedPayload = { project_id:document.getElementById('upload-project').value, company_id:document.getElementById('upload-company').value, document_date:document.getElementById('upload-document-date').value, source:'WEB', source_user_id:ownerId };
+      const jobs = [];
+      if (batchMode) {
+        for (let index = 0; index < encodedFiles.length; index += 1) {
+          showActivityToast('กำลังเก็บบิลแบบเป็นชุด…', `กำลังบันทึกบิล ${index + 1}/${encodedFiles.length}`);
+          jobs.push(await window.V2Api.callWithRequestId('submitBillPages', window.V2Api.newRequestId(), { ...sharedPayload, expected_pages:1, files:[encodedFiles[index]] }));
+        }
+      } else {
+        jobs.push(await window.V2Api.callWithRequestId('submitBillPages', window.V2Api.newRequestId(), { ...sharedPayload, expected_pages:expected, files:encodedFiles }));
+      }
       document.getElementById('upload-form').reset(); document.getElementById('file-list').innerHTML = ''; await bootstrap();
-      const bill = await waitForBillAiJob(job);
-      if (bill) { await bootstrap(); await showBillResult(bill); }
+      for (let index = 0; index < jobs.length; index += 1) {
+        showActivityToast(batchMode ? `กำลังวิเคราะห์บิล ${index + 1}/${jobs.length}` : 'กำลังวิเคราะห์บิล', 'รูปถูกเก็บใน WorkHub แล้ว ไม่ต้องอัปโหลดซ้ำ');
+        const bill = await waitForBillAiJob(jobs[index]);
+        if (bill) { await bootstrap(); await showBillResult(bill); }
+      }
       hideActivityToast();
     } catch (error) {
       hideActivityToast();
@@ -996,7 +1027,7 @@
 
   function billSummaryHtml(bill) {
     const items = (bill.items || []).map(item => `<tr><td>${escapeHtml(item.line_no)}</td><td>${escapeHtml(item.description)}</td><td class="text-right">${Number(item.quantity)||0} ${escapeHtml(item.unit||'')}</td><td class="text-right">${money(item.unit_price)}</td><td class="text-right">${money(item.amount)}</td></tr>`).join('');
-    const documents = (bill.documents || []).map(doc => `<button class="bill-document-link" data-preview-doc="${escapeHtml(doc.doc_id)}"><span class="bill-document-link__page">🧾 หน้า ${escapeHtml(doc.page_no || 1)}</span><span class="bill-document-link__name" title="${escapeHtml(doc.file_name || 'ดูเอกสาร')}">${escapeHtml(doc.file_name || 'ดูเอกสาร')}</span><small>${escapeHtml(doc.mime_type || 'ไม่ระบุชนิดไฟล์')} · ${doc.size_bytes ? (Number(doc.size_bytes)/1048576).toFixed(2)+' MB' : 'ไม่ระบุขนาด'}</small></button>`).join('');
+    const documents = (bill.documents || []).map(doc => `<button class="bill-document-link" data-preview-doc="${escapeHtml(doc.doc_id)}" data-preview-bill="${escapeHtml(bill.bill_id)}"><span class="bill-document-link__page">🧾 หน้า ${escapeHtml(doc.page_no || 1)}</span><span class="bill-document-link__name" title="${escapeHtml(doc.file_name || 'ดูเอกสาร')}">${escapeHtml(doc.file_name || 'ดูเอกสาร')}</span><small>${escapeHtml(doc.mime_type || 'ไม่ระบุชนิดไฟล์')} · ${doc.size_bytes ? (Number(doc.size_bytes)/1048576).toFixed(2)+' MB' : 'ไม่ระบุขนาด'}</small></button>`).join('');
     const check = value => value === true || String(value).toLowerCase() === 'true' ? '✅ ตรงกัน' : '⚠️ ไม่ตรง/อ่านไม่พบ';
     return `<div class="max-h-[65vh] space-y-4 overflow-y-auto pr-2 text-left text-sm">
       <section class="bill-review-summary"><div class="min-w-0"><p class="truncate text-lg font-semibold text-slate-900">${escapeHtml(bill.vendor_name || 'ไม่ทราบร้านค้า')}</p><p class="mt-1 text-sm text-slate-500">${escapeHtml(docTypeLabel(bill.doc_type))} · ${escapeHtml(bill.document_no || 'ไม่มีเลขที่เอกสาร')}</p><p class="mt-2 text-sm text-slate-600">${escapeHtml(thaiDate(bill.document_date))}</p></div><div class="text-right"><p class="text-xs font-medium text-slate-500">ยอดสุทธิ</p><p class="mt-1 text-2xl font-semibold text-emerald-700">${money(bill.grand_total)}</p><div class="mt-2">${statusBadge(bill.status)}</div></div></section>
@@ -1028,17 +1059,62 @@
   function detailCell(label, value, wide) { return `<div class="${wide?'sm:col-span-2':''}"><span class="text-xs text-slate-400">${escapeHtml(label)}</span><p class="mt-1 break-words font-medium">${escapeHtml(value == null || value === '' ? '-' : value)}</p></div>`; }
   function docTypeLabel(value) { return ({TAX_INVOICE:'ใบกำกับภาษี',RECEIPT:'ใบเสร็จรับเงิน',CASH_BILL:'บิลเงินสด',INVOICE:'ใบแจ้งหนี้',DELIVERY_NOTE:'ใบส่งของ',TOLL:'ค่าผ่านทาง/ทางด่วน',TRANSFER_SLIP:'สลิปโอนเงิน',OTHER:'เอกสารอื่นๆ'})[value] || value || '-'; }
 
-  async function previewDocument(docId) {
-    try {
-      const document = await runBusy(() => gas('getBillDocumentPreview', docId), 'กำลังโหลดเอกสาร…');
-      if (document.dataUrl && /^image\//.test(document.mimeType)) {
-        await Swal.fire({ title:document.fileName, imageUrl:document.dataUrl, imageAlt:document.fileName, width:900, confirmButtonText:'ปิด', customClass:{ popup:'bill-document-preview', title:'bill-document-preview__title' } });
-      } else if (document.dataUrl && document.mimeType === 'application/pdf') {
-        await Swal.fire({ title:document.fileName, html:`<iframe class="h-[70vh] w-full" src="${document.dataUrl}"></iframe>`, width:1000, confirmButtonText:'ปิด', customClass:{ popup:'bill-document-preview', title:'bill-document-preview__title' } });
-      } else if (document.externalUrl) {
-        window.open(document.externalUrl, '_blank', 'noopener');
-      } else throw new Error('ไฟล์นี้ไม่มีตัวอย่างให้แสดง');
-    } catch (error) { Swal.fire('เปิดเอกสารไม่ได้',error.message,'error'); }
+  function billMediaInfo(bill) {
+    if (!bill) return '<div class="bill-media-info__empty">กำลังโหลดรายละเอียดบิล…</div>';
+    return `<div class="bill-media-info__head"><span>${statusBadge(bill.status)}</span><strong>${money(bill.grand_total)}</strong></div>
+      <dl class="bill-media-info__facts">
+        <div><dt>ร้านค้า</dt><dd>${escapeHtml(bill.vendor_name || '-')}</dd></div>
+        <div><dt>วันที่ในบิล</dt><dd>${escapeHtml(thaiDate(bill.document_date))}</dd></div>
+        <div><dt>เลขที่เอกสาร</dt><dd>${escapeHtml(bill.document_no || '-')}</dd></div>
+        <div><dt>โครงการ</dt><dd>${escapeHtml(bill.project_name || '-')}</dd></div>
+        <div><dt>บริษัทผู้ซื้อ</dt><dd>${escapeHtml(bill.company_name || '-')}</dd></div>
+        <div><dt>เจ้าของบิล</dt><dd>${escapeHtml(bill.owner_display_name || bill.source_user_name || bill.source_user_id || '-')}</dd></div>
+        <div class="bill-media-info__wide"><dt>สถานะตรวจสอบ</dt><dd>${escapeHtml(bill.review_reasons || 'ข้อมูลพร้อมตรวจสอบ')}</dd></div>
+      </dl>`;
+  }
+
+  async function previewDocument(docId, billId = '') {
+    const existing = document.getElementById('bill-media-viewer');
+    if (existing) existing.remove();
+    const viewer = document.createElement('section');
+    viewer.id = 'bill-media-viewer';
+    viewer.className = 'bill-media-viewer';
+    viewer.setAttribute('role', 'dialog');
+    viewer.setAttribute('aria-modal', 'true');
+    viewer.setAttribute('aria-label', 'ดูรูปบิลและข้อมูล');
+    viewer.innerHTML = `<div class="bill-media-viewer__scrim" data-bill-media-close></div><div class="bill-media-viewer__panel" tabindex="-1"><header><div><span>รูปบิลและข้อมูล</span><h3>กำลังโหลดรูปบิล…</h3></div><button type="button" class="bill-media-close" data-bill-media-close aria-label="ปิดหน้าดูรูปบิล">×</button></header><div class="bill-media-viewer__body"><div class="bill-media-stage" aria-live="polite"></div><aside class="bill-media-info"></aside></div><footer><button type="button" class="secondary-btn" data-bill-media-prev>← ก่อนหน้า</button><span class="bill-media-counter">หน้า 1 / 1</span><button type="button" class="secondary-btn" data-bill-media-next>ถัดไป →</button></footer></div>`;
+    document.body.append(viewer);
+    document.body.classList.add('bill-media-viewer-open');
+    const panel = viewer.querySelector('.bill-media-viewer__panel');
+    const cache = new Map();
+    let bill = null;
+    try { if (billId) bill = await gas('getBillDetail', billId); } catch (_) {}
+    const documents = bill?.documents?.length ? bill.documents : [{ doc_id:docId, page_no:1 }];
+    let index = Math.max(0, documents.findIndex(item => String(item.doc_id) === String(docId)));
+    const close = () => { viewer.remove(); document.body.classList.remove('bill-media-viewer-open'); document.removeEventListener('keydown', onKey); };
+    const render = async () => {
+      const current = documents[index];
+      viewer.querySelector('h3').textContent = current.file_name || `รูปบิลหน้า ${index + 1}`;
+      viewer.querySelector('.bill-media-counter').textContent = `หน้า ${index + 1} / ${documents.length}`;
+      viewer.querySelector('[data-bill-media-prev]').disabled = index === 0;
+      viewer.querySelector('[data-bill-media-next]').disabled = index >= documents.length - 1;
+      viewer.querySelector('.bill-media-info').innerHTML = billMediaInfo(bill);
+      const stage = viewer.querySelector('.bill-media-stage');
+      stage.innerHTML = '<div class="bill-media-loading">กำลังโหลดรูปบิล…</div>';
+      try {
+        let source = cache.get(current.doc_id);
+        if (!source) { source = await gas('getBillDocumentPreview', current.doc_id); cache.set(current.doc_id, source); }
+        if (source.dataUrl && /^image\//.test(source.mimeType)) stage.innerHTML = `<img src="${source.dataUrl}" alt="${escapeHtml(source.fileName || `รูปบิลหน้า ${index + 1}`)}">`;
+        else if (source.dataUrl && source.mimeType === 'application/pdf') stage.innerHTML = `<iframe title="${escapeHtml(source.fileName || 'เอกสาร PDF')}" src="${source.dataUrl}"></iframe>`;
+        else if (source.externalUrl) stage.innerHTML = `<a class="primary-btn" href="${escapeHtml(source.externalUrl)}" target="_blank" rel="noopener">เปิดเอกสารในแท็บใหม่</a>`;
+        else throw new Error('ไฟล์นี้ไม่มีตัวอย่างให้แสดง');
+      } catch (error) { stage.innerHTML = `<div class="bill-media-loading is-error">เปิดรูปบิลไม่ได้<br><small>${escapeHtml(error.message)}</small></div>`; }
+    };
+    const onKey = event => { if (event.key === 'Escape') close(); if (event.key === 'ArrowLeft' && index > 0) { index -= 1; render(); } if (event.key === 'ArrowRight' && index < documents.length - 1) { index += 1; render(); } };
+    viewer.addEventListener('click', event => { if (event.target.closest('[data-bill-media-close]')) close(); if (event.target.closest('[data-bill-media-prev]') && index > 0) { index -= 1; render(); } if (event.target.closest('[data-bill-media-next]') && index < documents.length - 1) { index += 1; render(); } });
+    document.addEventListener('keydown', onKey);
+    panel.focus();
+    await render();
   }
 
   async function deleteBillFromWeb(billId) {
@@ -1094,6 +1170,28 @@
     if(filters.date_to)conditions.push(`ถึงวันที่: ${thaiDate(filters.date_to)}`);
     if(!conditions.length){const now=new Date(),month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;return{selection:{month},conditions:[`เดือนปัจจุบัน: ${thaiMonthPeriod(month)}`]};}
     return{selection:filters,conditions};
+  }
+
+  async function exportBillSelection(kind, selection, conditions = []) {
+    const spec = monthlyExportSpecs[kind];
+    if (!spec || activeMonthlyExports.has(kind)) return;
+    let preview;
+    try { preview = await gas('listBills', { ...selection, page:1, page_size:10 }); }
+    catch (error) { return Swal.fire('ตรวจสอบรายการ Export ไม่สำเร็จ', error.message, 'error'); }
+    if (!Number(preview.total || 0)) return Swal.fire({ icon:'info', title:'ไม่มีบิลสำหรับ Export', text:'ไม่พบรายการตามเงื่อนไขที่เลือก' });
+    const confirmation = await Swal.fire({ icon:'question', title:`ยืนยัน Export ${spec.label}`, html:`<div class="export-confirmation"><p>ระบบจะส่งออกตามเงื่อนไขต่อไปนี้</p><ul>${conditions.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul><strong>${Number(preview.total || 0).toLocaleString('th-TH')} บิล</strong></div>`, showCancelButton:true, confirmButtonText:`สร้าง ${spec.label}`, cancelButtonText:'กลับ', confirmButtonColor:'#8f5f42' });
+    if (!confirmation.isConfirmed) return;
+    activeMonthlyExports.add(kind);
+    showActivityToast(spec.busyTitle, 'กำลังสร้างไฟล์ตามรายการที่เลือก');
+    try {
+      const file = await spec.create(selection);
+      showActivityToast(`${spec.label} พร้อมดาวน์โหลด`, `${Number(file.count || 0).toLocaleString('th-TH')} บิล`, 'success');
+      await downloadExportFile(file, percent => showActivityToast(`กำลังดาวน์โหลด ${spec.label}`, `ดาวน์โหลดแล้ว ${percent}%`));
+      hideActivityToast();
+    } catch (error) {
+      hideActivityToast();
+      await Swal.fire({ icon:'error', title:`Export ${spec.label} ไม่สำเร็จ`, text:error.message, confirmButtonColor:'#8f5f42' });
+    } finally { activeMonthlyExports.delete(kind); }
   }
 
   async function exportMonthlyFile(kind) {
@@ -1414,13 +1512,14 @@
     const ownerBills = event.target.closest('[data-owner-bills]'); if (ownerBills) { let ids=[]; try { ids=JSON.parse(decodeURIComponent(ownerBills.dataset.ownerIds||'%5B%5D')); } catch (_) {} await openOwnerBills(ownerBills.dataset.ownerBills,ids); }
     const billOrder = event.target.closest('[data-bill-order]'); if (billOrder) { document.getElementById('bill-sort').value=billOrder.dataset.billOrder; await loadAllBills(1); }
     const bill = event.target.closest('[data-bill]'); if (bill) await openBill(bill.dataset.bill);
-    const preview = event.target.closest('[data-preview-doc]'); if (preview) await previewDocument(preview.dataset.previewDoc);
+    const preview = event.target.closest('[data-preview-doc]'); if (preview) await previewDocument(preview.dataset.previewDoc, preview.dataset.previewBill);
     const deleteBillButton = event.target.closest('[data-delete-bill]'); if (deleteBillButton) await deleteBillFromWeb(deleteBillButton.dataset.deleteBill);
     const restoreBillButton = event.target.closest('[data-restore-bill]'); if (restoreBillButton) await restoreBillFromWeb(restoreBillButton.dataset.restoreBill);
     const backfill = event.target.closest('#backfill-users'); if (backfill) { const result = await runBusy(() => gas('backfillLineUsernames'), 'กำลังอ่านชื่อจาก LINE…'); Swal.fire({icon:'success',title:'เรียบร้อย',text:result.message}); }
   });
   document.getElementById('bill-files').addEventListener('change', previewFiles);
-  ['upload-project','upload-company','expected-pages'].forEach(id => document.getElementById(id).addEventListener('change', () => { state.uploadRequestId = ''; }));
+  document.getElementById('upload-batch-mode').addEventListener('change', previewFiles);
+  ['upload-project','upload-company','expected-pages'].forEach(id => document.getElementById(id).addEventListener('change', () => { state.uploadRequestId = ''; previewFiles(); }));
   document.getElementById('upload-form').addEventListener('submit', submitUpload);
   document.querySelectorAll('[data-quick-settings-form]').forEach(form => form.addEventListener('submit', saveQuickSettingsFromWeb));
   document.querySelectorAll('[data-clear-quick-slot]').forEach(button => button.addEventListener('click', clearQuickSettingsFromWeb));

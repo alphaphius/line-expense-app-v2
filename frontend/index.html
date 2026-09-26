@@ -285,7 +285,7 @@
 
         <section id="view-upload" class="app-view hidden">
           <div class="mx-auto max-w-3xl card p-5 md:p-8">
-            <div class="mb-6"><p class="eyebrow">AI BILL CAPTURE</p><h3 class="text-2xl font-semibold">อัปโหลดบิล</h3><p class="mt-2 text-sm text-slate-500">รูปหลายใบจะถูกรวมเป็นเอกสารชุดเดียวกัน กรุณาเรียงหน้าก่อนเลือกไฟล์</p></div>
+            <div class="mb-6"><p class="eyebrow">AI BILL CAPTURE</p><h3 class="text-2xl font-semibold">อัปโหลดบิล</h3><p class="mt-2 text-sm text-slate-500">เลือกอัปโหลดเป็นเอกสารหลายหน้า หรืออัปโหลดเป็นชุดสูงสุด 5 บิล โดยระบบจะเก็บรูปก่อนแล้วจึงวิเคราะห์ต่อ</p></div>
             <div id="upload-quick-preset" class="upload-quick-preset hidden" role="status">
               <div class="upload-quick-preset__icon" aria-hidden="true">⚡</div>
               <div class="min-w-0 flex-1">
@@ -302,13 +302,14 @@
                 <label class="label">เจ้าของบิล<select id="upload-owner" class="field mt-2" required></select><small id="upload-owner-help" class="mt-1 block text-xs text-slate-500" aria-live="polite">รายชื่อมาจากผู้ที่เคยส่งบิลผ่าน LINE และรีเฟรชอัตโนมัติเมื่อเปิดหน้านี้</small></label>
               </div>
               <label class="label block">บิลชุดนี้มีกี่หน้า
-                <input id="expected-pages" class="field mt-2" type="number" min="1" max="6" value="1" required>
+                <input id="expected-pages" class="field mt-2" type="number" min="1" max="5" value="1" required>
               </label>
+              <label class="upload-batch-mode"><input id="upload-batch-mode" type="checkbox"><span><strong>อัปโหลดแบบเป็นชุด</strong><small>รูปละ 1 บิล · สูงสุด 5 บิลต่อครั้ง · ใช้โครงการ บริษัท เจ้าของบิล และวันที่เดียวกัน</small></span></label>
               <label id="drop-zone" class="block cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center transition hover:border-emerald-500 hover:bg-emerald-50">
                 <input id="bill-files" class="hidden" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required>
-                <div class="text-3xl">📄</div><p class="mt-2 font-medium">กดเพื่อเลือกรูปหรือ PDF</p><p class="mt-1 text-xs text-slate-500">สูงสุด 6 หน้า · ไฟล์ละไม่เกิน 8 MB</p>
+                <div class="text-3xl">📄</div><p class="mt-2 font-medium">กดเพื่อเลือกรูปหรือ PDF</p><p class="mt-1 text-xs text-slate-500">สูงสุด 5 ไฟล์ · ไฟล์ละไม่เกิน 8 MB</p>
               </label>
-              <div id="file-list" class="grid gap-3 sm:grid-cols-2"></div>
+              <div id="file-list" class="upload-page-slots" aria-live="polite"></div>
               <button class="primary-btn w-full py-3" type="submit">วิเคราะห์บิลด้วย Gemini</button>
             </form>
           </div>
