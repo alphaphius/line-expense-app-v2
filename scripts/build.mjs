@@ -57,6 +57,7 @@ await new Promise((resolve, reject) => {
 });
 
 try { await cp(path.join(frontend, 'icons'), path.join(dist, 'icons'), { recursive: true }); } catch (_) {}
+try { await cp(path.join(frontend, 'assets'), path.join(dist, 'assets'), { recursive: true }); } catch (_) {}
 await Promise.all([
   cp(path.join(root, 'node_modules', 'sweetalert2', 'dist', 'sweetalert2.all.min.js'), path.join(dist, 'vendor', 'sweetalert2.all.min.js')),
   cp(path.join(root, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), path.join(dist, 'vendor', 'chart.umd.js')),
