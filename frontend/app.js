@@ -1,4 +1,4 @@
-  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 }, activeView:'dashboard' };
+  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', uploadPageFiles: [], uploadBatchFiles: [], uploadTargetPage: 0, quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 }, activeView:'dashboard' };
   const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', 'ai-usage':'การใช้งาน AI', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
   const protectedViews = ['receipts','payroll','tasks','reports','ai-usage'];
@@ -794,7 +794,7 @@
         <strong>${escapeHtml(quick.label)}</strong>
         <span>${escapeHtml(`${quick.page_count} หน้า · ${quick.project_name} · ${quick.company_name}`)}</span>
       </button>`).join('');
-    if (configured.length && document.getElementById('bill-files').files.length === 0) {
+    if (configured.length && state.uploadPageFiles.length === 0 && state.uploadBatchFiles.length === 0) {
       applyQuickSettingsToUpload(configured[0].slot, false);
     }
   }
@@ -808,6 +808,7 @@
     document.getElementById('upload-project').value = quick.project_id;
     document.getElementById('upload-company').value = quick.company_id;
     document.getElementById('expected-pages').value = quick.page_count;
+    previewFiles();
     if (showFeedback) showActivityToast(`ใช้${quick.label} แล้ว`, `${quick.page_count} หน้า · ${quick.project_name}`, 'success');
   }
 
@@ -896,18 +897,42 @@
     await gas('deleteMasterData', type, id); await bootstrap();
   }
 
+  function resetUploadFiles() {
+    state.uploadPageFiles = [];
+    state.uploadBatchFiles = [];
+    state.uploadTargetPage = 0;
+    const input = document.getElementById('bill-files');
+    if (input) input.value = '';
+  }
+
   function previewFiles() {
-    const files = [...document.getElementById('bill-files').files];
+    const input = document.getElementById('bill-files');
     const batchMode = document.getElementById('upload-batch-mode').checked;
     state.uploadRequestId = '';
     const expectedInput = document.getElementById('expected-pages');
-    if (batchMode) expectedInput.value = files.length || 1;
+    input.multiple = batchMode;
+    document.getElementById('drop-zone').classList.toggle('hidden', !batchMode);
+    document.getElementById('drop-zone').classList.toggle('block', batchMode);
+    if (batchMode) expectedInput.value = state.uploadBatchFiles.length || 1;
     const expected = Math.max(1, Math.min(5, Number(expectedInput.value) || 1));
+    if (!batchMode) state.uploadPageFiles = state.uploadPageFiles.slice(0, expected);
+    const files = batchMode ? state.uploadBatchFiles : state.uploadPageFiles;
     document.getElementById('file-list').innerHTML = Array.from({ length:batchMode ? Math.max(files.length, 1) : expected }, (_, index) => {
       const file = files[index];
       const label = batchMode ? `บิล ${index + 1}` : `หน้า ${index + 1}`;
-      return `<div class="upload-page-slot ${file ? 'has-file' : ''}"><span>${label}</span><div>${file ? `<strong>${escapeHtml(file.name)}</strong><small>${(file.size / 1048576).toFixed(2)} MB · เตรียมอัปโหลดแล้ว</small>` : `<strong>รอเลือกรูป${label}</strong><small>ยังไม่มีไฟล์ในตำแหน่งนี้</small>`}</div><i>${file ? '✓' : index + 1}</i></div>`;
+      const contents = `<span>${label}</span><div>${file ? `<strong>${escapeHtml(file.name)}</strong><small>${(file.size / 1048576).toFixed(2)} MB · เตรียมอัปโหลดแล้ว</small>` : `<strong>${batchMode ? 'ยังไม่ได้เลือกบิล' : `เลือกไฟล์สำหรับ${label}`}</strong><small>${batchMode ? 'เลือกไฟล์จากกรอบด้านบน' : 'กดช่องนี้เพื่อเลือกรูปหรือ PDF ของหน้านี้'}</small>`}</div><i>${file ? '✓' : index + 1}</i>${batchMode ? '' : `<b>${file ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์'}</b>`}`;
+      return batchMode
+        ? `<div class="upload-page-slot ${file ? 'has-file' : ''}">${contents}</div>`
+        : `<button type="button" class="upload-page-slot upload-page-slot--selectable ${file ? 'has-file' : ''}" data-upload-page-index="${index}" aria-label="${file ? `เปลี่ยนไฟล์หน้า ${index + 1}` : `เลือกไฟล์หน้า ${index + 1}`}">${contents}</button>`;
     }).join('');
+  }
+
+  function handleBillFilesChange(event) {
+    const selected = [...event.currentTarget.files].slice(0, 5);
+    if (document.getElementById('upload-batch-mode').checked) state.uploadBatchFiles = selected;
+    else if (selected[0]) state.uploadPageFiles[state.uploadTargetPage] = selected[0];
+    if (!document.getElementById('upload-batch-mode').checked) event.currentTarget.value = '';
+    previewFiles();
   }
 
   function billAiStatusText(job) {
@@ -946,11 +971,12 @@
 
   async function submitUpload(event) {
     event.preventDefault();
-    const files = [...document.getElementById('bill-files').files];
     const batchMode = document.getElementById('upload-batch-mode').checked;
     const expected = Number(document.getElementById('expected-pages').value);
+    const files = batchMode ? state.uploadBatchFiles.filter(Boolean) : Array.from({ length:expected }, (_, index) => state.uploadPageFiles[index]);
     const ownerId = document.getElementById('upload-owner').value;
     if (!ownerId) return Swal.fire('กรุณาเลือกเจ้าของบิล', 'รายชื่อจะสร้างเมื่อบุคคลนั้นเคยส่งบิลผ่าน LINE อย่างน้อยหนึ่งครั้ง', 'warning');
+    if (!files.length || files.some(file => !file)) return Swal.fire('ยังเลือกไฟล์ไม่ครบ', batchMode ? 'กรุณาเลือกบิลอย่างน้อย 1 ไฟล์' : 'กรุณากดเลือกไฟล์ให้ครบทุกหน้าตามลำดับ', 'warning');
     if (files.length > 5) return Swal.fire('เลือกไฟล์เกินกำหนด', 'อัปโหลดได้สูงสุด 5 รูปต่อครั้ง', 'warning');
     if (!batchMode && files.length !== expected) return Swal.fire('จำนวนหน้าไม่ตรงกัน', `เลือก ${files.length} ไฟล์ แต่ระบุ ${expected} หน้า`, 'warning');
     if (files.some(file => file.size > 8 * 1024 * 1024)) return Swal.fire('ไฟล์ใหญ่เกินไป', 'ไฟล์ละไม่เกิน 8 MB', 'warning');
@@ -976,7 +1002,7 @@
       } else {
         jobs.push(await window.V2Api.callWithRequestId('submitBillPages', window.V2Api.newRequestId(), { ...sharedPayload, expected_pages:expected, files:encodedFiles }));
       }
-      document.getElementById('upload-form').reset(); document.getElementById('file-list').innerHTML = ''; await bootstrap();
+      document.getElementById('upload-form').reset(); resetUploadFiles(); previewFiles(); await bootstrap();
       for (let index = 0; index < jobs.length; index += 1) {
         showActivityToast(batchMode ? `กำลังวิเคราะห์บิล ${index + 1}/${jobs.length}` : 'กำลังวิเคราะห์บิล', 'รูปถูกเก็บใน WorkHub แล้ว ไม่ต้องอัปโหลดซ้ำ');
         const bill = await waitForBillAiJob(jobs[index]);
@@ -1517,10 +1543,20 @@
     const restoreBillButton = event.target.closest('[data-restore-bill]'); if (restoreBillButton) await restoreBillFromWeb(restoreBillButton.dataset.restoreBill);
     const backfill = event.target.closest('#backfill-users'); if (backfill) { const result = await runBusy(() => gas('backfillLineUsernames'), 'กำลังอ่านชื่อจาก LINE…'); Swal.fire({icon:'success',title:'เรียบร้อย',text:result.message}); }
   });
-  document.getElementById('bill-files').addEventListener('change', previewFiles);
-  document.getElementById('upload-batch-mode').addEventListener('change', previewFiles);
+  document.getElementById('bill-files').addEventListener('change', handleBillFilesChange);
+  document.getElementById('upload-batch-mode').addEventListener('change', () => { resetUploadFiles(); previewFiles(); });
+  document.getElementById('file-list').addEventListener('click', event => {
+    const slot = event.target.closest('[data-upload-page-index]');
+    if (!slot) return;
+    state.uploadTargetPage = Number(slot.dataset.uploadPageIndex) || 0;
+    const input = document.getElementById('bill-files');
+    input.multiple = false;
+    input.value = '';
+    input.click();
+  });
   ['upload-project','upload-company','expected-pages'].forEach(id => document.getElementById(id).addEventListener('change', () => { state.uploadRequestId = ''; previewFiles(); }));
   document.getElementById('upload-form').addEventListener('submit', submitUpload);
+  previewFiles();
   document.querySelectorAll('[data-quick-settings-form]').forEach(form => form.addEventListener('submit', saveQuickSettingsFromWeb));
   document.querySelectorAll('[data-clear-quick-slot]').forEach(button => button.addEventListener('click', clearQuickSettingsFromWeb));
   document.getElementById('upload-quick-options').addEventListener('click', event => {

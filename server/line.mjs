@@ -25,7 +25,20 @@ function targetOf(source = {}) { return clean(source.groupId || source.roomId ||
 function userOf(source = {}) { return clean(source.userId, 160); }
 function message(text, quickReply) { const result={type:'text',text:clean(text,5000)};if(quickReply?.length)result.quickReply={items:quickReply};return result; }
 function postback(label, data, displayText) { return {type:'action',action:{type:'postback',label:clean(label,20),data:clean(data,300),displayText:clean(displayText,300)}}; }
-function workHubFlexHero() { return config.publicBaseUrl ? { hero:{ type:'image', url:`${config.publicBaseUrl}/assets/line-bill-header.jpg`, size:'full', aspectRatio:'20:7', aspectMode:'cover' } } : {}; }
+function flexHeaderUrl() { return `${config.publicBaseUrl}/assets/line-bill-header.jpg?v=${encodeURIComponent(config.appVersion)}`; }
+function workHubFlexHero() { return config.publicBaseUrl ? { hero:{ type:'image', url:flexHeaderUrl(), size:'full', aspectRatio:'20:7', aspectMode:'cover' } } : {}; }
+function billChoiceHero() {
+  const title=[
+    {type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#FFE09A',weight:'bold',size:'sm'},
+    {type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md'},
+    {type:'text',text:'ใช้ค่าลัดเพื่อข้ามการเลือกโครงการและบริษัท',color:'#F6EDE7',size:'sm',margin:'sm',wrap:true},
+  ];
+  if(!config.publicBaseUrl)return{header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:title}};
+  return{hero:{type:'box',layout:'vertical',height:'205px',paddingAll:'0px',contents:[
+    {type:'image',url:flexHeaderUrl(),size:'full',aspectMode:'cover',position:'absolute',offsetTop:'0px',offsetStart:'0px',width:'100%',height:'100%'},
+    {type:'box',layout:'vertical',position:'absolute',offsetBottom:'0px',offsetStart:'0px',width:'100%',backgroundColor:'#2D211CDD',paddingAll:'22px',contents:title},
+  ]}};
+}
 
 async function lineRequest(path, { method='GET', body, binary=false } = {}) {
   if (!config.lineChannelAccessToken) throw new Error('ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN บน NAS');
@@ -141,7 +154,7 @@ function pageCountMessage(sessionId,received,quick) {
     body.push({type:'box',layout:'horizontal',spacing:'sm',margin:counts.length?'sm':'md',contents:columns});counts.push(count);
   }
   body.push({type:'button',style:'secondary',height:'sm',margin:'xl',color:'#B84C3F',action:{type:'postback',label:'ยกเลิกรูปนี้',data:`action=cancel_session&session_id=${sessionId}`,displayText:'ยกเลิกรูปที่ส่งล่าสุด'}});
-  return {type:'flex',altText:'เลือกวิธีรับบิลหรือยกเลิก',contents:{type:'bubble',size:'mega',...workHubFlexHero(),header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#E3BE72',weight:'bold',size:'sm'},{type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md'},{type:'text',text:'ใช้ค่าลัดเพื่อข้ามการเลือกโครงการและบริษัท',color:'#D8C8C0',size:'sm',margin:'sm',wrap:true}]},body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:body}}};
+  return {type:'flex',altText:'เลือกวิธีรับบิลหรือยกเลิก',contents:{type:'bubble',size:'mega',...billChoiceHero(),body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',contents:body}}};
 }
 
 async function projectSelectionMessage(sessionId) {

@@ -218,3 +218,11 @@
 
 /* When the map is hidden, keep only its restore control above the resize rail. */
 .report-map-list-layout.is-map-hidden>.report-map-pane{visibility:visible;overflow:visible;width:0;padding:0}.report-map-list-layout.is-map-hidden>.report-map-pane>.report-site-map{visibility:hidden;overflow:hidden;padding:0}
+
+/* Final map geometry: the canvas consumes the full pane and every marker caption stays on two rows. */
+.report-map-list-layout>.report-map-pane>.report-site-map{display:flex!important;min-height:0!important;flex-direction:column!important}
+.report-map-list-layout>.report-map-pane>.report-site-map>.report-site-map__canvas{height:auto!important;min-height:0!important;flex:1 1 auto!important}
+.workhub-map-marker>span{display:grid!important;width:max-content!important;max-width:none!important;gap:1px!important;overflow:visible!important;white-space:nowrap!important;text-align:center!important}
+.workhub-map-marker>span strong,.workhub-map-marker>span small{display:block!important;width:max-content!important;max-width:none!important;overflow:visible!important;overflow-wrap:normal!important;text-overflow:clip!important;white-space:nowrap!important;word-break:keep-all!important}
+@media(max-width:900px){.report-map-list-layout>.report-map-pane>.report-site-map>.report-site-map__canvas{height:280px!important;flex:none!important}}
+@media(max-width:700px){.report-map-list-layout>.report-map-pane>.report-site-map>.report-site-map__canvas{height:220px!important}}
