@@ -25,19 +25,11 @@ function targetOf(source = {}) { return clean(source.groupId || source.roomId ||
 function userOf(source = {}) { return clean(source.userId, 160); }
 function message(text, quickReply) { const result={type:'text',text:clean(text,5000)};if(quickReply?.length)result.quickReply={items:quickReply};return result; }
 function postback(label, data, displayText) { return {type:'action',action:{type:'postback',label:clean(label,20),data:clean(data,300),displayText:clean(displayText,300)}}; }
-function flexHeaderUrl() { return `${config.publicBaseUrl}/assets/line-bill-header.jpg?v=${encodeURIComponent(config.appVersion)}`; }
+function flexHeaderUrl(fileName='line-bill-header.jpg') { return `${config.publicBaseUrl}/assets/${fileName}?v=${encodeURIComponent(config.appVersion)}`; }
 function workHubFlexHero() { return config.publicBaseUrl ? { hero:{ type:'image', url:flexHeaderUrl(), size:'full', aspectRatio:'20:7', aspectMode:'cover' } } : {}; }
 function billChoiceHero() {
-  const title=[
-    {type:'text',text:'เตรียมอ่านบิลด้วย AI',color:'#FFE09A',weight:'bold',size:'sm'},
-    {type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl',margin:'md'},
-    {type:'text',text:'ใช้ค่าลัดเพื่อข้ามการเลือกโครงการและบริษัท',color:'#F6EDE7',size:'sm',margin:'sm',wrap:true},
-  ];
-  if(!config.publicBaseUrl)return{header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:title}};
-  return{hero:{type:'box',layout:'vertical',height:'205px',paddingAll:'0px',contents:[
-    {type:'image',url:flexHeaderUrl(),size:'full',aspectMode:'cover',position:'absolute',offsetTop:'0px',offsetStart:'0px',width:'100%',height:'100%'},
-    {type:'box',layout:'vertical',position:'absolute',offsetBottom:'0px',offsetStart:'0px',width:'100%',backgroundColor:'#2D211CDD',paddingAll:'22px',contents:title},
-  ]}};
+  if(!config.publicBaseUrl)return{header:{type:'box',layout:'vertical',backgroundColor:'#2D211C',paddingAll:'22px',contents:[{type:'text',text:'เลือกวิธีรับบิล',color:'#FFFFFF',weight:'bold',size:'xxl'}]}};
+  return{hero:{type:'image',url:flexHeaderUrl('line-bill-choice-header.jpg'),size:'full',aspectRatio:'20:7',aspectMode:'cover'}};
 }
 
 async function lineRequest(path, { method='GET', body, binary=false } = {}) {
