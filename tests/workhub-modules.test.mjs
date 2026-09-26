@@ -268,7 +268,7 @@ test('reports support reusable templates, site-scoped equipment IDs, CSV imports
   assert.match(styles, /\.report-device-row\.is-ready/);
   assert.match(styles, /\.report-journey-site\.is-ready/);
   assert.match(reports, /SITE ID:/);
-  assert.match(reports, /Equipment ID/);
+  assert.match(reports, /Instrument ID/);
   assert.match(reports, /Group ID:/);
 });
 
@@ -306,7 +306,7 @@ test('legacy site rows display their real compact Site Code instead of repeating
 
 test('report CSV entry is scoped to assigned equipment and includes prefilled identity columns', async () => {
   const reports = await read('frontend/reports.js');
-  assert.match(reports, /reportCsvSystemHeaders=\['site_id','equipment_id','equipment_type','equipment_name'\]/);
+  assert.match(reports, /reportCsvSystemHeaders=\['site_id','instrument_id','equipment_id','equipment_type','equipment_name','latitude','longitude','utm_n','utm_e','utm_zone'\]/);
   assert.match(reports, /function reportCsvScope/);
   assert.match(reports, /function reportCsvRows/);
   assert.match(reports, /data-report-csv-group/);
@@ -513,6 +513,16 @@ test('report coordinates accept N/E and lat/long decimal columns', async () => {
   assert.equal(latLong.latitude, 13.7);
   assert.equal(latLong.longitude, 100.4);
   assert.equal(reports.normalizeCoordinate('181', 'lng'), '');
+});
+
+test('instrument coordinates convert to the Thailand UTM zone requested by longitude', async () => {
+  const reports = await loadReportsCore();
+  const zone47 = reports.latLongToUtm(13.7563, 100.5018);
+  const zone48 = reports.latLongToUtm(15.0, 103.0);
+  assert.equal(zone47.zoneLabel, '47N');
+  assert.equal(zone48.zoneLabel, '48N');
+  assert.ok(zone47.easting > 0 && zone47.northing > 0);
+  assert.ok(zone48.easting > 0 && zone48.northing > 0);
 });
 
 test('reports replace split DOCX and XLSX text placeholders without changing the file layout nodes', async () => {

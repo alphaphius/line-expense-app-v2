@@ -110,19 +110,27 @@
         await loadAllBills(state.billList.page || 1, { silent:true });
       } else if (activeView === 'receipts' && window.ReceiptModule) {
         await window.ReceiptModule.refresh?.();
+      } else if (activeView === 'payroll' && window.PayrollModule) {
+        await window.PayrollModule.activate?.(true);
+      } else if (activeView === 'tasks' && window.TaskManagerModule) {
+        await window.TaskManagerModule.activate?.(true);
+      } else if (activeView === 'reports' && window.ReportManagerModule) {
+        await window.ReportManagerModule.refresh?.();
+      } else if (activeView === 'ai-usage') {
+        await loadAiUsage();
       }
       lastLiveRefreshAt = Date.now();
-    })().catch(error => console.warn('WorkHub background refresh failed:', error.message)).finally(() => { liveRefreshPromise = null; });
+    })().catch(error => { console.warn('WorkHub background refresh failed:', error.message); throw error; }).finally(() => { liveRefreshPromise = null; });
     return liveRefreshPromise;
   }
 
   function startLiveRefresh() {
     if (liveRefreshTimer) return;
-    const resume = () => refreshVisibleData(false);
+    const resume = () => refreshVisibleData(false).catch(() => {});
     liveRefreshTimer = window.setInterval(resume, LIVE_REFRESH_INTERVAL_MS);
     window.addEventListener('focus', resume);
     window.addEventListener('pageshow', resume);
-    window.addEventListener('online', () => refreshVisibleData(true));
+    window.addEventListener('online', () => refreshVisibleData(true).catch(() => {}));
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
   }
 
@@ -1108,22 +1116,37 @@
     viewer.setAttribute('role', 'dialog');
     viewer.setAttribute('aria-modal', 'true');
     viewer.setAttribute('aria-label', 'ดูรูปบิลและข้อมูล');
-    viewer.innerHTML = `<div class="bill-media-viewer__scrim" data-bill-media-close></div><div class="bill-media-viewer__panel" tabindex="-1"><header><div><span>รูปบิลและข้อมูล</span><h3>กำลังโหลดรูปบิล…</h3></div><button type="button" class="bill-media-close" data-bill-media-close aria-label="ปิดหน้าดูรูปบิล">×</button></header><div class="bill-media-viewer__body"><div class="bill-media-stage" aria-live="polite"></div><aside class="bill-media-info"></aside></div><footer><button type="button" class="secondary-btn" data-bill-media-prev>← ก่อนหน้า</button><span class="bill-media-counter">หน้า 1 / 1</span><button type="button" class="secondary-btn" data-bill-media-next>ถัดไป →</button></footer></div>`;
+    viewer.innerHTML = `<div class="bill-media-viewer__scrim" data-bill-media-close></div><div class="bill-media-viewer__panel" tabindex="-1"><header><div><span>รูปบิลและข้อมูล</span><h3>กำลังโหลดรูปบิล…</h3></div><button type="button" class="bill-media-close" data-bill-media-close aria-label="ปิดหน้าดูรูปบิล">×</button></header><div class="bill-media-viewer__body"><div class="bill-media-stage" aria-live="polite"></div><aside class="bill-media-info"></aside></div><footer><div class="bill-media-nav-group" aria-label="เลื่อนหน้าภายในบิล"><small>หน้าในชุด</small><button type="button" class="secondary-btn" data-bill-page-prev>← หน้าก่อน</button><span class="bill-media-counter">หน้า 1 / 1</span><button type="button" class="secondary-btn" data-bill-page-next>หน้าถัดไป →</button></div><div class="bill-media-nav-group bill-media-nav-group--bills" aria-label="เลื่อนไปรายการบิล"><small>รายการบิล</small><button type="button" class="secondary-btn" data-bill-item-prev>← บิลก่อนหน้า</button><span class="bill-item-counter">บิล 1 / 1</span><button type="button" class="secondary-btn" data-bill-item-next>บิลถัดไป →</button></div></footer></div>`;
     document.body.append(viewer);
     document.body.classList.add('bill-media-viewer-open');
     const panel = viewer.querySelector('.bill-media-viewer__panel');
     const cache = new Map();
+    const billIds = [...new Set([
+      ...(state.billList.rows || []),
+      ...(state.dashboard?.bills || []),
+      ...(state.pendingReviews || []),
+    ].map(item => String(item?.bill_id || '')).filter(Boolean))];
+    if (billId && !billIds.includes(String(billId))) billIds.push(String(billId));
+    let billIndex = Math.max(0, billIds.indexOf(String(billId)));
     let bill = null;
-    try { if (billId) bill = await gas('getBillDetail', billId); } catch (_) {}
-    const documents = bill?.documents?.length ? bill.documents : [{ doc_id:docId, page_no:1 }];
-    let index = Math.max(0, documents.findIndex(item => String(item.doc_id) === String(docId)));
+    let documents = [];
+    let index = 0;
     const close = () => { viewer.remove(); document.body.classList.remove('bill-media-viewer-open'); document.removeEventListener('keydown', onKey); };
     const render = async () => {
       const current = documents[index];
+      viewer.querySelector('.bill-media-counter').textContent = documents.length ? `หน้า ${index + 1} / ${documents.length}` : 'ไม่มีรูป';
+      viewer.querySelector('[data-bill-page-prev]').disabled = !documents.length || index === 0;
+      viewer.querySelector('[data-bill-page-next]').disabled = !documents.length || index >= documents.length - 1;
+      viewer.querySelector('.bill-item-counter').textContent = billIds.length ? `บิล ${billIndex + 1} / ${billIds.length}` : 'บิลปัจจุบัน';
+      viewer.querySelector('[data-bill-item-prev]').disabled = billIndex <= 0;
+      viewer.querySelector('[data-bill-item-next]').disabled = !billIds.length || billIndex >= billIds.length - 1;
+      if (!current) {
+        viewer.querySelector('h3').textContent = 'ไม่พบรูปในบิลนี้';
+        viewer.querySelector('.bill-media-stage').innerHTML = '<div class="bill-media-loading is-error">บิลนี้ไม่มีไฟล์รูปให้แสดง</div>';
+        viewer.querySelector('.bill-media-info').innerHTML = billMediaInfo(bill);
+        return;
+      }
       viewer.querySelector('h3').textContent = current.file_name || `รูปบิลหน้า ${index + 1}`;
-      viewer.querySelector('.bill-media-counter').textContent = `หน้า ${index + 1} / ${documents.length}`;
-      viewer.querySelector('[data-bill-media-prev]').disabled = index === 0;
-      viewer.querySelector('[data-bill-media-next]').disabled = index >= documents.length - 1;
       viewer.querySelector('.bill-media-info').innerHTML = billMediaInfo(bill);
       const stage = viewer.querySelector('.bill-media-stage');
       stage.innerHTML = '<div class="bill-media-loading">กำลังโหลดรูปบิล…</div>';
@@ -1136,11 +1159,24 @@
         else throw new Error('ไฟล์นี้ไม่มีตัวอย่างให้แสดง');
       } catch (error) { stage.innerHTML = `<div class="bill-media-loading is-error">เปิดรูปบิลไม่ได้<br><small>${escapeHtml(error.message)}</small></div>`; }
     };
+    const loadBill = async (nextBillId, preferredDocId = '') => {
+      viewer.querySelector('.bill-media-stage').innerHTML = '<div class="bill-media-loading">กำลังโหลดรายการบิล…</div>';
+      bill = nextBillId ? await gas('getBillDetail', nextBillId) : null;
+      documents = bill?.documents?.length ? bill.documents : (preferredDocId ? [{ doc_id:preferredDocId, page_no:1 }] : []);
+      index = Math.max(0, documents.findIndex(item => String(item.doc_id) === String(preferredDocId)));
+      await render();
+    };
+    const moveBill = async delta => {
+      const next = billIndex + delta;
+      if (next < 0 || next >= billIds.length) return;
+      billIndex = next;
+      await loadBill(billIds[billIndex]);
+    };
     const onKey = event => { if (event.key === 'Escape') close(); if (event.key === 'ArrowLeft' && index > 0) { index -= 1; render(); } if (event.key === 'ArrowRight' && index < documents.length - 1) { index += 1; render(); } };
-    viewer.addEventListener('click', event => { if (event.target.closest('[data-bill-media-close]')) close(); if (event.target.closest('[data-bill-media-prev]') && index > 0) { index -= 1; render(); } if (event.target.closest('[data-bill-media-next]') && index < documents.length - 1) { index += 1; render(); } });
+    viewer.addEventListener('click', event => { if (event.target.closest('[data-bill-media-close]')) close(); if (event.target.closest('[data-bill-page-prev]') && index > 0) { index -= 1; render(); } if (event.target.closest('[data-bill-page-next]') && index < documents.length - 1) { index += 1; render(); } if (event.target.closest('[data-bill-item-prev]')) moveBill(-1); if (event.target.closest('[data-bill-item-next]')) moveBill(1); });
     document.addEventListener('keydown', onKey);
     panel.focus();
-    await render();
+    try { await loadBill(billId, docId); } catch (error) { viewer.querySelector('.bill-media-stage').innerHTML = `<div class="bill-media-loading is-error">โหลดรายการบิลไม่ได้<br><small>${escapeHtml(error.message)}</small></div>`; }
   }
 
   async function deleteBillFromWeb(billId) {
@@ -1598,13 +1634,28 @@
   document.getElementById('bill-prev').addEventListener('click', () => loadAllBills(Math.max(1, state.billList.page - 1)));
   document.getElementById('bill-next').addEventListener('click', () => loadAllBills(Math.min(state.billList.pages, state.billList.page + 1)));
   document.getElementById('refresh-btn').addEventListener('click', async () => {
+    const button = document.getElementById('refresh-btn');
+    if (button.disabled) return;
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = 'กำลังรีเฟรช…';
+    button.setAttribute('aria-busy', 'true');
     try {
       await bootstrap();
       if (!document.getElementById('view-bills').classList.contains('hidden')) await loadAllBills(state.billList.page || 1);
       if (!document.getElementById('view-receipts').classList.contains('hidden') && window.ReceiptModule) await window.ReceiptModule.activate(true);
       if (!document.getElementById('view-payroll').classList.contains('hidden') && window.PayrollModule) window.PayrollModule.activate(true);
       if (!document.getElementById('view-tasks').classList.contains('hidden') && window.TaskManagerModule) window.TaskManagerModule.activate(true);
-    } catch (error) { showFatal(error); }
+      if (!document.getElementById('view-reports').classList.contains('hidden') && window.ReportManagerModule) await window.ReportManagerModule.refresh?.();
+      lastLiveRefreshAt = Date.now();
+      showActivityToast('อัปเดตข้อมูลล่าสุดแล้ว', new Date().toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', second:'2-digit' }), 'success');
+    } catch (error) {
+      await Swal.fire({ icon:'error', title:'รีเฟรชข้อมูลไม่สำเร็จ', text:error.message, confirmButtonColor:'#8f5f42' });
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+      button.removeAttribute('aria-busy');
+    }
   });
   function showFatal(error) { document.getElementById('loading-screen').classList.add('hidden'); Swal.fire({ icon:'error', title:'ระบบไม่พร้อม', text:error.message }); }
   async function initializeLiff() {
