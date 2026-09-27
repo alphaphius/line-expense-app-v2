@@ -143,6 +143,19 @@
     return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
   }
 
+  function safeOwnerColor(value) {
+    return /^#[0-9A-Fa-f]{6}$/.test(String(value || '')) ? String(value).toUpperCase() : '#8F5F42';
+  }
+
+  function ownerColorFor(userId, fallback) {
+    const owner = (state.masters?.billOwners || []).find(item => String(item.user_id) === String(userId || ''));
+    return safeOwnerColor(owner?.bill_color || fallback);
+  }
+
+  function ownerNameWithDot(name, color, className = '') {
+    return `<span class="bill-owner-label ${escapeHtml(className)}"><i class="bill-owner-dot" style="--owner-color:${safeOwnerColor(color)}" aria-hidden="true"></i><span>${escapeHtml(name || 'ไม่ทราบชื่อ')}</span></span>`;
+  }
+
   function money(value) {
     return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(Number(value) || 0);
   }
@@ -315,7 +328,7 @@
     document.getElementById('review-inbox-count').textContent = reviewCount.toLocaleString('th-TH');
     document.getElementById('bill-table').innerHTML = data.bills.length ? rowsWithDateBands(data.bills).map(({row:bill,bandClass}) => `
       <tr class="${bandClass}"><td class="bill-preview-column">${billPreviewButton(bill)}</td><td>${escapeHtml(thaiDate(bill.document_date))}</td><td><div class="font-medium">${escapeHtml(bill.vendor_name || '-')}</div><div class="text-xs text-slate-400">${escapeHtml(bill.document_no || '')}</div></td>
-      <td>${escapeHtml(bill.project_name)}</td><td>${escapeHtml(bill.category_name)}</td><td>${escapeHtml(bill.source_user_name || bill.source_user_id || (bill.source === 'LINE' ? 'LINE User' : 'เว็บแอป'))}</td><td class="font-medium">${money(bill.grand_total)}</td>
+      <td>${escapeHtml(bill.project_name)}</td><td>${escapeHtml(bill.category_name)}</td><td>${ownerNameWithDot(bill.source_user_name || bill.source_user_id || (bill.source === 'LINE' ? 'LINE User' : 'เว็บแอป'),ownerColorFor(bill.source_user_id,bill.owner_color))}</td><td class="font-medium">${money(bill.grand_total)}</td>
       <td>${statusBadge(bill.status)}</td><td><button class="text-emerald-700" data-bill="${escapeHtml(bill.bill_id)}">ดู/แก้ไข</button></td></tr>`).join('')
       : `<tr><td colspan="9" class="py-10 text-center text-slate-400">ไม่พบบิลใน ${escapeHtml(thaiMonthPeriod(currentMonth.period))} ตามตัวกรองที่เลือก</td></tr>`;
   }
@@ -355,7 +368,7 @@
     document.getElementById('dashboard-owner-options').innerHTML = ownerOptions.length ? ownerOptions.map(owner => `
       <label class="dashboard-owner-option">
         <input type="checkbox" value="${escapeHtml(owner.label)}" data-dashboard-owner ${selected.has(owner.label) ? 'checked' : ''}>
-        <span><strong>${escapeHtml(owner.label || 'ไม่ทราบชื่อ')}</strong><small>${Number(owner.count || 0).toLocaleString('th-TH')} บิล · ${money(owner.total)}</small></span>
+        <span><strong>${ownerNameWithDot(owner.label || 'ไม่ทราบชื่อ',owner.color)}</strong><small>${Number(owner.count || 0).toLocaleString('th-TH')} บิล · ${money(owner.total)}</small></span>
       </label>`).join('') : '<p class="dashboard-owner-empty">เดือนนี้ยังไม่มีข้อมูลเจ้าของบิล</p>';
     document.getElementById('dashboard-filter-feedback').textContent = personMode
       ? (selected.size ? `กำลังแสดง ${selected.size.toLocaleString('th-TH')} คน ใน ${thaiMonthPeriod(filters.period)}` : `ยังไม่ได้เลือกเจ้าของบิลใน ${thaiMonthPeriod(filters.period)}`)
@@ -430,7 +443,7 @@
       const ownerIds = encodeURIComponent(JSON.stringify(Array.isArray(row.owner_ids) ? row.owner_ids : []));
       return `<button type="button" class="uploader-bar-row" data-owner-bills="${escapeHtml(row.label)}" data-owner-ids="${ownerIds}" title="เปิดรายการบิลของ ${escapeHtml(row.label)}">
         <div class="uploader-bar-meta">
-          <strong>${escapeHtml(row.label || 'ไม่ทราบชื่อ')}</strong>
+          <strong>${ownerNameWithDot(row.label || 'ไม่ทราบชื่อ',row.color)}</strong>
           <span>${count.toLocaleString('th-TH')} ชุด</span>
         </div>
         <div class="uploader-bar-data">
@@ -651,7 +664,7 @@
     if(!container)return;
     const owners=state.masters.billOwners||[];
     const selected=state.billOwnerIds===null?owners.map(owner=>String(owner.user_id)):selectedBillOwnerIds().map(String);
-    container.innerHTML=owners.length?owners.map(owner=>`<label><input type="checkbox" data-bill-owner-id="${escapeHtml(owner.user_id)}" ${selected.includes(String(owner.user_id))?'checked':''}><span>${escapeHtml(owner.display_name||owner.user_id)}</span></label>`).join(''):'<p>ยังไม่มีรายชื่อเจ้าของบิลจาก LINE</p>';
+    container.innerHTML=owners.length?owners.map(owner=>`<label><input type="checkbox" data-bill-owner-id="${escapeHtml(owner.user_id)}" ${selected.includes(String(owner.user_id))?'checked':''}><span>${ownerNameWithDot(owner.display_name||owner.user_id,owner.bill_color)}</span></label>`).join(''):'<p>ยังไม่มีรายชื่อเจ้าของบิลจาก LINE</p>';
     const label=document.getElementById('bill-owner-filter-label');
     if(!owners.length)label.textContent='ยังไม่มีรายชื่อ';
     else if(selected.length===owners.length)label.textContent=`ทุกคน (${owners.length})`;
@@ -679,7 +692,7 @@
       <tr class="${bandClass}"><td class="bill-preview-column">${billPreviewButton(bill)}</td><td>${escapeHtml(thaiDate(bill.document_date))}<div class="mt-1 text-[10px] text-slate-400">อัปโหลด ${escapeHtml(thaiDateTime(bill.created_at))}</div></td>
       <td><button class="text-left font-medium text-emerald-700 hover:underline" data-bill="${escapeHtml(bill.bill_id)}">${escapeHtml(bill.vendor_name || 'ไม่ทราบร้านค้า')}</button><div class="text-xs text-slate-400">${escapeHtml(bill.document_no || '-')}</div></td>
       <td>${escapeHtml(bill.project_name)}</td><td class="max-w-52 truncate" title="${escapeHtml(bill.company_name)}">${escapeHtml(bill.company_name)}</td><td>${escapeHtml(bill.category_name)}</td>
-      <td>${escapeHtml(bill.source_user_name || bill.source_user_id || '-')}</td><td class="font-medium">${money(bill.grand_total)}</td><td>${statusBadge(bill.status)}</td>
+      <td>${ownerNameWithDot(bill.source_user_name || bill.source_user_id || '-',ownerColorFor(bill.source_user_id,bill.owner_color))}</td><td class="font-medium">${money(bill.grand_total)}</td><td>${statusBadge(bill.status)}</td>
       <td><div class="flex items-center gap-2"><button class="rounded-lg border border-slate-200 px-3 py-1 text-xs" data-bill="${escapeHtml(bill.bill_id)}">รายละเอียด</button>${bill.status === 'REJECTED' ? `<button class="rounded-lg border border-amber-200 px-3 py-1 text-xs text-amber-700" data-restore-bill="${escapeHtml(bill.bill_id)}">กู้คืน</button>` : `<button class="rounded-lg border border-red-200 px-3 py-1 text-xs text-red-600" data-delete-bill="${escapeHtml(bill.bill_id)}">ลบ</button>`}</div></td></tr>`).join('')
       : '<tr><td colspan="10" class="py-12 text-center text-slate-400">ไม่พบรายการตามเงื่อนไข</td></tr>';
   }
@@ -720,7 +733,7 @@
       return `<div class="owner-master-row">
         <div class="owner-master-avatar" aria-hidden="true">${avatar}</div>
         <div class="owner-master-copy">
-          <div class="owner-master-name"><strong>${escapeHtml(effectiveName)}</strong>${custom ? '<span>ชื่อ WorkHub</span>' : '<span class="is-line">ชื่อจาก LINE</span>'}</div>
+          <div class="owner-master-name"><strong>${ownerNameWithDot(effectiveName,owner.bill_color)}</strong>${custom ? '<span>ชื่อ WorkHub</span>' : '<span class="is-line">ชื่อจาก LINE</span>'}</div>
           <p>ชื่อ LINE ล่าสุด: ${escapeHtml(lineName)}</p>
           <small>LINE ID · …${escapeHtml(String(owner.user_id || '').slice(-8))}</small>
         </div>
@@ -735,11 +748,7 @@
     const lineName = owner.line_display_name || owner.display_name || 'ไม่พบชื่อ LINE';
     const result = await Swal.fire({
       title:'ตั้งชื่อที่ใช้ใน WorkHub',
-      html:`<div class="owner-rename-dialog"><p>ชื่อ LINE ล่าสุด</p><strong>${escapeHtml(lineName)}</strong><small>ชื่อนี้ยังเก็บไว้เพื่อยืนยันตัวบุคคล แม้ผู้ใช้จะเปลี่ยนชื่อ LINE ภายหลัง</small></div>`,
-      input:'text',
-      inputValue:owner.workhub_name || '',
-      inputPlaceholder:'เช่น คุณเอก · ทีมสำรวจ',
-      inputAttributes:{ maxlength:'255', autocapitalize:'off', autocomplete:'off' },
+      html:`<div class="owner-rename-dialog"><p>ชื่อ LINE ล่าสุด</p><strong>${escapeHtml(lineName)}</strong><small>ชื่อนี้ยังเก็บไว้เพื่อยืนยันตัวบุคคล แม้ผู้ใช้จะเปลี่ยนชื่อ LINE ภายหลัง</small><label>ชื่อที่ใช้ใน WorkHub<input id="owner-workhub-name" class="swal2-input" maxlength="255" value="${escapeHtml(owner.workhub_name||'')}" placeholder="เช่น คุณเอก · ทีมสำรวจ"></label><label class="owner-color-control"><span>สีจุดประจำเจ้าของบิล</span><input id="owner-bill-color" type="color" value="${safeOwnerColor(owner.bill_color)}"><output id="owner-bill-color-value">${safeOwnerColor(owner.bill_color)}</output></label></div>`,
       showCancelButton:true,
       showDenyButton:Boolean(owner.workhub_name),
       confirmButtonText:'บันทึกชื่อ',
@@ -749,14 +758,16 @@
       denyButtonColor:'#78675d',
       showLoaderOnConfirm:true,
       allowOutsideClick:()=>!Swal.isLoading(),
-      preConfirm:async value => {
-        const name = String(value || '').trim();
+      didOpen:popup => {const color=popup.querySelector('#owner-bill-color'),output=popup.querySelector('#owner-bill-color-value');color?.addEventListener('input',()=>{output.textContent=color.value.toUpperCase();});popup.querySelector('#owner-workhub-name')?.focus();},
+      preConfirm:async () => {
+        const name = String(Swal.getPopup()?.querySelector('#owner-workhub-name')?.value || '').trim();
+        const billColor = safeOwnerColor(Swal.getPopup()?.querySelector('#owner-bill-color')?.value);
         if (!name) return Swal.showValidationMessage('กรุณากรอกชื่อ หรือกด “กลับไปใช้ชื่อ LINE”');
-        try { return await gas('saveBillOwnerName', { user_id:userId, workhub_name:name }); }
+        try { return await gas('saveBillOwnerName', { user_id:userId, workhub_name:name, bill_color:billColor }); }
         catch (error) { Swal.showValidationMessage(error.message); return false; }
       },
       preDeny:async () => {
-        try { return await gas('saveBillOwnerName', { user_id:userId, workhub_name:'' }); }
+        try { return await gas('saveBillOwnerName', { user_id:userId, workhub_name:'', bill_color:safeOwnerColor(owner.bill_color) }); }
         catch (error) { Swal.showValidationMessage(error.message); return false; }
       },
     });
@@ -1083,7 +1094,7 @@
         ${detailCell('สถานะ',bill.status)}${detailCell('เหตุผลที่ต้องตรวจ',bill.review_reasons||'ไม่มี',true)}
       </div></section>
       <section class="rounded-2xl bg-slate-50 p-4"><h4 class="mb-3 font-semibold text-slate-700">รายละเอียดเพิ่มเติม</h4><div class="grid gap-3 sm:grid-cols-2">
-        ${detailCell('คำอธิบาย',bill.description,true)}${detailCell('หมายเหตุ',bill.notes,true)}${detailCell('วิธีชำระเงิน',bill.payment_method)}${detailCell('สกุลเงิน',bill.currency)}${detailCell('เจ้าของบิล',bill.source_user_name||bill.source_user_id)}${detailCell('ช่องทาง',bill.source)}
+        ${detailCell('คำอธิบาย',bill.description,true)}${detailCell('หมายเหตุ',bill.notes,true)}${detailCell('วิธีชำระเงิน',bill.payment_method)}${detailCell('สกุลเงิน',bill.currency)}${detailCellHtml('เจ้าของบิล',ownerNameWithDot(bill.owner_display_name||bill.source_user_name||bill.source_user_id||'-',ownerColorFor(bill.source_user_id,bill.owner_color)))}${detailCell('ช่องทาง',bill.source)}
       </div></section>
       <section class="rounded-2xl bg-slate-50 p-4"><h4 class="mb-3 font-semibold text-slate-700">รายการสินค้า/บริการ</h4>${items?`<div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr><th>#</th><th>รายการ</th><th>จำนวน</th><th>ราคาต่อหน่วย</th><th>รวม</th></tr></thead><tbody>${items}</tbody></table></div>`:'<p class="text-slate-400">ไม่มีรายการย่อย</p>'}</section>
       <section class="rounded-2xl bg-slate-50 p-4"><h4 class="mb-3 font-semibold text-slate-700">รูปและเอกสารต้นฉบับ</h4><div class="flex flex-wrap gap-2">${documents||'<span class="text-slate-400">ไม่พบไฟล์เอกสาร</span>'}</div></section>
@@ -1093,6 +1104,7 @@
   }
 
   function detailCell(label, value, wide) { return `<div class="${wide?'sm:col-span-2':''}"><span class="text-xs text-slate-400">${escapeHtml(label)}</span><p class="mt-1 break-words font-medium">${escapeHtml(value == null || value === '' ? '-' : value)}</p></div>`; }
+  function detailCellHtml(label, html, wide) { return `<div class="${wide?'sm:col-span-2':''}"><span class="text-xs text-slate-400">${escapeHtml(label)}</span><p class="mt-1 break-words font-medium">${html}</p></div>`; }
   function docTypeLabel(value) { return ({TAX_INVOICE:'ใบกำกับภาษี',RECEIPT:'ใบเสร็จรับเงิน',CASH_BILL:'บิลเงินสด',INVOICE:'ใบแจ้งหนี้',DELIVERY_NOTE:'ใบส่งของ',TOLL:'ค่าผ่านทาง/ทางด่วน',TRANSFER_SLIP:'สลิปโอนเงิน',OTHER:'เอกสารอื่นๆ'})[value] || value || '-'; }
 
   function billMediaInfo(bill) {
@@ -1104,7 +1116,7 @@
         <div><dt>เลขที่เอกสาร</dt><dd>${escapeHtml(bill.document_no || '-')}</dd></div>
         <div><dt>โครงการ</dt><dd>${escapeHtml(bill.project_name || '-')}</dd></div>
         <div><dt>บริษัทผู้ซื้อ</dt><dd>${escapeHtml(bill.company_name || '-')}</dd></div>
-        <div><dt>เจ้าของบิล</dt><dd>${escapeHtml(bill.owner_display_name || bill.source_user_name || bill.source_user_id || '-')}</dd></div>
+        <div><dt>เจ้าของบิล</dt><dd>${ownerNameWithDot(bill.owner_display_name || bill.source_user_name || bill.source_user_id || '-',ownerColorFor(bill.source_user_id,bill.owner_color))}</dd></div>
         <div class="bill-media-info__wide"><dt>สถานะตรวจสอบ</dt><dd>${escapeHtml(bill.review_reasons || 'ข้อมูลพร้อมตรวจสอบ')}</dd></div>
       </dl>`;
   }
@@ -1677,10 +1689,16 @@
       document.title = health.appName || 'WorkHub';
       await initializeLiff();
       await bootstrap();
+      const monitoringParams = new URLSearchParams(location.search);
+      if (monitoringParams.get('monitor_site')) {
+        document.body.classList.add('monitoring-portal');
+        switchView('reports', { history:false });
+      }
       liveRefreshReady = true;
       startLiveRefresh();
       const linkedBillId = window.INITIAL_BILL_ID || '';
       window.setTimeout(() => {
+        if (monitoringParams.get('monitor_site')) return;
         if(linkedBillId&&window.INITIAL_BILL_EDIT)openBillForEdit(linkedBillId).catch(showFatal);
         else startPendingReviewWorkflow(linkedBillId).catch(showFatal);
       }, 450);

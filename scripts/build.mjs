@@ -64,4 +64,14 @@ await Promise.all([
   cp(path.join(root, 'node_modules', 'jszip', 'dist', 'jszip.min.js'), path.join(dist, 'vendor', 'jszip.min.js')),
   cp(path.join(root, 'node_modules', '@googlemaps', 'markerclusterer', 'dist', 'index.umd.js'), path.join(dist, 'vendor', 'markerclusterer.umd.js')),
 ]);
+await build({
+  entryPoints: [path.join(root, 'node_modules', 'qrcode', 'lib', 'browser.js')],
+  outfile: path.join(dist, 'vendor', 'qrcode.js'),
+  bundle: true,
+  minify: true,
+  format: 'iife',
+  globalName: 'QRCode',
+  target: ['safari15', 'chrome100', 'edge100', 'firefox100'],
+  legalComments: 'none',
+});
 console.log(`Built ${packageJson.name} ${packageJson.version} → ${dist}`);

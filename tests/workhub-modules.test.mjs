@@ -693,3 +693,28 @@ test('report state uses revision conflicts and periodic refresh for multiple dev
   assert.match(reports,/data-report-refresh-now/);
   assert.match(reports,/data-report-back/);
 });
+
+test('instrument workspace links Parameter, Initial Reading, Monitoring, QR sharing, and site cloning', async () => {
+  const [reports, styles, index, build] = await Promise.all([
+    read('frontend/reports.js'),
+    read('frontend/workhub-modules.css'),
+    read('frontend/index.html'),
+    read('scripts/build.mjs'),
+  ]);
+  assert.match(reports, /function ensureParameterSchema/);
+  assert.match(reports, /\{PARAM\.field\}/);
+  assert.match(reports, /\{INITIAL\.field\}/);
+  assert.match(reports, /function formulaFieldOrder/);
+  assert.match(reports, /พบสูตรวนซ้ำ/);
+  assert.match(reports, /data-parameter-import-form/);
+  assert.match(reports, /data-initial-reading-form/);
+  assert.match(reports, /data-monitoring-form/);
+  assert.match(reports, /data-monitoring-chart-type/);
+  assert.match(reports, /monitor_site/);
+  assert.match(reports, /data-site-clone-form/);
+  assert.match(styles, /\.instrument-section-tabs/);
+  assert.match(styles, /body\.report-map-fullscreen/);
+  assert.match(styles, /100dvh/);
+  assert.match(index, /vendor\/qrcode\.js/);
+  assert.match(build, /globalName: 'QRCode'/);
+});

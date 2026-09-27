@@ -728,6 +728,17 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .coming-soon-card p:not(.eyebrow) { max-width:500px; margin-top:7px; color:#806d62; font-size:13px; line-height:1.65; }
 .coming-soon-card code { border-radius:5px; background:#eaded2; padding:1px 5px; color:#704633; }
 
+.bill-owner-label { display:inline-flex; min-width:0; align-items:center; gap:7px; vertical-align:middle; }
+.bill-owner-label > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bill-owner-dot { width:10px; height:10px; flex:0 0 10px; border:2px solid rgba(255,255,255,.9); border-radius:50%; background:var(--owner-color,#8f5f42); box-shadow:0 0 0 1px color-mix(in srgb,var(--owner-color,#8f5f42) 65%,#5d4033); }
+.owner-color-control { display:grid; grid-template-columns:54px minmax(0,1fr); align-items:center; gap:10px; }
+.owner-color-control input[type="color"] { width:54px; height:46px; overflow:hidden; border:1px solid #d8c5b5; border-radius:11px; background:#fff; padding:4px; cursor:pointer; }
+.owner-color-control output { min-height:42px; border:1px solid #e0d1c5; border-radius:10px; background:#faf6f2; padding:11px 12px; color:#66483a; font:700 12px ui-monospace,monospace; }
+
+body.monitoring-portal #app-sidebar,body.monitoring-portal #sidebar-toggle,body.monitoring-portal .app-header { display:none!important; }
+body.monitoring-portal .app-main { width:100vw!important; max-width:none!important; margin-left:0!important; }
+body.monitoring-portal #view-reports { padding:0!important; }
+
 @media (min-width:1024px) { .sidebar-section-label { display:block; } }
 @media (min-width:1024px) {
   .app-main { width:calc(100vw - 18rem) !important; min-width:0; margin-left:18rem !important; }

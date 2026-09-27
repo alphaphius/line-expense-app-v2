@@ -1,0 +1,2 @@
+ALTER TABLE line_users
+  ADD COLUMN IF NOT EXISTS bill_color CHAR(7) NOT NULL DEFAULT '#8F5F42' AFTER workhub_name;

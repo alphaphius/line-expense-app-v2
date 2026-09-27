@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: workhub:4.9.22
+    image: workhub:4.10.0
     container_name: workhub
     restart: unless-stopped
     stop_grace_period: 4m

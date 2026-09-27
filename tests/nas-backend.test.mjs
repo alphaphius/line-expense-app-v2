@@ -267,16 +267,22 @@ test('LINE Flex preserves the legacy visual sections, six-page limit, cancel and
 });
 
 test('bill owner aliases preserve LINE identity and drive old and future bill labels', async () => {
-  const [migration, masters, bills, line, api] = await Promise.all([
+  const [migration, colorMigration, masters, bills, line, api, app] = await Promise.all([
     read('server/migrations/007_line_user_workhub_names.sql'),
+    read('server/migrations/015_bill_owner_colors.sql'),
     read('server/actions/masters.mjs'),
     read('server/actions/bills.mjs'),
     read('server/line.mjs'),
     read('server/api.mjs'),
+    read('frontend/app.js'),
   ]);
   assert.match(migration, /workhub_name VARCHAR\(255\)/);
+  assert.match(colorMigration, /bill_color CHAR\(7\)/);
   assert.match(masters, /display_name AS line_display_name/);
+  assert.match(masters, /UPDATE line_users SET workhub_name = \?, bill_color = \?/);
   assert.match(masters, /UPDATE bills SET source_user_name = \? WHERE source_user_id = \?/);
+  assert.match(bills, /owner_color/);
+  assert.match(app, /bill-owner-dot/);
   assert.match(bills, /NULLIF\(workhub_name, ''\).*NULLIF\(display_name, ''\)/);
   assert.match(line, /ON DUPLICATE KEY UPDATE display_name=VALUES\(display_name\)/);
   assert.match(api, /saveBillOwnerName/);
