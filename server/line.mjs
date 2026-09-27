@@ -4,7 +4,7 @@ import { execute, one, select, transaction } from './db.mjs';
 import { readBuffer, removeFile, storeCompressedImage } from './files.mjs';
 import { clean, nowSql, number, uuid } from './utils.mjs';
 import { getQuickSettings } from './actions/masters.mjs';
-import { confirmBill, deleteBill, getBillDetail, normalizeQualityScore, submitBillPages } from './actions/bills.mjs';
+import { confirmBill, deleteBill, getBillAiJob, getBillDetail, normalizeQualityScore, submitBillPages } from './actions/bills.mjs';
 import { bindLineSession, enqueueLineEvents, enqueueLineMessage, lineEventContext, pendingLineInput } from './line-queue.mjs';
 import { LineDeliveryError } from './line-delivery.mjs';
 
@@ -50,6 +50,25 @@ async function lineRequest(path, { method='GET', body, binary=false } = {}) {
   }
   const text=await response.text();
   return text?JSON.parse(text):{};
+}
+
+async function startLineLoading(source, seconds=15) {
+  if(source?.type!=='user'||!source.userId)return false;
+  try {
+    await lineRequest('/v2/bot/chat/loading/start',{method:'POST',body:{chatId:source.userId,loadingSeconds:Math.max(5,Math.min(60,seconds))}});
+    return true;
+  } catch { return false; }
+}
+
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+export async function waitForBillAiResult(jobId,{timeoutMs=9000,intervalMs=750}={}) {
+  const deadline=Date.now()+Math.max(0,timeoutMs);
+  let job=await getBillAiJob(jobId);
+  while(!['AI_COMPLETED','AI_ACTION_REQUIRED','AI_CANCELLED'].includes(job.status)&&Date.now()<deadline){
+    await wait(Math.min(intervalMs,Math.max(0,deadline-Date.now())));
+    job=await getBillAiJob(jobId);
+  }
+  return job;
 }
 
 async function reply(replyToken, messages) {
@@ -213,12 +232,13 @@ function billConfirmation(bill) {
 function analysisProgressFlex(job) {
   const status=clean(job.status,40);
   const actionRequired=status==='AI_ACTION_REQUIRED';
-  const title=actionRequired?'ต้องให้ผู้ดูแลตรวจสอบ':'กำลังวิเคราะห์บิล';
+  const processing=status==='AI_PROCESSING';
+  const title=actionRequired?'ต้องให้ผู้ดูแลตรวจสอบ':processing?'Gemini กำลังอ่านบิล':'กำลังวิเคราะห์บิล';
   const detail=clean(job.status_message,500)||(status==='AI_RETRY'?'Gemini ไม่ว่าง ระบบจะลองใหม่อัตโนมัติ':'รูปถูกเก็บแล้วและอยู่ในคิว AI');
   const body=[
     {type:'text',text:'WORKHUB · BILL AI',color:'#9A6244',weight:'bold',size:'sm'},
     {type:'text',text:title,color:'#3D2C25',weight:'bold',size:'xl',margin:'md',wrap:true},
-    {type:'text',text:'ไม่ต้องส่งรูปซ้ำ',color:'#79675D',size:'sm',margin:'sm'},
+    {type:'text',text:'ไม่ต้องส่งรูปซ้ำ · กดตรวจเพียงครั้งเดียวแล้วรอสักครู่',color:'#79675D',size:'sm',margin:'sm',wrap:true},
     {type:'separator',margin:'md',color:'#DECBBB'},
     {type:'text',text:detail,color:'#44312A',size:'sm',wrap:true},
     row('จำนวนหน้า',`${number(job.page_count)||1} หน้า`),
@@ -226,7 +246,7 @@ function analysisProgressFlex(job) {
   ];
   if(job.next_attempt_at)body.push(row('ระบบลองใหม่',new Date(String(job.next_attempt_at).replace(' ','T')+'Z').toLocaleString('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'short',timeStyle:'short'})));
   return {type:'flex',altText:`${title} · กดตรวจผล AI`,contents:{type:'bubble',...workHubFlexHero(),body:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'md',contents:body},footer:{type:'box',layout:'vertical',backgroundColor:'#FFFDF9',paddingAll:'20px',spacing:'sm',contents:[
-    {type:'button',style:'primary',color:'#31473A',action:{type:'postback',label:'ตรวจผล AI',data:`action=check_bill_ai&job_id=${job.job_id}`,displayText:'ตรวจผลวิเคราะห์บิล'}},
+    {type:'button',style:'primary',color:'#31473A',action:{type:'postback',label:actionRequired?'ดูสิ่งที่ต้องแก้':'ตรวจผล AI',data:`action=check_bill_ai&job_id=${job.job_id}`,displayText:'ตรวจผลวิเคราะห์บิล'}},
     ...(config.publicBaseUrl?[{type:'button',style:'secondary',color:'#8F5F42',action:{type:'uri',label:'เปิด WorkHub',uri:`${config.publicBaseUrl}/?openExternalBrowser=1`}}]:[]),
   ]}}};
 }
@@ -297,9 +317,15 @@ async function handlePostback(event,userId,contextId) {
   const data=Object.fromEntries(new URLSearchParams(clean(event.postback?.data,1000)));
   const action=clean(data.action,80);
   if(action==='check_bill_ai'){
-    const job=await one(`SELECT j.*,b.bill_id,b.status AS bill_status,b.page_count FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
+    let job=await one(`SELECT j.*,b.bill_id,b.status AS bill_status,b.page_count FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
       WHERE j.job_id=:id AND b.source='LINE' AND b.source_user_id=:user AND b.source_context_id=:context`,{id:clean(data.job_id,64),user:userId,context:contextId});
     if(!job)throw new Error('ไม่พบคิววิเคราะห์นี้ หรือผู้ส่งไม่มีสิทธิ์ตรวจสอบ');
+    if(!['AI_COMPLETED','AI_ACTION_REQUIRED','AI_CANCELLED'].includes(job.status)){
+      await startLineLoading(event.source,15);
+      const latest=await waitForBillAiResult(job.job_id);
+      job=await one(`SELECT j.*,b.bill_id,b.status AS bill_status,b.page_count FROM bill_ai_jobs j JOIN bills b ON b.bill_id=j.bill_id
+        WHERE j.job_id=:id`,{id:latest.job_id});
+    }
     if(job.status==='AI_COMPLETED'&&job.bill_status!=='REJECTED'){
       const bill=await getBillDetail(job.bill_id);
       return reply(event.replyToken,[job.bill_status==='CONFIRMED'?billSavedConfirmation(bill):billConfirmation(bill)]);

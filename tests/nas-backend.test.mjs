@@ -158,6 +158,7 @@ test('LINE AI progress remains a Flex reply with a manual result button',()=>{
   assert.equal(flex.type,'flex');
   assert.match(JSON.stringify(flex),/action=check_bill_ai&job_id=job-1/);
   assert.match(flex.altText,/กดตรวจผล AI/);
+  assert.match(JSON.stringify(flex),/กดตรวจเพียงครั้งเดียวแล้วรอสักครู่/);
 });
 
 test('scrypt password hashes verify without storing plaintext', async () => {

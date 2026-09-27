@@ -82,6 +82,8 @@ test('LINE webhook commits before 200 and bill flow contains no automatic Push w
   const line=await fs.readFile(new URL('../server/line.mjs',import.meta.url),'utf8');
   const delivery=await fs.readFile(new URL('../server/line-delivery.mjs',import.meta.url),'utf8');
   assert.match(line,/action=check_bill_ai/);
+  assert.match(line,/v2\/bot\/chat\/loading\/start/);
+  assert.match(line,/waitForBillAiResult/);
   assert.doesNotMatch(line,/message\/push|pushWithRetry/);
   assert.doesNotMatch(delivery,/message\/push|PUSH_ACCEPTED/);
   const bills=await fs.readFile(new URL('../server/actions/bills.mjs',import.meta.url),'utf8');

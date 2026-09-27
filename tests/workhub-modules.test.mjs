@@ -57,7 +57,20 @@ test('approved Task Manager contains only notes, equipment tracking, and plannin
   assert.match(tasks, /แผนงาน/);
   assert.match(tasks, /data-gantt-bar/);
   assert.match(tasks, /S\/N .*ถูกลงทะเบียนแล้ว/);
+  assert.match(tasks, /workhub-equipment-template\.csv/);
+  assert.match(tasks, /data-asset-group-check/);
+  assert.match(tasks, /work_group_id/);
+  assert.match(tasks, /REPORTS_KEY = 'workhub-installation-reports-v2'/);
   assert.doesNotMatch(tasks, /ทีมและบุคลากร|CRM|อนุมัติ/);
+});
+
+test('Task Manager equipment CSV parser supports quoted values and Thai text', async () => {
+  const context = vm.createContext({ window:{}, Date, Intl, Math, Number, String, Array, Object, RegExp, Map, Set });
+  new vm.Script(await read('frontend/tasks.js'), { filename:'tasks.js' }).runInContext(context);
+  const rows=context.window.TaskManagerModule.parseAssetCsv('\uFEFFwork_group_id,asset_serial,asset_name,equipment_group\r\nFY2569,EQ-01,"เครื่องมือ, สำรวจ",Survey');
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].work_group_id,'FY2569');
+  assert.equal(rows[0].asset_name,'เครื่องมือ, สำรวจ');
 });
 
 test('payroll provides group bulk attendance, half-hour OT, weekly totals and separate exports', async () => {
