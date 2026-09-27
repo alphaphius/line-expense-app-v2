@@ -727,3 +727,23 @@ test('instrument workspace links Parameter, Initial Reading, Monitoring, QR shar
   assert.match(index, /vendor\/qrcode\.js/);
   assert.match(build, /globalName: 'QRCode'/);
 });
+
+test('reading schema editor is fullscreen, formulas are draggable, and Parameter CSV routes by instrument IDs', async () => {
+  const [reports, styles] = await Promise.all([
+    read('frontend/reports.js'),
+    read('frontend/workhub-modules.css'),
+  ]);
+  assert.match(styles, /\.schema-settings-dialog\{inset:0;width:100vw/);
+  assert.match(styles, /overflow-x:hidden;overflow-y:auto/);
+  assert.match(reports, /data-formula-scope="schema"/);
+  assert.match(reports, /draggable="true" title="ลากไปวางในสูตร"/);
+  assert.match(reports, /event\.dataTransfer\.setData\('text\/plain'/);
+  assert.match(reports, /function parameterCsvRows/);
+  assert.match(reports, /\['group_id','site_id','instrument_id','recorded_at'/);
+  assert.match(reports, /data-parameter-template-download/);
+  assert.match(reports, /นำเข้า Parameter หลาย Instrument/);
+  assert.match(reports, /data-reading-template-download="initial"/);
+  assert.match(reports, /data-reading-template-download="monitoring"/);
+  assert.match(reports, /data-reading-import-form/);
+  assert.match(reports, /closeDialog\(\);const confirmed=await authorizeDelete/);
+});
