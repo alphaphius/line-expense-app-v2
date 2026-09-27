@@ -735,7 +735,7 @@ test('reading schema editor is fullscreen, formulas are draggable, and Parameter
   ]);
   assert.match(styles, /\.schema-settings-dialog\{inset:0;width:100vw/);
   assert.match(styles, /overflow-x:hidden;overflow-y:auto/);
-  assert.match(reports, /data-formula-scope="schema"/);
+  assert.match(reports, /function schemaEditorRows/);
   assert.match(reports, /draggable="true" title="ลากไปวางในสูตร"/);
   assert.match(reports, /event\.dataTransfer\.setData\('text\/plain'/);
   assert.match(reports, /function parameterCsvRows/);
