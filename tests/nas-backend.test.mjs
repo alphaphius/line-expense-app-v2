@@ -161,6 +161,15 @@ test('LINE AI progress remains a Flex reply with a manual result button',()=>{
   assert.match(JSON.stringify(flex),/กดตรวจเพียงครั้งเดียวแล้วรอสักครู่/);
 });
 
+test('bill confirmation is idempotent and confirmed bills cannot be confirmed again in the web UI',async()=>{
+  const [bills,frontend]=await Promise.all([read('server/actions/bills.mjs'),read('frontend/app.js')]);
+  assert.match(bills,/SELECT \* FROM bills WHERE bill_id=\? FOR UPDATE/);
+  assert.match(bills,/if\(before\.status===status\)return/);
+  assert.match(frontend,/const isConfirmed = bill\.status === 'CONFIRMED'/);
+  assert.match(frontend,/showConfirmButton:!isDeleted&&!isConfirmed/);
+  assert.match(frontend,/ยืนยันและบันทึกบิลแล้ว/);
+});
+
 test('scrypt password hashes verify without storing plaintext', async () => {
   const encoded = await hashPassword('test-password');
   assert.match(encoded, /^scrypt\$16384\$8\$1\$/);

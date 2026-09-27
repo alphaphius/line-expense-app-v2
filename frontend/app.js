@@ -1038,10 +1038,12 @@
       return { action:'pending', billId:bill.bill_id };
     }
     const isDeleted = bill.status === 'REJECTED';
+    const isConfirmed = bill.status === 'CONFIRMED';
     const needsReview = bill.needs_review === true || String(bill.needs_review).toLowerCase() === 'true';
     const warning = needsReview ? `<div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-900"><strong class="block">จุดที่ควรตรวจสอบ</strong><span class="mt-1 block">${escapeHtml(bill.review_reasons || 'กรุณาตรวจสอบข้อมูลก่อน')}</span></div>` : '';
+    const confirmedNotice = isConfirmed ? `<div class="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left text-sm text-emerald-900"><strong class="block">✓ ยืนยันและบันทึกบิลแล้ว</strong><span class="mt-1 block">รายการนี้อยู่ในฐานข้อมูลเรียบร้อย ไม่ต้องกดยืนยันซ้ำ</span></div>` : '';
     const queueContext = options.queueMode ? `<div class="review-progress"><span>กำลังตรวจสอบรายการล่าสุด</span><strong>ค้างอีก ${Number(options.remainingCount || 1).toLocaleString('th-TH')} รายการ</strong></div>` : '';
-    const result = await Swal.fire({ title:options.queueMode ? 'ตรวจสอบบิล' : 'รายละเอียดบิล', html: queueContext + warning + billSummaryHtml(bill), showConfirmButton:!isDeleted, showCancelButton:true, showDenyButton:!isDeleted, confirmButtonText:'ยืนยันบิลนี้', denyButtonText:'แก้ไขข้อมูล', cancelButtonText:options.queueMode ? 'ไว้ตรวจทีหลัง' : 'ปิด', confirmButtonColor:'#8f5f42', denyButtonColor:'#4b372f', width:1050, customClass:{ popup:'bill-review-modal', actions:'bill-review-actions' } });
+    const result = await Swal.fire({ title:options.queueMode ? 'ตรวจสอบบิล' : 'รายละเอียดบิล', html: queueContext + confirmedNotice + warning + billSummaryHtml(bill), showConfirmButton:!isDeleted&&!isConfirmed, showCancelButton:true, showDenyButton:!isDeleted, confirmButtonText:'ยืนยันบิลนี้', denyButtonText:'แก้ไขข้อมูล', cancelButtonText:options.queueMode&&!isConfirmed ? 'ไว้ตรวจทีหลัง' : 'ปิด', confirmButtonColor:'#8f5f42', denyButtonColor:'#4b372f', width:1050, customClass:{ popup:'bill-review-modal', actions:'bill-review-actions' } });
     if (result.isConfirmed) {
       showActivityToast('กำลังยืนยันบิล…', 'บันทึกข้อมูลอยู่เบื้องหลัง คุณใช้งานส่วนอื่นต่อได้');
       try {
