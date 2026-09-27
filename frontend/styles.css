@@ -731,9 +731,21 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .bill-owner-label { display:inline-flex; min-width:0; align-items:center; gap:7px; vertical-align:middle; }
 .bill-owner-label > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bill-owner-dot { width:10px; height:10px; flex:0 0 10px; border:2px solid rgba(255,255,255,.9); border-radius:50%; background:var(--owner-color,#8f5f42); box-shadow:0 0 0 1px color-mix(in srgb,var(--owner-color,#8f5f42) 65%,#5d4033); }
-.owner-color-control { display:grid; grid-template-columns:54px minmax(0,1fr); align-items:center; gap:10px; }
+.owner-rename-modal { width:min(520px,calc(100vw - 24px))!important; max-width:calc(100vw - 24px)!important; padding:24px!important; }
+.owner-rename-title { padding:0 0 14px!important; color:#3f2e27!important; font-size:clamp(22px,5vw,31px)!important; line-height:1.25!important; text-align:left!important; overflow-wrap:anywhere; }
+.owner-rename-modal .swal2-html-container { margin:0!important; overflow:visible!important; }
+.owner-rename-dialog { display:grid; gap:16px; min-width:0; margin:0; padding:16px; }
+.owner-line-name,.owner-name-control { display:grid; min-width:0; gap:6px; }
+.owner-line-name>span,.owner-name-control>span,.owner-color-control>span { color:#735e52; font-size:12px; font-weight:750; line-height:1.45; }
+.owner-line-name strong { min-width:0; overflow-wrap:anywhere; }
+.owner-line-name small { margin:0; }
+.owner-name-control .swal2-input { width:100%!important; min-width:0; height:auto; min-height:48px; margin:0!important; padding:10px 12px; border-color:#d8c5b5; border-radius:11px; font-size:16px; box-shadow:none; }
+.owner-color-control { display:grid; min-width:0; grid-template-columns:58px minmax(0,1fr); align-items:center; gap:8px 10px; }
+.owner-color-control>span { grid-column:1/-1; }
 .owner-color-control input[type="color"] { width:54px; height:46px; overflow:hidden; border:1px solid #d8c5b5; border-radius:11px; background:#fff; padding:4px; cursor:pointer; }
-.owner-color-control output { min-height:42px; border:1px solid #e0d1c5; border-radius:10px; background:#faf6f2; padding:11px 12px; color:#66483a; font:700 12px ui-monospace,monospace; }
+.owner-color-control output { display:flex; min-width:0; min-height:46px; align-items:center; border:1px solid #e0d1c5; border-radius:10px; background:#faf6f2; padding:10px 12px; color:#66483a; font:700 13px ui-monospace,monospace; overflow-wrap:anywhere; }
+.owner-rename-actions { width:100%; margin:18px 0 0!important; gap:8px; }
+.owner-rename-actions .swal2-styled { min-height:44px; margin:0!important; }
 
 body.monitoring-portal #app-sidebar,body.monitoring-portal #sidebar-toggle,body.monitoring-portal .app-header { display:none!important; }
 body.monitoring-portal .app-main { width:100vw!important; max-width:none!important; margin-left:0!important; }
@@ -753,6 +765,10 @@ body.monitoring-portal #view-reports { padding:0!important; }
   .receipt-registry-wage { display:none!important; }
 }
 @media (max-width:640px) {
+  .owner-rename-modal { padding:18px 14px!important; }
+  .owner-rename-dialog { gap:14px; padding:14px; }
+  .owner-rename-actions { display:grid!important; grid-template-columns:1fr; }
+  .owner-rename-actions .swal2-styled { width:100%; }
   .product-nav { display:grid; width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; overflow:visible; margin:0; padding:0 6px 15px; }
   .product-nav__button { width:100%; min-width:0; min-height:68px; align-items:center; padding:6px 3px; text-align:center; }
   .product-nav__button span { font-size:11px; line-height:1.3; white-space:normal; }

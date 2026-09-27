@@ -748,7 +748,9 @@
     const lineName = owner.line_display_name || owner.display_name || 'ไม่พบชื่อ LINE';
     const result = await Swal.fire({
       title:'ตั้งชื่อที่ใช้ใน WorkHub',
-      html:`<div class="owner-rename-dialog"><p>ชื่อ LINE ล่าสุด</p><strong>${escapeHtml(lineName)}</strong><small>ชื่อนี้ยังเก็บไว้เพื่อยืนยันตัวบุคคล แม้ผู้ใช้จะเปลี่ยนชื่อ LINE ภายหลัง</small><label>ชื่อที่ใช้ใน WorkHub<input id="owner-workhub-name" class="swal2-input" maxlength="255" value="${escapeHtml(owner.workhub_name||'')}" placeholder="เช่น คุณเอก · ทีมสำรวจ"></label><label class="owner-color-control"><span>สีจุดประจำเจ้าของบิล</span><input id="owner-bill-color" type="color" value="${safeOwnerColor(owner.bill_color)}"><output id="owner-bill-color-value">${safeOwnerColor(owner.bill_color)}</output></label></div>`,
+      html:`<div class="owner-rename-dialog"><div class="owner-line-name"><span>ชื่อ LINE ล่าสุด</span><strong>${escapeHtml(lineName)}</strong><small>ชื่อนี้ยังเก็บไว้เพื่อยืนยันตัวบุคคล แม้ผู้ใช้จะเปลี่ยนชื่อ LINE ภายหลัง</small></div><label class="owner-name-control"><span>ชื่อที่ใช้ใน WorkHub</span><input id="owner-workhub-name" class="swal2-input" maxlength="255" value="${escapeHtml(owner.workhub_name||'')}" placeholder="เช่น คุณเอก · ทีมสำรวจ"></label><label class="owner-color-control"><span>สีจุดประจำเจ้าของบิล</span><input id="owner-bill-color" type="color" value="${safeOwnerColor(owner.bill_color)}" aria-label="เลือกสีประจำเจ้าของบิล"><output id="owner-bill-color-value">${safeOwnerColor(owner.bill_color).toUpperCase()}</output></label></div>`,
+      customClass:{popup:'owner-rename-modal',title:'owner-rename-title',actions:'owner-rename-actions'},
+      width:520,
       showCancelButton:true,
       showDenyButton:Boolean(owner.workhub_name),
       confirmButtonText:'บันทึกชื่อ',
