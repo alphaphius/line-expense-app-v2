@@ -165,6 +165,8 @@ test('bill confirmation is idempotent and confirmed bills cannot be confirmed ag
   const [bills,frontend]=await Promise.all([read('server/actions/bills.mjs'),read('frontend/app.js')]);
   assert.match(bills,/SELECT \* FROM bills WHERE bill_id=\? FOR UPDATE/);
   assert.match(bills,/if\(before\.status===status\)return/);
+  assert.match(bills,/const confirmed = row\.status === 'CONFIRMED'/);
+  assert.match(bills,/const status = confirmed \? 'CONFIRMED'/);
   assert.match(frontend,/const isConfirmed = bill\.status === 'CONFIRMED'/);
   assert.match(frontend,/showConfirmButton:!isDeleted&&!isConfirmed/);
   assert.match(frontend,/ยืนยันและบันทึกบิลแล้ว/);

@@ -401,8 +401,11 @@ export async function repairAddressMatchFlags() {
     if (!taxMatch) reasons.push('เลขผู้เสียภาษีผู้ซื้อไม่ตรงกับบริษัทที่เลือก');
     if (!addressMatch) reasons.push('ที่อยู่ผู้ซื้อไม่ตรงกับบริษัทที่เลือก');
     reasons = [...new Set(reasons)];
-    const needsReview = reasons.length > 0 || !companyMatch || !taxMatch || !addressMatch || !row.document_date || !clean(row.vendor_name);
-    const status = needsReview ? 'NEEDS_REVIEW' : (row.status === 'NEEDS_REVIEW' ? 'PENDING_CONFIRMATION' : row.status);
+    const confirmed = row.status === 'CONFIRMED';
+    const needsReview = confirmed ? false : reasons.length > 0 || !companyMatch || !taxMatch || !addressMatch || !row.document_date || !clean(row.vendor_name);
+    // A human confirmation is authoritative. Startup repair may refresh the
+    // comparison flags, but it must never reopen an already confirmed bill.
+    const status = confirmed ? 'CONFIRMED' : needsReview ? 'NEEDS_REVIEW' : (row.status === 'NEEDS_REVIEW' ? 'PENDING_CONFIRMATION' : row.status);
     const changed = bool(row.company_match) !== companyMatch || bool(row.tax_id_match) !== taxMatch || bool(row.address_match) !== addressMatch
       || bool(row.needs_review) !== needsReview || row.status !== status;
     if (!changed) continue;
