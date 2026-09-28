@@ -6,12 +6,39 @@ import vm from 'node:vm';
 async function fixture(){
   const source=await fs.readFile(new URL('../frontend/reports.js',import.meta.url),'utf8');
   const context=vm.createContext({window:{},structuredClone,Date,Intl,Math});
-  vm.runInContext(source.replace('window.ReportManagerModule=Object.freeze','window.readingTest={state,parameterCsvRows,readingCsvRows,resolveReadingCsvInstrument,schemaEditorRows,syncSchemaSettingsInputs,parseFieldOptions,evaluateFormula,calculateSchemaValues,thresholdViolations,monitoringChartData};window.ReportManagerModule=Object.freeze'),context);
+  vm.runInContext(source.replace('window.ReportManagerModule=Object.freeze','window.readingTest={state,initialReadingAt,initialReadingRows,saveInitialReading,parameterCsvRows,readingCsvRows,resolveReadingCsvInstrument,schemaEditorRows,syncSchemaSettingsInputs,parseFieldOptions,evaluateFormula,calculateSchemaValues,thresholdViolations,monitoringChartData};window.ReportManagerModule=Object.freeze'),context);
   const api=context.window.readingTest;
   const equipment={uid:'e1',id:'SM.1',groupId:'wg-internal',siteId:'s1',type:'Soil Moisture Sensor'};
   api.state.data={groups:[{id:'wg-internal',code:'P06811'},{id:'wg-other',code:'P06812'}],sites:[{uid:'s1',id:'69A_I1',groupId:'wg-internal'},{uid:'s2',id:'69A_I1',groupId:'wg-other'}],equipment:[equipment,{...equipment,uid:'e2',groupId:'wg-other',siteId:'s2'}],parameterData:{e1:{fields:[{key:'factor',type:'number'}],pages:[],rows:[]}},monitoringProfiles:[{id:'p1',fields:[{key:'reading',type:'number'},{key:'result',type:'formula',formula:'{reading}*2'}],pages:[]}],monitoringAssignments:{e1:'p1'}};
   return {api,equipment};
 }
+
+test('re-initial uses effective reading time and leaves saved monitoring results unchanged',async()=>{
+  const {api,equipment}=await fixture();api.state.data.initialReadings={};
+  const first=api.saveInitialReading(equipment,{recordedAt:'2026-09-01T00:00:00Z',values:{reading:10}});
+  const schema={fields:[{key:'delta',label:'Delta',type:'formula',formula:'{reading}-{INITIAL.reading}'}]};
+  const saved=api.calculateSchemaValues(schema,{reading:18,recorded_at:'2026-09-05T00:00:00Z'},equipment);
+  assert.equal(saved.delta,8);
+  const second=api.saveInitialReading(equipment,{recordedAt:'2026-09-10T00:00:00Z',values:{reading:15}});
+  assert.equal(api.initialReadingAt(equipment,'2026-09-09T23:59:59Z').id,first.id);
+  assert.equal(api.initialReadingAt(equipment,'2026-09-10T00:00:00Z').id,second.id);
+  assert.equal(api.calculateSchemaValues(schema,{reading:18,recorded_at:'2026-09-05T00:00:00Z'},equipment).delta,8);
+  assert.equal(api.calculateSchemaValues(schema,{reading:18,recorded_at:'2026-09-11T00:00:00Z'},equipment).delta,3);
+  assert.equal(saved.delta,8);
+  assert.ok(api.calculateSchemaValues(schema,{reading:18,recorded_at:'2026-08-01T00:00:00Z'},equipment).__formulaError);
+  api.saveInitialReading(equipment,{recordedAt:'2026-09-10T00:00:00Z',values:{reading:20}},second.id);
+  assert.equal(api.initialReadingRows(equipment).length,2);assert.equal(saved.delta,8);
+});
+
+test('legacy Initial is preserved once and backdated inserts do not replace the latest baseline',async()=>{
+  const {api,equipment}=await fixture();api.state.data.initialReadings={e1:{profileId:'p1',values:{reading:2}}};
+  assert.equal(api.initialReadingRows(equipment).length,1);assert.equal(api.initialReadingRows(equipment).length,1);
+  assert.equal(api.initialReadingAt(equipment,'2020-01-01').values.reading,2);
+  api.saveInitialReading(equipment,{recordedAt:'2026-09-10',values:{reading:10}});
+  api.saveInitialReading(equipment,{recordedAt:'2026-09-05',values:{reading:5}});
+  assert.equal(api.state.data.initialReadings.e1.values.reading,10);
+  assert.equal(api.initialReadingAt(equipment,'2026-09-06').values.reading,5);
+});
 
 test('CSV templates expose configured Group ID and omit computed reading inputs',async()=>{
   const {api,equipment}=await fixture();

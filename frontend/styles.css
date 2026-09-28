@@ -96,7 +96,11 @@
   .monthly-chart-empty.hidden { display:none; }
   .uploader-summary-card { overflow:hidden; padding:20px 22px; }
   .uploader-summary-card__head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; }
-  .uploader-summary-bars { display:grid; max-height:300px; gap:13px; margin-top:18px; overflow-y:auto; padding-right:4px; scrollbar-color:#cfb69f transparent; scrollbar-width:thin; }
+  .uploader-summary-bars { display:grid; max-height:300px; gap:13px; margin-top:18px; overflow-y:scroll; padding-right:12px; scrollbar-gutter:stable; scrollbar-color:#986042 #ede2d6; scrollbar-width:auto; }
+  .uploader-summary-bars::-webkit-scrollbar { width:12px; }
+  .uploader-summary-bars::-webkit-scrollbar-track { background:#ede2d6; border-radius:8px; }
+  .uploader-summary-bars::-webkit-scrollbar-thumb { background:#986042; border:2px solid #ede2d6; border-radius:8px; }
+  .uploader-scroll-cue { margin:12px 0 0; text-align:center; font-size:12px; color:#795842; }
   .uploader-bar-row { display:grid; width:100%; grid-template-columns:minmax(150px,.8fr) minmax(220px,1.8fr); align-items:center; gap:16px; min-width:0; border-radius:11px; padding:7px 9px; text-align:left; transition:background .18s,transform .18s; }
   button.uploader-bar-row:hover, button.uploader-bar-row:focus-visible { background:#fbf1e5; transform:translateY(-1px); }
   .uploader-bar-meta { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:10px; }
