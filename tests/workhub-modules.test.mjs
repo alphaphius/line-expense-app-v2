@@ -675,7 +675,9 @@ test('report templates support rename, Enum and Quick Edit fields, UTF-8 CSV, an
   assert.match(reports,/name="templateName"/);
   assert.match(reports,/value="enum"/);
   assert.match(reports,/value="quick"/);
-  assert.match(reports,/\.options=input\.value\.split\('\|'\)/);
+  assert.match(reports,/function parseFieldOptions/);
+  assert.match(reports,/split\(\/\[,\|\]\//);
+  assert.match(reports,/ผ่าน, ไม่ผ่าน, รอตรวจสอบ/);
   assert.match(reports,/function csvUtf8/);
   assert.match(reports,/\\uFEFF/);
   assert.match(reports,/function reportFileBase/);
