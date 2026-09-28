@@ -6,7 +6,7 @@ import vm from 'node:vm';
 async function fixture(){
   const source=await fs.readFile(new URL('../frontend/reports.js',import.meta.url),'utf8');
   const context=vm.createContext({window:{},structuredClone,Date,Intl,Math});
-  vm.runInContext(source.replace('window.ReportManagerModule=Object.freeze','window.readingTest={state,parameterCsvRows,readingCsvRows,resolveReadingCsvInstrument,schemaEditorRows,syncSchemaSettingsInputs,evaluateFormula,calculateSchemaValues,thresholdViolations,monitoringChartData};window.ReportManagerModule=Object.freeze'),context);
+  vm.runInContext(source.replace('window.ReportManagerModule=Object.freeze','window.readingTest={state,parameterCsvRows,readingCsvRows,resolveReadingCsvInstrument,schemaEditorRows,syncSchemaSettingsInputs,parseFieldOptions,evaluateFormula,calculateSchemaValues,thresholdViolations,monitoringChartData};window.ReportManagerModule=Object.freeze'),context);
   const api=context.window.readingTest;
   const equipment={uid:'e1',id:'SM.1',groupId:'wg-internal',siteId:'s1',type:'Soil Moisture Sensor'};
   api.state.data={groups:[{id:'wg-internal',code:'P06811'},{id:'wg-other',code:'P06812'}],sites:[{uid:'s1',id:'69A_I1',groupId:'wg-internal'},{uid:'s2',id:'69A_I1',groupId:'wg-other'}],equipment:[equipment,{...equipment,uid:'e2',groupId:'wg-other',siteId:'s2'}],parameterData:{e1:{fields:[{key:'factor',type:'number'}],pages:[],rows:[]}},monitoringProfiles:[{id:'p1',fields:[{key:'reading',type:'number'},{key:'result',type:'formula',formula:'{reading}*2'}],pages:[]}],monitoringAssignments:{e1:'p1'}};
@@ -35,10 +35,13 @@ test('CSV import resolves visible IDs case-insensitively without cross-site fall
 test('shared field editor preserves labels, page assignment, required state and choices',async()=>{
   const {api}=await fixture();const schema={name:'Before',pages:[{number:1,title:'Page'}],fields:[{key:'reading',label:'Reading',type:'number',page:1,formula:'',options:[]}]};
   const elements={schema_name:{value:'After'},field_label_0:{value:'Status'},field_type_0:{value:'quick'},field_page_0:{value:'1'},field_required_0:{checked:true}};
-  api.syncSchemaSettingsInputs({elements,querySelectorAll:()=>[{dataset:{pageNumber:'1'},value:'Measurements'}],querySelector:()=>({value:'Pass | Fail'})},schema);
-  assert.equal(schema.name,'After');assert.equal(schema.fields[0].label,'Status');assert.equal(schema.fields[0].type,'quick');assert.equal(schema.fields[0].required,true);assert.equal(schema.pages[0].title,'Measurements');assert.deepEqual(Array.from(schema.fields[0].options),['Pass','Fail']);
+  api.syncSchemaSettingsInputs({elements,querySelectorAll:()=>[{dataset:{pageNumber:'1'},value:'Measurements'}],querySelector:()=>({value:'Pass, Fail, Review'})},schema);
+  assert.equal(schema.name,'After');assert.equal(schema.fields[0].label,'Status');assert.equal(schema.fields[0].type,'quick');assert.equal(schema.fields[0].required,true);assert.equal(schema.pages[0].title,'Measurements');assert.deepEqual(Array.from(schema.fields[0].options),['Pass','Fail','Review']);
   const html=api.schemaEditorRows(schema);assert.ok(html.includes('data-formula-scope="schema"'));assert.ok(html.includes('name="field_type_0"'));assert.ok(!html.includes('data-template-'));
   assert.ok(html.includes('class="field-control-strip"'));assert.ok(html.includes('field_required_0'));assert.ok(html.includes('data-field-move="up"'));
+  assert.ok(html.includes('placeholder="เช่น ผ่าน, ไม่ผ่าน, รอตรวจสอบ"'));
+  assert.deepEqual(Array.from(api.parseFieldOptions('ผ่าน, ไม่ผ่าน, รอตรวจสอบ')),['ผ่าน','ไม่ผ่าน','รอตรวจสอบ']);
+  assert.deepEqual(Array.from(api.parseFieldOptions('เดิม | ยังใช้ได้')),['เดิม','ยังใช้ได้']);
 });
 
 test('desktop shared Field editor keeps identity, inputs and controls in one compact row',async()=>{
