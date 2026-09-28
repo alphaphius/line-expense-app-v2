@@ -38,6 +38,15 @@ test('shared field editor preserves labels, page assignment, required state and 
   api.syncSchemaSettingsInputs({elements,querySelectorAll:()=>[{dataset:{pageNumber:'1'},value:'Measurements'}],querySelector:()=>({value:'Pass | Fail'})},schema);
   assert.equal(schema.name,'After');assert.equal(schema.fields[0].label,'Status');assert.equal(schema.fields[0].type,'quick');assert.equal(schema.fields[0].required,true);assert.equal(schema.pages[0].title,'Measurements');assert.deepEqual(Array.from(schema.fields[0].options),['Pass','Fail']);
   const html=api.schemaEditorRows(schema);assert.ok(html.includes('data-formula-scope="schema"'));assert.ok(html.includes('name="field_type_0"'));assert.ok(!html.includes('data-template-'));
+  assert.ok(html.includes('class="field-control-strip"'));assert.ok(html.includes('field_required_0'));assert.ok(html.includes('data-field-move="up"'));
+});
+
+test('desktop shared Field editor keeps identity, inputs and controls in one compact row',async()=>{
+  const css=await fs.readFile(new URL('../frontend/workhub-modules.css',import.meta.url),'utf8');
+  assert.match(css,/@media\(min-width:1100px\)/);
+  assert.match(css,/\.wizard-field-row>\.field-control-strip\{grid-column:5;grid-row:1/);
+  assert.match(css,/data-template-fields-form\]>\.form-grid\{grid-template-columns:/);
+  assert.match(css,/@media\(max-width:700px\)[\s\S]*\.wizard-field-row>\.field-control-strip\{grid-column:1\/-1;grid-row:3/);
 });
 test('text concatenation and date formats support reading timestamps',async()=>{
   const {api}=await fixture();
