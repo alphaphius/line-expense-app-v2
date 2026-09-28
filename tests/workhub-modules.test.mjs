@@ -143,6 +143,32 @@ test('bill tables provide image preview, date-band grouping, page sizes, sort co
   assert.match(masters, /aggregateOwners/);
 });
 
+test('bill preview keeps the active list context and owner export accepts a full year-month period', async () => {
+  const [app, masters] = await Promise.all([
+    read('frontend/app.js'), read('server/actions/masters.mjs'),
+  ]);
+  assert.match(app, /billMediaContextIds/);
+  assert.match(app, /previewDocument\(preview\.dataset\.previewDoc, preview\.dataset\.previewBill, billIdsFromRows\(currentData\.rows\)\)/);
+  assert.doesNotMatch(app, /\.\.\.\(state\.billList\.rows \|\| \[\]\),\s*\.\.\.\(state\.dashboard\?\.bills \|\| \[\]\)/);
+  assert.match(masters, /\^\(\\d\{4\}\)-\(\\d\{2\}\)\$/);
+  assert.match(masters, /DATE_FORMAT\(COALESCE\(b\.document_date, b\.created_at\), '%Y-%m'\) = :period/);
+});
+
+test('project photos expose deletion only in the large viewer and loading uses the jumping-bar indicator', async () => {
+  const [reports, moduleCss, appCss] = await Promise.all([
+    read('frontend/reports.js'), read('frontend/workhub-modules.css'), read('frontend/styles.css'),
+  ]);
+  const carouselMarkup = reports.match(/function siteProjectPanel[\s\S]*?function bindSiteProjectPanel/)?.[0] || '';
+  assert.doesNotMatch(carouselMarkup, /data-site-photo-remove/);
+  assert.match(reports, /data-site-photo-delete/);
+  assert.match(reports, /deleteStoredRecord\(imageStorageId\('site-'\+site\.uid,photoId\)\)/);
+  assert.match(moduleCss, /\.site-photo-view__actions/);
+  assert.doesNotMatch(moduleCss, /\.site-media-remove/);
+  assert.match(appCss, /@keyframes loader-travel/);
+  assert.match(appCss, /\.swal2-loader/);
+  assert.doesNotMatch(appCss, /@keyframes spin/);
+});
+
 test('secondary navigation exposes protected Main App, Stock App, AI Usage, and Reports access', async () => {
   const [html, app, css, preview] = await Promise.all([
     read('frontend/index.html'), read('frontend/app.js'), read('frontend/styles.css'), read('scripts/dev-server.mjs'),
@@ -715,7 +741,7 @@ test('instrument workspace links Parameter, Initial Reading, Monitoring, QR shar
   assert.match(reports, /data-reading-template-new/);
   assert.match(reports, /data-reading-template-edit/);
   assert.match(reports, /data-reading-template-delete/);
-  assert.match(reports, /Initial Reading และ Monitoring ใช้ Template ช่องกรอกเดียวกัน/);
+  assert.match(reports, /Initial Reading และ Monitoring (?:จะ)?ใช้(?: Template)? ?ช่องกรอก(?:ชุด)?เดียวกัน/);
   assert.match(reports, /field_required_/);
   assert.match(reports, /schemaForSettings/);
   assert.match(reports, /data-monitoring-chart-type/);
@@ -744,8 +770,8 @@ test('reading schema editor is fullscreen, formulas are draggable, and Parameter
   assert.match(reports, /\['group_id','site_id','instrument_id','recorded_at'/);
   assert.match(reports, /data-parameter-template-download/);
   assert.match(reports, /นำเข้า Parameter หลาย Instrument/);
-  assert.match(reports, /data-reading-template-download="initial"/);
-  assert.match(reports, /data-reading-template-download="monitoring"/);
+  assert.match(reports, /data-reading-template-download="\$\{(?:kind|mode)\}"/);
+  assert.match(reports, /downloadReadingTemplate\(equipment,readingTemplateDownload\.dataset\.readingTemplateDownload\)/);
   assert.match(reports, /data-reading-import-form/);
   assert.match(reports, /closeDialog\(\);const confirmed=await authorizeDelete/);
 });

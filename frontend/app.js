@@ -1,4 +1,4 @@
-  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', uploadPageFiles: [], uploadBatchFiles: [], uploadTargetPage: 0, quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 }, activeView:'dashboard' };
+  const state = { masters: { projects: [], companies: [], categories: [], vendors: [], billOwners: [] }, dashboard: null, dashboardFilters: { period:'', view_mode:'overall', owners:null }, billOwnerIds:null, dashboardRequestId: 0, uploadRequestId: '', uploadPageFiles: [], uploadBatchFiles: [], uploadTargetPage: 0, quickSettings: null, pendingReviews: [], reviewWorkflowActive: false, monthlyChart: null, billList: { rows: [], page: 1, pages: 1, total: 0 }, billMediaContextIds:[], activeView:'dashboard' };
   const viewTitles = { dashboard: 'ภาพรวมค่าใช้จ่าย', bills: 'บิลทั้งหมด', upload: 'เพิ่มบิล', masters: 'ตั้งค่าข้อมูล', receipts: 'เอกสารใบรับเงิน', payroll: 'สรุปค่าแรง', tasks: 'Task manager', reports: 'รายงาน', 'ai-usage':'การใช้งาน AI', system: 'สถานะระบบ' };
   const expenseViews = ['dashboard','bills','upload','masters','system'];
   const protectedViews = ['receipts','payroll','tasks','reports','ai-usage'];
@@ -185,6 +185,16 @@
     const attrs = docId ? `data-preview-doc="${escapeHtml(docId)}" data-preview-bill="${escapeHtml(bill.bill_id || '')}"` : 'disabled';
     const label = docId ? 'แสดงรูปบิล' : 'ไม่มีรูปบิล';
     return `<button type="button" class="bill-preview-btn" ${attrs} title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="m5.5 17 4.1-4 3.1 2.8 2.4-2.2 3.4 3.4"></path></svg></button>`;
+  }
+
+  function billIdsFromRows(rows) {
+    return [...new Set((Array.isArray(rows) ? rows : []).map(row => String(row?.bill_id || '')).filter(Boolean))];
+  }
+
+  function billContextIdsForElement(element) {
+    if (element?.closest('#all-bills-table, #view-bills')) return billIdsFromRows(state.billList.rows);
+    if (element?.closest('#bill-table, #view-dashboard')) return billIdsFromRows(state.dashboard?.bills);
+    return state.billMediaContextIds.slice();
   }
 
   function rowsWithDateBands(rows, enabled = true) {
@@ -496,6 +506,7 @@
             });
             if (serial !== requestSerial || !popup.isConnected) return;
             currentData = result; currentPage = result.page;
+            state.billMediaContextIds = billIdsFromRows(result.rows);
             const useBands = sortBy === 'document_date';
             rowsNode.innerHTML = result.rows.length ? rowsWithDateBands(result.rows, useBands).map(({row:bill,bandClass}) => `<tr class="${bandClass}">
               <td>${billPreviewButton(bill)}</td><td>${escapeHtml(thaiDateTime(bill.created_at))}</td><td>${escapeHtml(thaiDate(bill.document_date))}</td>
@@ -531,6 +542,12 @@
           const period = monthInput.value || initialPeriod;
           exportBillSelection(button.dataset.ownerExport, { month:period, ...(safeOwnerIds.length ? { owner_ids:safeOwnerIds } : { owner_names:[label] }) }, [`เจ้าของบิล: ${label}`, `เดือน: ${thaiMonthPeriod(period)}`]);
         }));
+        popup.addEventListener('click', event => {
+          const preview = event.target.closest('[data-preview-doc]');
+          if (!preview) return;
+          event.stopPropagation();
+          previewDocument(preview.dataset.previewDoc, preview.dataset.previewBill, billIdsFromRows(currentData.rows));
+        });
         load(1);
       },
     });
@@ -1123,7 +1140,7 @@
       </dl>`;
   }
 
-  async function previewDocument(docId, billId = '') {
+  async function previewDocument(docId, billId = '', contextBillIds = []) {
     const existing = document.getElementById('bill-media-viewer');
     if (existing) existing.remove();
     const viewer = document.createElement('section');
@@ -1137,11 +1154,7 @@
     document.body.classList.add('bill-media-viewer-open');
     const panel = viewer.querySelector('.bill-media-viewer__panel');
     const cache = new Map();
-    const billIds = [...new Set([
-      ...(state.billList.rows || []),
-      ...(state.dashboard?.bills || []),
-      ...(state.pendingReviews || []),
-    ].map(item => String(item?.bill_id || '')).filter(Boolean))];
+    const billIds = [...new Set((contextBillIds.length ? contextBillIds : [billId]).map(String).filter(Boolean))];
     if (billId && !billIds.includes(String(billId))) billIds.push(String(billId));
     let billIndex = Math.max(0, billIds.indexOf(String(billId)));
     let bill = null;
@@ -1589,8 +1602,8 @@
     const renameOwner = event.target.closest('[data-rename-bill-owner]'); if (renameOwner) await openBillOwnerNameForm(renameOwner.dataset.renameBillOwner);
     const ownerBills = event.target.closest('[data-owner-bills]'); if (ownerBills) { let ids=[]; try { ids=JSON.parse(decodeURIComponent(ownerBills.dataset.ownerIds||'%5B%5D')); } catch (_) {} await openOwnerBills(ownerBills.dataset.ownerBills,ids); }
     const billOrder = event.target.closest('[data-bill-order]'); if (billOrder) { document.getElementById('bill-sort').value=billOrder.dataset.billOrder; await loadAllBills(1); }
-    const bill = event.target.closest('[data-bill]'); if (bill) await openBill(bill.dataset.bill);
-    const preview = event.target.closest('[data-preview-doc]'); if (preview) await previewDocument(preview.dataset.previewDoc, preview.dataset.previewBill);
+    const bill = event.target.closest('[data-bill]'); if (bill) { const context=billContextIdsForElement(bill); state.billMediaContextIds=context.length?context:[String(bill.dataset.bill)]; await openBill(bill.dataset.bill); }
+    const preview = event.target.closest('[data-preview-doc]'); if (preview) { const context=billContextIdsForElement(preview); state.billMediaContextIds=context.length?context:[String(preview.dataset.previewBill)]; await previewDocument(preview.dataset.previewDoc, preview.dataset.previewBill, state.billMediaContextIds); }
     const deleteBillButton = event.target.closest('[data-delete-bill]'); if (deleteBillButton) await deleteBillFromWeb(deleteBillButton.dataset.deleteBill);
     const restoreBillButton = event.target.closest('[data-restore-bill]'); if (restoreBillButton) await restoreBillFromWeb(restoreBillButton.dataset.restoreBill);
     const backfill = event.target.closest('#backfill-users'); if (backfill) { const result = await runBusy(() => gas('backfillLineUsernames'), 'กำลังอ่านชื่อจาก LINE…'); Swal.fire({icon:'success',title:'เรียบร้อย',text:result.message}); }

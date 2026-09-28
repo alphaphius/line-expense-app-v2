@@ -387,11 +387,14 @@ body.monitoring-portal .report-module-heading,body.monitoring-portal .report-tab
 .site-media-item>button:first-child{width:100%;height:100%;display:block;background:#f1e9e0;border:0;padding:0;cursor:zoom-in}
 .site-media-item img{width:100%;height:100%;object-fit:cover;display:block}
 .site-media-item:focus-within{flex-grow:3;outline:2px solid #986042;outline-offset:-2px}
-.site-media-remove{position:absolute;right:6px;top:6px;width:40px;height:40px;border-radius:50%;background:#fffdf9;color:#543729;border:1px solid #d8c3b2;font-size:24px}
 @media(hover:hover){.site-media-item:hover{flex-grow:3}}
 .wh-dialog.site-photo-dialog{width:min(96vw,1400px);max-width:96vw;padding:0}
-.site-photo-view{position:relative;background:#231d19;padding:44px 12px 12px}
-.site-photo-view>button{position:absolute;top:4px;right:8px;width:40px;height:40px;font-size:26px;color:white}
+.site-photo-view{position:relative;background:#231d19;padding:56px 12px 12px}
+.site-photo-view__actions{position:absolute;inset:8px 10px auto;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.site-photo-view__actions button{min-height:40px;border-radius:10px;padding:7px 12px;color:#fff;font-weight:700}
+.site-photo-delete{border:1px solid rgba(255,174,174,.55);background:rgba(116,32,32,.45);font-size:13px}
+.site-photo-delete:hover,.site-photo-delete:focus-visible{background:#9f3030}
+.site-photo-close{width:40px;padding:0!important;font-size:26px}
 .site-photo-view img{display:block;width:100%;max-height:82dvh;object-fit:contain}
 @media(max-width:600px){.site-project-panel{padding:12px}.site-media-carousel{height:180px}.site-media-item{flex-basis:65%}.site-project-panel textarea{font-size:16px}}
 @media(prefers-reduced-motion:reduce){.site-media-item{transition:none}}
