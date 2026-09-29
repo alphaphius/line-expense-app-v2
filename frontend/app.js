@@ -192,7 +192,7 @@
   }
 
   function billContextIdsForElement(element) {
-    if (element?.closest('#all-bills-table, #view-bills')) return billIdsFromRows(state.billList.rows);
+    if (element?.closest('#all-bills-table, #view-bills')) return state.billList.context_ids?.length ? state.billList.context_ids.map(String) : billIdsFromRows(state.billList.rows);
     if (element?.closest('#bill-table, #view-dashboard')) return billIdsFromRows(state.dashboard?.bills);
     return state.billMediaContextIds.slice();
   }
@@ -478,6 +478,7 @@
         <label>เรียงรายการ<select id="owner-bills-sort"><option value="created_at:desc">เวลาอัปโหลดใหม่สุด</option><option value="document_date:desc">วันที่ในบิลใหม่สุด</option></select></label>
       </div>
       <div id="owner-bills-feedback" class="mb-2 text-xs text-slate-500" aria-live="polite">กำลังโหลดรายการ…</div>
+      <div id="owner-bills-total" class="owner-bills-total" aria-live="polite"></div>
       <div class="owner-bills-table-wrap"><table class="owner-bills-table"><thead><tr><th>รูป</th><th>เวลาอัปโหลด</th><th>วันที่ในบิล</th><th>ร้านค้า</th><th>โครงการ</th><th>ยอดรวม</th><th>สถานะ</th></tr></thead><tbody id="owner-bills-rows"><tr><td colspan="7" class="text-center">กำลังโหลด…</td></tr></tbody></table></div>
       <div class="owner-bills-footer"><div class="owner-bills-footer__pages"><button id="owner-bills-prev" type="button">ก่อนหน้า</button><span id="owner-bills-page">หน้า 1/1</span><button id="owner-bills-next" type="button">ถัดไป</button></div><div class="owner-bills-export"><button type="button" data-owner-export="word">Export DOCX</button><button type="button" data-owner-export="excel">Export Excel</button><button id="owner-bills-all" type="button" class="owner-bills-all">ดูบิลทั้งหมดของชื่อนี้</button></div></div>`,
       didOpen:popup => {
@@ -501,12 +502,13 @@
           previous.disabled = true; next.disabled = true;
           try {
             const result = await gas('listBills', {
-              page, page_size:20, year, month, sort_by:sortBy, sort_dir:sortDir,
+              page, page_size:20, year, month, sort_by:sortBy, sort_dir:sortDir, include_context:true,
               ...(safeOwnerIds.length ? { owner_ids:safeOwnerIds } : { owner_names:[label] }),
             });
             if (serial !== requestSerial || !popup.isConnected) return;
             currentData = result; currentPage = result.page;
-            state.billMediaContextIds = billIdsFromRows(result.rows);
+            state.billMediaContextIds = result.context_ids?.length ? result.context_ids.map(String) : billIdsFromRows(result.rows);
+            popup.querySelector('#owner-bills-total').textContent = `ยอดสุทธิ ${thaiMonthPeriod(period)} · ${money(result.net_total ?? result.rows.reduce((sum,bill)=>sum+Number(bill.grand_total||0),0))}`;
             const useBands = sortBy === 'document_date';
             rowsNode.innerHTML = result.rows.length ? rowsWithDateBands(result.rows, useBands).map(({row:bill,bandClass}) => `<tr class="${bandClass}">
               <td>${billPreviewButton(bill)}</td><td>${escapeHtml(thaiDateTime(bill.created_at))}</td><td>${escapeHtml(thaiDate(bill.document_date))}</td>
@@ -546,7 +548,7 @@
           const preview = event.target.closest('[data-preview-doc]');
           if (!preview) return;
           event.stopPropagation();
-          previewDocument(preview.dataset.previewDoc, preview.dataset.previewBill, billIdsFromRows(currentData.rows));
+          previewDocument(preview.dataset.previewDoc, preview.dataset.previewBill, currentData.context_ids?.length ? currentData.context_ids.map(String) : billIdsFromRows(currentData.rows));
         });
         load(1);
       },
@@ -647,7 +649,7 @@
     const [sortBy, sortDir] = (document.getElementById('bill-sort').value || 'document_date:desc').split(':');
     const filters = Object.assign(currentBillFilters(), {
       page, page_size: Number(document.getElementById('bill-page-size').value) || 20, query: document.getElementById('bill-search').value,
-      sort_by: sortBy, sort_dir: sortDir,
+      sort_by: sortBy, sort_dir: sortDir, include_context:true,
     });
     try {
       state.billList = await gas('listBills', filters);

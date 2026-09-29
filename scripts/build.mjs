@@ -17,12 +17,12 @@ for (const file of ['index.html', 'manifest.webmanifest']) {
   await cp(path.join(frontend, file), path.join(dist, file));
 }
 
-const versionedAssets = ['styles.css','workhub-modules.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','workhub-core.js','module-store.js','tasks.js','payroll.js','report-xlsx.js','reports.js','app.js','pwa.js'];
+const versionedAssets = ['styles.css','workhub-modules.css','config.js','api.js','image-optimizer.js','protected-access.js','receipts.js','workhub-core.js','module-store.js','tasks.js','payroll.js','report-xlsx.js','survey-core.js','survey.js','reports.js','app.js','pwa.js'];
 let builtIndex = await readFile(path.join(dist, 'index.html'), 'utf8');
 for (const asset of versionedAssets) builtIndex = builtIndex.replaceAll(`./${asset}`, `./${asset}?v=${packageJson.version}`);
 await writeFile(path.join(dist, 'index.html'), builtIndex);
 
-for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'workhub-core.js', 'module-store.js', 'tasks.js', 'payroll.js', 'report-xlsx.js', 'reports.js', 'app.js', 'pwa.js']) {
+for (const file of ['api.js', 'image-optimizer.js', 'protected-access.js', 'receipts.js', 'workhub-core.js', 'module-store.js', 'tasks.js', 'payroll.js', 'report-xlsx.js', 'survey-core.js', 'survey.js', 'reports.js', 'app.js', 'pwa.js']) {
   await build({
     entryPoints: [path.join(frontend, file)],
     outfile: path.join(dist, file),
@@ -59,6 +59,7 @@ await new Promise((resolve, reject) => {
 try { await cp(path.join(frontend, 'icons'), path.join(dist, 'icons'), { recursive: true }); } catch (_) {}
 try { await cp(path.join(frontend, 'assets'), path.join(dist, 'assets'), { recursive: true }); } catch (_) {}
 await Promise.all([
+  cp(path.join(root, 'node_modules', 'proj4', 'dist', 'proj4.js'), path.join(dist, 'vendor', 'proj4.js')),
   cp(path.join(root, 'node_modules', 'sweetalert2', 'dist', 'sweetalert2.all.min.js'), path.join(dist, 'vendor', 'sweetalert2.all.min.js')),
   cp(path.join(root, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'), path.join(dist, 'vendor', 'chart.umd.js')),
   cp(path.join(root, 'node_modules', 'jszip', 'dist', 'jszip.min.js'), path.join(dist, 'vendor', 'jszip.min.js')),

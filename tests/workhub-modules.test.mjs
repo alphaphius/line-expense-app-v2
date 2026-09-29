@@ -148,7 +148,7 @@ test('bill preview keeps the active list context and owner export accepts a full
     read('frontend/app.js'), read('server/actions/masters.mjs'),
   ]);
   assert.match(app, /billMediaContextIds/);
-  assert.match(app, /previewDocument\(preview\.dataset\.previewDoc, preview\.dataset\.previewBill, billIdsFromRows\(currentData\.rows\)\)/);
+  assert.match(app, /currentData\.context_ids\?\.length/);
   assert.doesNotMatch(app, /\.\.\.\(state\.billList\.rows \|\| \[\]\),\s*\.\.\.\(state\.dashboard\?\.bills \|\| \[\]\)/);
   assert.match(masters, /\^\(\\d\{4\}\)-\(\\d\{2\}\)\$/);
   assert.match(masters, /DATE_FORMAT\(COALESCE\(b\.document_date, b\.created_at\), '%Y-%m'\) = :period/);

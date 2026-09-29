@@ -69,7 +69,7 @@ async function mockAction(action, args = []) {
   if (action === 'getBillOwners') return mockData.masters.billOwners;
   if (action === 'listBills') {
     const filters=args[0]||{}, all=filterMockBills(filters), pageSize=Number(filters.page_size)||25, pages=Math.max(1,Math.ceil(all.length/pageSize)), page=Math.max(1,Math.min(pages,Number(filters.page)||1));
-    return { rows:all.slice((page-1)*pageSize,page*pageSize), total:all.length, page, pages, pageSize };
+    return { rows:all.slice((page-1)*pageSize,page*pageSize), total:all.length, net_total:all.reduce((sum,bill)=>sum+Number(bill.grand_total||0),0), context_ids:filters.include_context?all.map(bill=>bill.bill_id):[], page, pages, pageSize };
   }
   if (action === 'exportMonthlyBillExcel') {
     const rows=filterMockBills(args[0]||{}), buffer=await createBillXlsx(rows);

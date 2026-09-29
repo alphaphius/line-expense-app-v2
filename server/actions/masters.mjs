@@ -186,7 +186,7 @@ export async function listBills(filters = {}) {
   }
   if (filters.query) { where.push("LOWER(CONCAT_WS(' ', b.document_no, b.vendor_name, b.vendor_tax_id, b.buyer_name, b.description, b.notes, b.source_user_id, b.source_user_name, lu.display_name, lu.workhub_name, p.project_name, co.company_name, c.category_name)) LIKE :query"); params.query = `%${clean(filters.query, 180).toLowerCase()}%`; }
   const from = `FROM bills b LEFT JOIN projects p ON p.project_id=b.project_id LEFT JOIN companies co ON co.company_id=b.company_id LEFT JOIN categories c ON c.category_id=b.category_id LEFT JOIN line_users lu ON lu.user_id=b.source_user_id LEFT JOIN (SELECT bill_id,SUBSTRING_INDEX(GROUP_CONCAT(doc_id ORDER BY page_no),',',1) AS preview_doc_id FROM bill_documents GROUP BY bill_id) docs ON docs.bill_id=b.bill_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
-  const count = await one(`SELECT COUNT(*) AS total ${from}`, params);
+  const count = await one(`SELECT COUNT(*) AS total, COALESCE(SUM(b.grand_total),0) AS net_total ${from}`, params);
   const allowedSorts = new Set(['document_date','created_at','grand_total','vendor_name','status','document_no']);
   const sort = allowedSorts.has(filters.sort_by) ? filters.sort_by : 'document_date';
   const direction = filters.sort_dir === 'asc' ? 'ASC' : 'DESC';
@@ -195,8 +195,10 @@ export async function listBills(filters = {}) {
   const page = Math.max(1, Math.min(pages, Number(filters.page) || 1));
   params.limit = pageSize;
   params.offset = (page - 1) * pageSize;
-  const rows = await select(`SELECT b.*, p.project_name, co.company_name, c.category_name, docs.preview_doc_id, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name, COALESCE(NULLIF(lu.bill_color,''),'#8F5F42') AS owner_color ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC LIMIT :limit OFFSET :offset`, params);
-  return { rows: rows.map(enrichBill), total: Number(count.total), page, pageSize, pages };
+  const rows = await select(`SELECT b.*, p.project_name, co.company_name, c.category_name, docs.preview_doc_id, COALESCE(NULLIF(lu.workhub_name, ''), NULLIF(b.source_user_name, ''), NULLIF(lu.display_name, ''), IF(b.source='LINE','ผู้ส่งผ่าน LINE','เว็บแอป')) AS owner_display_name, COALESCE(NULLIF(lu.bill_color,''),'#8F5F42') AS owner_color ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC, b.bill_id ASC LIMIT :limit OFFSET :offset`, params);
+  const context = filters.include_context === true
+    ? await select(`SELECT b.bill_id ${from} ORDER BY b.${sort} ${direction}, b.created_at DESC, b.bill_id ASC`, params) : [];
+  return { rows: rows.map(enrichBill), total: Number(count.total), net_total:Number(count.net_total), context_ids:context.map(row=>row.bill_id), page, pageSize, pages };
 }
 
 export async function getDashboard(filters = {}) {
