@@ -228,10 +228,10 @@ export async function getDashboard(filters = {}) {
   }
   const personBreakdowns = [...ownerCategories.values()].map(value => ({ ...value, categories: [...value.categories.values()].sort((a,b)=>b.total-a.total) })).sort((a,b)=>b.total-a.total);
   const categoryDays = new Map();
-  for (const row of selectedPeriodRows) {
-    const label=row.category_name||'ยังไม่จัดกลุ่ม',day=String(row.document_date||row.created_at).slice(0,10);
-    const category=categoryDays.get(label)||{label,total:0,days:{}};
-    category.total+=number(row.grand_total);category.days[day]=(category.days[day]||0)+number(row.grand_total);categoryDays.set(label,category);
+  for (const row of rows.filter(row=>String(row.document_date||row.created_at).slice(0,4)===currentYear)) {
+    const label=row.category_name||'ยังไม่จัดกลุ่ม',month=String(row.document_date||row.created_at).slice(0,7);
+    const category=categoryDays.get(label)||{label,total:0,months:{}};
+    category.total+=number(row.grand_total);category.months[month]=(category.months[month]||0)+number(row.grand_total);categoryDays.set(label,category);
   }
   return {
     filters: { period, currentPeriod: new Date().toISOString().slice(0,7), viewMode, selectedOwners, ownersProvided: Array.isArray(filters.owners) },

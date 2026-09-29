@@ -445,6 +445,7 @@
 .weekly-group-filter label b { color:#4c392f; font-size:10px; }
 .weekly-group-filter label small { color:#907d72; font-size:8px; }
 .ai-usage-page { display:grid; gap:18px; max-width:1500px; margin:0 auto; }
+.storage-usage dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:16px 0}.storage-usage dl>div{padding:12px;background:#f8f1e8;border-radius:8px}.storage-usage dd{font-size:20px;font-weight:750;margin-top:6px}.storage-usage p{font-size:12px;color:#776151}
 .ai-usage-hero { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
 .ai-usage-hero > div:first-child p { color:#a16646; font-size:10px; font-weight:850; letter-spacing:.15em; }
 .ai-usage-hero h2 { margin-top:5px; color:#38271f; font-size:clamp(24px,3vw,40px); font-weight:800; }

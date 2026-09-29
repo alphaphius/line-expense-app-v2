@@ -1,4 +1,5 @@
 import { config } from './config.mjs';
+import { getStorageUsage } from './storage-usage.mjs';
 import { lineQueueWarnings } from './line-queue.mjs';
 import { execute, one, ping, select, transaction } from './db.mjs';
 import { readBuffer, storeBuffer } from './files.mjs';
@@ -62,7 +63,7 @@ async function getAiUsageSummary(){
     const requests=Number(usage.requests)||0,tokens=Number(usage.total_tokens)||0,requestLimit=Number(setting.request_limit_day)||0,tokenLimit=Number(setting.token_limit_day)||0;
     return{...scope,plan_name:setting.plan_name||'FREE',requests,successful:Number(usage.successful)||0,failed:Math.max(0,requests-(Number(usage.successful)||0)),input_tokens:Number(usage.input_tokens)||0,output_tokens:Number(usage.output_tokens)||0,thought_tokens:Number(usage.thought_tokens)||0,total_tokens:tokens,avg_latency_ms:Number(usage.avg_latency_ms)||0,request_limit_day:requestLimit,token_limit_day:tokenLimit,requests_remaining:requestLimit?Math.max(0,requestLimit-requests):null,tokens_remaining:tokenLimit?Math.max(0,tokenLimit-tokens):null,request_percent:requestLimit?Math.min(100,requests/requestLimit*100):null,token_percent:tokenLimit?Math.min(100,tokens/tokenLimit*100):null};
   });
-  return{plan:'FREE',day_label:window.label,reset_at:window.resetAt,time_zone:'America/Los_Angeles',scopes,trend:trend.map(publicRow),errors:errors.map(publicRow),note:'นับเฉพาะคำขอที่ส่งจาก WorkHub โควตาจริงใช้ร่วมกันระดับ Google Cloud project และ model'};
+  return{storage:await getStorageUsage(),plan:'FREE',day_label:window.label,reset_at:window.resetAt,time_zone:'America/Los_Angeles',scopes,trend:trend.map(publicRow),errors:errors.map(publicRow),note:'นับเฉพาะคำขอที่ส่งจาก WorkHub โควตาจริงใช้ร่วมกันระดับ Google Cloud project และ model'};
 }
 
 async function saveAiQuotaSettings(payload={}){

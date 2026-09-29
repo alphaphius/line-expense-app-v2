@@ -47,7 +47,7 @@ const mockData = {
 };
 
 const mockCategorySeries=new Map();
-for(const bill of mockData.bills){const label=bill.category_name||'ยังไม่จัดกลุ่ม',row=mockCategorySeries.get(label)||{label,total:0,days:{}};row.total+=bill.grand_total;row.days[bill.document_date]=(row.days[bill.document_date]||0)+bill.grand_total;mockCategorySeries.set(label,row);}
+for(const bill of mockData.bills){const label=bill.category_name||'ยังไม่จัดกลุ่ม',row=mockCategorySeries.get(label)||{label,total:0,months:{}};row.total+=bill.grand_total;row.months[bill.document_date.slice(0,7)]=(row.months[bill.document_date.slice(0,7)]||0)+bill.grand_total;mockCategorySeries.set(label,row);}
 mockData.dashboard.categorySeries=[...mockCategorySeries.values()];
 
 function filterMockBills(filters = {}) {
@@ -65,6 +65,7 @@ function filterMockBills(filters = {}) {
 }
 
 async function mockAction(action, args = []) {
+  if(action==='getAiUsageSummary'){const {scanStorage}=await import('../server/storage-usage.mjs');return {reset_at:new Date().toISOString(),scopes:[],trend:[],errors:[],storage:await scanStorage({codeRoot:path.resolve(root,'..'),dataRoot:path.resolve(root,'..','.workhub-data'),query:async()=>{throw new Error('Local preview has no database connection');}}),note:'Local preview · ยังไม่เชื่อมบริการ AI บน NAS'};}
   if (action === 'health') return { appName:mockData.appName, appVersion:'3.1.0', apiVersion:'2.0', schemaVersion:3, accessMode:'OPEN', loginRequired:false, sessionRequired:false, pinMustChange:false, liffId:'', frontendUrl:mockData.frontendUrl, modules:mockData.modules };
   if (action === 'openSession') return mockSession;
   if (action === 'openProtectedSession') return { token:'local-protected-session-token-000000000', expiresAt:Date.now() + 6 * 60 * 60 * 1000 };

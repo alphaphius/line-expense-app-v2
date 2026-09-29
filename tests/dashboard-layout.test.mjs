@@ -10,8 +10,9 @@ test('category graph aggregates all monthly bills rather than the 50 dashboard r
   const context=vm.createContext({normalizePeriod:p=>p,select:async()=>rows,enrichBill:r=>r,number:v=>Number(v)||0,aggregate:()=>[],aggregateOwners:()=>[],ownerLabel:r=>r.source_user_name});
   new vm.Script(source.slice(source.indexOf('export async function getDashboard('),source.indexOf('export async function getBootstrapData(')).replace('export async','async')+';globalThis.getDashboard=getDashboard;').runInContext(context);
   const all=await context.getDashboard({period:'2026-09'});
-  assert.equal(all.bills.length,50);assert.equal(all.categorySeries.reduce((s,c)=>s+c.total,0),6000);
-  assert.equal(all.categorySeries.find(c=>c.label==='วัสดุ').days['2026-09-15'],3000);
+  assert.equal(all.bills.length,50);assert.equal(all.categorySeries.reduce((s,c)=>s+c.total,0),6999);
+  assert.equal(all.categorySeries.find(c=>c.label==='วัสดุ').months['2026-09'],3000);
+  assert.equal(all.categorySeries.find(c=>c.label==='วัสดุ').months['2026-08'],999);
   const owner=await context.getDashboard({period:'2026-09',view_mode:'person',owners:[]});
   assert.equal(owner.categorySeries.length,0);
 });
