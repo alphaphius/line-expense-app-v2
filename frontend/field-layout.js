@@ -1,6 +1,47 @@
 (function () {
   'use strict';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function bindSort(parent,{itemSelector,handleSelector,onCommit}) {
+    if(!parent)return;
+    parent.querySelectorAll(handleSelector).forEach(handle=>{
+      handle.draggable=false;handle.style.touchAction='none';
+      handle.onpointerdown=event=>{
+        if(event.button!==0||parent.dataset.sorting)return;
+        const item=handle.closest(itemSelector);if(!item)return;
+        event.preventDefault();event.stopPropagation();
+        const original=[...parent.querySelectorAll(itemSelector)],from=original.indexOf(item),bounds=item.getBoundingClientRect(),ghost=item.cloneNode(true),layer=parent.closest('dialog')||document.body;
+        const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let x=event.clientX,y=event.clientY,lastX=x,lastY=y,active=true,frame,lastMove=0;
+        ghost.querySelectorAll('[id]').forEach(node=>node.removeAttribute('id'));ghost.removeAttribute('id');ghost.setAttribute('aria-hidden','true');ghost.inert=true;ghost.classList.add('field-sort-ghost');
+        Object.assign(ghost.style,{position:'fixed',left:bounds.left+'px',top:bounds.top+'px',width:bounds.width+'px',height:bounds.height+'px',margin:'0',gridColumn:'auto',pointerEvents:'none',zIndex:'2147483647'});layer.append(ghost);
+        item.classList.add('field-sort-placeholder');parent.dataset.sorting='true';handle.setAttribute('aria-grabbed','true');
+        let scroller=parent;while(scroller!==document.body&&!(scroller.scrollHeight>scroller.clientHeight&&/auto|scroll/.test(getComputedStyle(scroller).overflowY)))scroller=scroller.parentElement;
+        function preview(){
+          if(!active)return;
+          ghost.style.transform=`translate(${x-event.clientX}px,${y-event.clientY}px)`;
+          const viewport=scroller.getBoundingClientRect();if(y<viewport.top+36)scroller.scrollTop-=12;else if(y>viewport.bottom-36)scroller.scrollTop+=12;
+          if(Math.hypot(x-lastX,y-lastY)>7&&performance.now()-lastMove>90){
+            const target=document.elementFromPoint(x,y)?.closest(itemSelector);
+            if(target&&target!==item&&target.parentElement===item.parentElement){
+              const nodes=[...parent.querySelectorAll(itemSelector)],before=new Map(nodes.map(node=>[node,node.getBoundingClientRect()])),a=nodes.indexOf(item),b=nodes.indexOf(target);
+              nodes.forEach(node=>node.getAnimations().forEach(animation=>animation.cancel()));
+              target.parentElement.insertBefore(item,a<b?target.nextSibling:target);
+              if(!reduced)nodes.forEach(node=>{const old=before.get(node),now=node.getBoundingClientRect();node.animate([{transform:`translate(${old.left-now.left}px,${old.top-now.top}px)`},{transform:'translate(0,0)'}],{duration:180,easing:'cubic-bezier(.16,1,.3,1)'});});
+              lastMove=performance.now();lastX=x;lastY=y;
+            }
+          }
+          frame=requestAnimationFrame(preview);
+        }
+        function finish(commit){
+          if(!active)return;active=false;cancelAnimationFrame(frame);document.removeEventListener('pointermove',moving);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',cancel);document.removeEventListener('keydown',key);window.removeEventListener('blur',cancel);layer.removeEventListener('close',cancel);
+          const order=[...parent.querySelectorAll(itemSelector)],to=order.indexOf(item);ghost.remove();item.classList.remove('field-sort-placeholder');delete parent.dataset.sorting;handle.removeAttribute('aria-grabbed');original.forEach(node=>node.getAnimations().forEach(animation=>animation.cancel()));
+          if(!commit)original.forEach(node=>item.parentElement.append(node));else if(from!==to)onCommit(from,to,order);
+        }
+        const moving=e=>{if(e.pointerId!==event.pointerId)return;e.preventDefault();x=e.clientX;y=e.clientY;},up=e=>{if(e.pointerId===event.pointerId)finish(true);},cancel=()=>finish(false),key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(false);}};
+        document.addEventListener('pointermove',moving,{passive:false});document.addEventListener('pointerup',up);document.addEventListener('pointercancel',cancel);document.addEventListener('keydown',key);window.addEventListener('blur',cancel);layer.addEventListener('close',cancel,{once:true});frame=requestAnimationFrame(preview);
+      };
+    });
+  }
   function settings(schema,device) {
     const layout=schema.layout?.[device]||{},keys=schema.fields.map(field=>field.key),columns=Math.max(1,Math.min(device==='mobile'?3:4,Number(layout.columns)||(device==='mobile'?1:2)));
     return {columns,order:[...new Set([...(layout.order||[]).filter(key=>keys.includes(key)),...keys])],spans:{...layout.spans}};
@@ -20,12 +61,10 @@
       host.querySelector('[data-layout-columns]').onchange=e=>{e.stopPropagation();layout.columns=Number(e.target.value);update(layout);render();};
       host.querySelectorAll('[data-layout-span]').forEach(select=>select.onchange=e=>{e.stopPropagation();layout.spans[select.dataset.layoutSpan]=Number(select.value);update(layout);render();});
       host.querySelectorAll('[data-layout-up],[data-layout-down]').forEach(b=>b.onclick=e=>{e.stopPropagation();const key=b.dataset.layoutUp||b.dataset.layoutDown,index=fields.findIndex(field=>field.key===key);move(key,fields[index+(b.hasAttribute('data-layout-up')?-1:1)]?.key);});
+      bindSort(host.querySelector('.field-layout-preview'),{itemSelector:'[data-layout-key]',handleSelector:'[data-layout-drag]',onCommit:(_,__,tiles)=>{const next=settings(schema,device),keys=tiles.map(tile=>tile.dataset.layoutKey),visible=new Set(keys);let index=0;next.order=next.order.map(key=>visible.has(key)?keys[index++]:key);update(next);render();}});
+      /* Native drag events remain supported for automation and non-pointer clients. */
       host.querySelectorAll('[data-layout-drag]').forEach(handle=>{
         handle.ondragstart=e=>{e.stopPropagation();drag=handle.dataset.layoutDrag;e.dataTransfer.setData('text/plain',drag);e.dataTransfer.effectAllowed='move';};
-        handle.onpointerdown=e=>{e.preventDefault();e.stopPropagation();drag=handle.dataset.layoutDrag;handle.closest('[data-layout-key]').classList.add('is-dragging');handle.setPointerCapture(e.pointerId);};
-        handle.onpointermove=e=>{if(!drag)return;e.preventDefault();host.querySelectorAll('.is-drop-target').forEach(n=>n.classList.remove('is-drop-target'));document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-layout-key]')?.classList.add('is-drop-target');};
-        handle.onpointerup=e=>{if(!drag)return;const key=drag;drag=null;const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-layout-key]');host.querySelectorAll('.is-dragging,.is-drop-target').forEach(n=>n.classList.remove('is-dragging','is-drop-target'));if(target&&host.contains(target))move(key,target.dataset.layoutKey);};
-        handle.onpointercancel=()=>{drag=null;host.querySelectorAll('.is-drop-target').forEach(n=>n.classList.remove('is-drop-target'));};
       });
       host.querySelectorAll('[data-layout-key]').forEach(tile=>{tile.ondragover=e=>{if(!drag)return;e.preventDefault();e.stopPropagation();};tile.ondrop=e=>{if(!drag)return;e.preventDefault();e.stopPropagation();const key=drag;drag=null;move(key,tile.dataset.layoutKey);};});
     }
@@ -39,5 +78,5 @@
       for(const child of grid.children){const control=child.querySelector('[name],[data-report-image],[data-formula-output]'),key=control?.name||control?.dataset.reportImage||control?.dataset.formulaOutput;if(!key)continue;child.style.setProperty('--field-desktop-order',Math.max(0,desktop.order.indexOf(key)));child.style.setProperty('--field-mobile-order',Math.max(0,mobile.order.indexOf(key)));child.style.setProperty('--field-desktop-span',Math.min(desktop.columns,Math.max(1,Number(desktop.spans[key])||1)));child.style.setProperty('--field-mobile-span',Math.min(mobile.columns,Math.max(1,Number(mobile.spans[key])||1)));}
     });
   }
-  window.WorkHubFieldLayout=Object.freeze({mount,apply,settings});
+  window.WorkHubFieldLayout=Object.freeze({mount,apply,settings,bindSort});
 })();
