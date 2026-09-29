@@ -227,6 +227,12 @@ export async function getDashboard(filters = {}) {
     cat.count += 1; cat.total += number(row.grand_total); value.categories.set(category, cat); ownerCategories.set(owner, value);
   }
   const personBreakdowns = [...ownerCategories.values()].map(value => ({ ...value, categories: [...value.categories.values()].sort((a,b)=>b.total-a.total) })).sort((a,b)=>b.total-a.total);
+  const categoryDays = new Map();
+  for (const row of selectedPeriodRows) {
+    const label=row.category_name||'ยังไม่จัดกลุ่ม',day=String(row.document_date||row.created_at).slice(0,10);
+    const category=categoryDays.get(label)||{label,total:0,days:{}};
+    category.total+=number(row.grand_total);category.days[day]=(category.days[day]||0)+number(row.grand_total);categoryDays.set(label,category);
+  }
   return {
     filters: { period, currentPeriod: new Date().toISOString().slice(0,7), viewMode, selectedOwners, ownersProvided: Array.isArray(filters.owners) },
     ownerOptions,
@@ -240,6 +246,7 @@ export async function getDashboard(filters = {}) {
     byMonth: aggregate(rows, row => String(row.document_date || row.created_at).slice(0,7)),
     byProject: aggregate(selectedPeriodRows, row => row.project_name || 'ไม่ระบุโครงการ'),
     byCategory: aggregate(selectedPeriodRows, row => row.category_name || 'ยังไม่จัดกลุ่ม'),
+    categorySeries:[...categoryDays.values()].sort((a,b)=>b.total-a.total),
     uploaderSummary, personBreakdowns, bills: selectedPeriodRows.slice(0,50),
   };
 }

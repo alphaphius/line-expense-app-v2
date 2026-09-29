@@ -2,7 +2,7 @@ const CACHE_NAME = 'workhub-shell-24';
 const SHELL = ['./', './index.html', './styles.css', './workhub-modules.css', './config.js', './api.js', './image-optimizer.js', './protected-access.js', './receipts.js', './workhub-core.js', './module-store.js', './tasks.js', './payroll.js', './report-xlsx.js', './reports.js', './app.js', './pwa.js', './manifest.webmanifest', './icons/app-icon-wh-192.png', './icons/app-icon-wh-512.png', './vendor/sweetalert2.all.min.js', './vendor/chart.umd.js', './vendor/qrcode.js', './vendor/jszip.min.js', './vendor/markerclusterer.umd.js'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll([...SHELL,'./survey-core.js','./survey.js','./vendor/proj4.js'])).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll([...SHELL,'./survey-core.js','./survey.js','./field-layout.js','./vendor/proj4.js'])).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {

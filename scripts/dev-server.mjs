@@ -46,6 +46,10 @@ const mockData = {
   },
 };
 
+const mockCategorySeries=new Map();
+for(const bill of mockData.bills){const label=bill.category_name||'ยังไม่จัดกลุ่ม',row=mockCategorySeries.get(label)||{label,total:0,days:{}};row.total+=bill.grand_total;row.days[bill.document_date]=(row.days[bill.document_date]||0)+bill.grand_total;mockCategorySeries.set(label,row);}
+mockData.dashboard.categorySeries=[...mockCategorySeries.values()];
+
 function filterMockBills(filters = {}) {
   let rows = mockData.bills.slice();
   if (Array.isArray(filters.owner_ids)) rows = rows.filter(row => filters.owner_ids.includes(row.source_user_id));

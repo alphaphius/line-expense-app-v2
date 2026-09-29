@@ -299,6 +299,26 @@
     if (selected) element.value = selected;
   }
 
+  let categoryChart = null;
+  const hiddenBillCategories = new Set();
+  function renderCategoryChart(data) {
+    const period=data.summary?.currentMonth?.period||data.filters?.period||state.dashboardFilters.period;
+    let series=data.categorySeries;
+    if(!Array.isArray(series)){
+      const groups=new Map();for(const row of data.bills||[]){const label=row.category_name||'ยังไม่จัดกลุ่ม',day=String(row.document_date||row.created_at).slice(0,10);if(!day.startsWith(period))continue;const item=groups.get(label)||{label,total:0,days:{}};item.total+=Number(row.grand_total)||0;item.days[day]=(item.days[day]||0)+(Number(row.grand_total)||0);groups.set(label,item);}series=[...groups.values()];
+    }
+    const [year,month]=String(period||'').split('-').map(Number),days=new Date(year,month,0).getDate()||31;
+    const colors=['#99603D','#287E89','#6C56A1','#3C824E','#B74849','#B28A21','#4775B0','#8C527A'];
+    document.getElementById('category-chart-period').textContent=`${thaiMonthPeriod(period)} · ยอดรายวัน (บาท) · เลือกเส้นที่ต้องการแสดง`;
+    document.getElementById('category-chart-options').innerHTML=series.map((item,index)=>`<label style="--category-color:${colors[index%colors.length]}"><input type="checkbox" data-category-series="${index}" ${hiddenBillCategories.has(item.label)?'':'checked'}><i aria-hidden="true"></i><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong></label>`).join('');
+    document.getElementById('category-chart-empty').classList.toggle('hidden',series.length>0);
+    if(categoryChart)categoryChart.destroy();
+    categoryChart=new Chart(document.getElementById('category-history-chart'),{type:'line',data:{labels:Array.from({length:days},(_,i)=>i+1),datasets:series.map((item,index)=>({label:item.label,data:Array.from({length:days},(_,i)=>Number(item.days[`${period}-${String(i+1).padStart(2,'0')}`]||0)),borderColor:colors[index%colors.length],backgroundColor:colors[index%colors.length],borderDash:index>=colors.length?[5,3]:[],borderWidth:2,pointRadius:2,tension:0,hidden:hiddenBillCategories.has(item.label)}))},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:context=>`${context.dataset.label}: ${money(context.parsed.y)}`}}},scales:{x:{title:{display:true,text:'วันที่'},ticks:{maxTicksLimit:16}},y:{beginAtZero:true,ticks:{callback:value=>Number(value).toLocaleString('th-TH')}}}}});
+    const toggle=(index,visible)=>{const name=series[index].label;if(visible)hiddenBillCategories.delete(name);else hiddenBillCategories.add(name);categoryChart.setDatasetVisibility(index,visible);categoryChart.update();};
+    document.querySelectorAll('[data-category-series]').forEach(input=>input.onchange=()=>toggle(Number(input.dataset.categorySeries),input.checked));
+    const all=visible=>{document.querySelectorAll('[data-category-series]').forEach(input=>{input.checked=visible;toggle(Number(input.dataset.categorySeries),visible);});};
+    document.getElementById('category-show-all').onclick=()=>all(true);document.getElementById('category-hide-all').onclick=()=>all(false);
+  }
   function renderDashboard() {
     const data = state.dashboard;
     renderDashboardControls(data);
@@ -321,6 +341,7 @@
         <strong>${money(project.total)}</strong>
       </div>`).join('') : '<p class="previous-project-empty">เดือนก่อนยังไม่มีรายการที่แยกตามโครงการ</p>';
     renderMonthlyHistoryChart(data.byMonth);
+    renderCategoryChart(data);
     renderUploaderSummary(data.uploaderSummary);
     renderPersonBreakdowns(data.personBreakdowns);
     const personMode = state.dashboardFilters.view_mode === 'person';
@@ -1023,6 +1044,8 @@
     const submitButton = event.submitter || event.currentTarget.querySelector('[type="submit"]');
     if (submitButton && submitButton.disabled) return;
     if (submitButton) { submitButton.disabled = true; submitButton.dataset.originalText = submitButton.textContent; submitButton.textContent = 'กำลังเตรียมรูป…'; }
+    activityBatchProgress={current:1,total:batchMode?files.length:1};
+    document.getElementById('activity-toast').classList.remove('is-review');
     showActivityToast('กำลังบีบอัดรูป…', 'เตรียมไฟล์ให้เล็กลงก่อนอัปโหลด');
     try {
       const encodedFiles = await window.ImageOptimizer.prepareFiles(files, progress => {
@@ -1036,6 +1059,7 @@
       const jobs = [];
       if (batchMode) {
         for (let index = 0; index < encodedFiles.length; index += 1) {
+          activityBatchProgress={current:index+1,total:encodedFiles.length};
           showActivityToast('กำลังเก็บบิลแบบเป็นชุด…', `กำลังบันทึกบิล ${index + 1}/${encodedFiles.length}`);
           jobs.push(await window.V2Api.callWithRequestId('submitBillPages', window.V2Api.newRequestId(), { ...sharedPayload, expected_pages:1, files:[encodedFiles[index]] }));
         }
@@ -1044,15 +1068,17 @@
       }
       document.getElementById('upload-form').reset(); resetUploadFiles(); previewFiles(); await bootstrap();
       for (let index = 0; index < jobs.length; index += 1) {
+        activityBatchProgress={current:index+1,total:jobs.length};
         showActivityToast(batchMode ? `กำลังวิเคราะห์บิล ${index + 1}/${jobs.length}` : 'กำลังวิเคราะห์บิล', 'รูปถูกเก็บใน WorkHub แล้ว ไม่ต้องอัปโหลดซ้ำ');
         const bill = await waitForBillAiJob(jobs[index]);
-        if (bill) { await bootstrap(); await showBillResult(bill); }
+        if (bill) { await bootstrap();const toast=document.getElementById('activity-toast');toast.classList.add('is-collapsed','is-review');toast.setAttribute('aria-expanded','false');toast.setAttribute('aria-label','ขยายสถานะการทำงาน');await showBillResult(bill);toast.classList.remove('is-review'); }
       }
       hideActivityToast();
     } catch (error) {
       hideActivityToast();
       Swal.fire({ icon:'error', title:'รับบิลไม่สำเร็จ', text:error.message, footer:'หากขึ้นข้อความว่าเก็บรูปสำเร็จแล้วก่อนหน้านี้ ไม่ต้องอัปโหลดซ้ำ ให้ตรวจสถานะใน “บิลทั้งหมด”' });
     } finally {
+      activityBatchProgress=null;
       if (submitButton) { submitButton.disabled = false; submitButton.textContent = submitButton.dataset.originalText || 'เก็บและวิเคราะห์บิล'; }
     }
   }
@@ -1561,6 +1587,11 @@
     return Array.isArray(result) ? result : [];
   }
   let activityToastTimer = null;
+  let activityBatchProgress = null;
+  document.getElementById('activity-toast').addEventListener('click',()=>{
+    const toast=document.getElementById('activity-toast'),collapsed=toast.classList.toggle('is-collapsed');
+    toast.setAttribute('aria-expanded',String(!collapsed));toast.setAttribute('aria-label',collapsed?'ขยายสถานะการทำงาน':'ย่อสถานะการทำงาน');
+  });
   function showActivityToast(title, detail, type = 'loading') {
     const toast = document.getElementById('activity-toast');
     clearTimeout(activityToastTimer);
@@ -1568,6 +1599,7 @@
     toast.classList.toggle('is-success', type === 'success');
     document.getElementById('activity-toast-title').textContent = title;
     document.getElementById('activity-toast-detail').textContent = detail || '';
+    document.getElementById('activity-toast-compact').textContent = activityBatchProgress ? `${activityBatchProgress.current}/${activityBatchProgress.total} · เหลือ ${Math.max(0,activityBatchProgress.total-activityBatchProgress.current)}` : type==='success'?'เสร็จแล้ว':'กำลังทำงาน';
     document.getElementById('activity-toast-icon').className = type === 'success' ? 'activity-toast__check' : 'activity-toast__spinner';
     if (type === 'success') activityToastTimer = setTimeout(hideActivityToast, 2200);
   }

@@ -33,6 +33,7 @@
   <script defer src="./vendor/proj4.js"></script>
   <script defer src="./survey-core.js"></script>
   <script defer src="./survey.js"></script>
+  <script defer src="./field-layout.js"></script>
   <script defer src="./reports.js"></script>
   <script defer src="./app.js"></script>
   <script defer src="./pwa.js"></script>
@@ -215,6 +216,12 @@
               </div>
             </div>
             <div id="monthly-chart-empty" class="monthly-chart-empty hidden" role="status">ยังไม่มีข้อมูลเพียงพอสำหรับแสดงกราฟรายเดือน</div>
+          </article>
+          <article class="card category-chart-card">
+            <div class="category-chart-header"><div><h3 class="text-lg font-semibold">ยอดเงินตามหมวดบิล</h3><p id="category-chart-period" class="text-sm text-slate-500"></p></div><div><button type="button" id="category-show-all" class="secondary-btn">แสดงทั้งหมด</button><button type="button" id="category-hide-all" class="secondary-btn">ซ่อนทั้งหมด</button></div></div>
+            <div id="category-chart-options" class="category-chart-options"></div>
+            <div class="category-chart-canvas"><canvas id="category-history-chart" role="img" aria-label="กราฟค่าใช้จ่ายรายวันแยกตามหมวดบิล"></canvas></div>
+            <p id="category-chart-empty" class="hidden text-sm text-slate-500" role="status">ไม่มีข้อมูลหมวดบิลในเดือนที่เลือก</p>
           </article>
           <article id="uploader-summary-card" class="card uploader-summary-card">
             <div class="uploader-summary-card__head">
@@ -475,10 +482,11 @@
       </footer>
     </main>
   </div>
-  <div id="activity-toast" class="activity-toast hidden" role="status" aria-live="polite" aria-atomic="true">
+  <button type="button" id="activity-toast" class="activity-toast hidden" aria-expanded="true" aria-label="ย่อสถานะการทำงาน" aria-live="polite" aria-atomic="true">
     <span id="activity-toast-icon" class="activity-toast__spinner" aria-hidden="true"></span>
     <span class="min-w-0"><strong id="activity-toast-title" class="block text-sm">กำลังทำงาน…</strong><small id="activity-toast-detail" class="mt-0.5 block text-xs">คุณสามารถใช้งานส่วนอื่นต่อได้</small></span>
-  </div>
+    <span id="activity-toast-compact" class="activity-toast__compact">กำลังทำงาน</span>
+  </button>
   <dialog id="external-link-sheet" class="external-link-sheet">
     <form method="dialog" class="external-link-sheet__panel">
       <span class="external-link-sheet__grab" aria-hidden="true"></span>

@@ -810,3 +810,9 @@ body.monitoring-portal #view-reports { padding:0!important; }
   .coming-soon-card { min-height:280px; align-items:flex-start; flex-direction:column; }
   .coming-soon-card > span { font-size:48px; }
 }
+/* Category comparisons and collapsible background-job status. */
+.category-chart-header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.category-chart-header>div:last-child{display:flex;gap:8px}.category-chart-options{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.category-chart-options label{display:flex;align-items:center;gap:7px;font-size:12px;padding:8px 10px;background:#f6eee3;border-radius:8px;cursor:pointer}.category-chart-options i{height:3px;width:16px;background:var(--category-color)}.category-chart-options strong{font-variant-numeric:tabular-nums}.category-chart-canvas{height:290px;position:relative}
+.activity-toast{pointer-events:auto!important;cursor:pointer;text-align:left}.activity-toast__compact{display:none;white-space:nowrap;font-size:12px;font-weight:700}.activity-toast.is-collapsed{left:auto!important;width:auto;max-width:240px;padding:10px 12px}.activity-toast.is-collapsed>.min-w-0{display:none}.activity-toast.is-collapsed .activity-toast__compact{display:block}.activity-toast.is-review{top:calc(12px + env(safe-area-inset-top));bottom:auto!important}.activity-toast:focus-visible{outline:3px solid #d5b370;outline-offset:3px}
+@media(max-width:600px){.category-chart-options{display:grid;grid-template-columns:1fr}.category-chart-options label strong{margin-left:auto}.category-chart-canvas{height:250px}}
+.category-chart-card{padding:22px}.category-chart-card:has(#category-chart-empty:not(.hidden)) .category-chart-canvas{display:none}
+@media(max-width:600px){.category-chart-card{padding:16px}}
