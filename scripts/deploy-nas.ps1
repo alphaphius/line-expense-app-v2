@@ -2,9 +2,13 @@ param(
   [string]$NasHost = "192.168.1.200",
   [string]$NasUser = "tkh",
   [int]$SshPort = 1150,
+  [string]$IdentityFile = "",
   [string]$RemoteRoot = "/volume1/docker/workhub",
   [string]$PublicUrl = "https://workhub.nasgfe1.synology.me"
 )
+
+Import-Module Microsoft.PowerShell.Management
+Import-Module Microsoft.PowerShell.Utility
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -37,6 +41,19 @@ try {
   $remoteArchive = "$RemoteRoot/releases/workhub-$releaseId.tar.gz"
   $remoteScript = "$RemoteRoot/releases/deploy-$releaseId.sh"
   $target = "$NasUser@$NasHost"
+  $defaultIdentity = Join-Path $HOME ".ssh/workhub_nas"
+  if (-not $IdentityFile -and (Test-Path -LiteralPath $defaultIdentity)) {
+    $IdentityFile = $defaultIdentity
+  }
+  if ($IdentityFile) {
+    $IdentityFile = (Resolve-Path -LiteralPath $IdentityFile).Path
+  }
+  $sshArgs = @("-p", "$SshPort", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15")
+  $scpArgs = @("-O", "-P", "$SshPort", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15")
+  if ($IdentityFile) {
+    $sshArgs += @("-i", $IdentityFile, "-o", "IdentitiesOnly=yes")
+    $scpArgs += @("-i", $IdentityFile, "-o", "IdentitiesOnly=yes")
+  }
 
   Write-Host "[1/5] Building verified release $releaseId"
   Invoke-External npm @("run", "verify")
@@ -51,12 +68,12 @@ test -f '$RemoteRoot/app/workhub-line.env'
 test -f '$RemoteRoot/secrets/workhub-receipt-ai.env'
 mkdir -p '$RemoteRoot/releases' '$RemoteRoot/backups'
 "@
-  Invoke-External ssh @("-p", "$SshPort", "-o", "ConnectTimeout=10", $target, $preflight)
+  Invoke-External ssh ($sshArgs + @($target, $preflight))
 
   Write-Host "[3/5] Uploading release archive"
   # Synology DSM may disable the SFTP subsystem used by modern scp.
   # Force the legacy SCP protocol, which works over the same secured SSH session.
-  Invoke-External scp @("-O", "-P", "$SshPort", $archive, "${target}:$remoteArchive")
+  Invoke-External scp ($scpArgs + @($archive, "${target}:$remoteArchive"))
 
   Write-Host "[4/5] Backing up and rebuilding WorkHub"
   $remoteDeploy = @"
@@ -139,8 +156,8 @@ rm -f '$remoteScript'
 echo "Release `$RID is healthy"
 "@
   Set-Content -LiteralPath $remoteScriptLocal -Value $remoteDeploy -NoNewline
-  Invoke-External scp @("-O", "-P", "$SshPort", $remoteScriptLocal, "${target}:$remoteScript")
-  Invoke-External ssh @("-tt", "-p", "$SshPort", $target, "sudo -S sh '$remoteScript'")
+  Invoke-External scp ($scpArgs + @($remoteScriptLocal, "${target}:$remoteScript"))
+  Invoke-External ssh (@("-tt") + $sshArgs + @($target, "sudo -S sh '$remoteScript'"))
 
   Write-Host "[5/5] Verifying LAN and public HTTPS"
   Invoke-External curl @("-fsS", "http://${NasHost}:8080/api/health")

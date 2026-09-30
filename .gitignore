@@ -10,5 +10,6 @@ dist/
 .env.nas
 workhub-line.env
 .workhub-data/
+.tools/
 migration-data/
 *.migration.json
