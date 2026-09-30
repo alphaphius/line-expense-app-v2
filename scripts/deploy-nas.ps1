@@ -66,6 +66,7 @@ test -d '$RemoteRoot/app'
 test -f '$RemoteRoot/app/.env.nas'
 test -f '$RemoteRoot/app/workhub-line.env'
 test -f '$RemoteRoot/secrets/workhub-receipt-ai.env'
+test -x /usr/local/bin/workhub-deploy-runner
 mkdir -p '$RemoteRoot/releases' '$RemoteRoot/backups'
 "@
   Invoke-External ssh ($sshArgs + @($target, $preflight))
@@ -157,7 +158,7 @@ echo "Release `$RID is healthy"
 "@
   Set-Content -LiteralPath $remoteScriptLocal -Value $remoteDeploy -NoNewline
   Invoke-External scp ($scpArgs + @($remoteScriptLocal, "${target}:$remoteScript"))
-  Invoke-External ssh (@("-tt") + $sshArgs + @($target, "sudo -S sh '$remoteScript'"))
+  Invoke-External ssh ($sshArgs + @($target, "sudo -n /usr/local/bin/workhub-deploy-runner '$remoteScript'"))
 
   Write-Host "[5/5] Verifying LAN and public HTTPS"
   Invoke-External curl @("-fsS", "http://${NasHost}:8080/api/health")
