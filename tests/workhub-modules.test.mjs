@@ -161,12 +161,26 @@ test('project photos expose deletion only in the large viewer and loading uses t
   const carouselMarkup = reports.match(/function siteProjectPanel[\s\S]*?function bindSiteProjectPanel/)?.[0] || '';
   assert.doesNotMatch(carouselMarkup, /data-site-photo-remove/);
   assert.match(reports, /data-site-photo-delete/);
-  assert.match(reports, /deleteStoredRecord\(imageStorageId\('site-'\+site\.uid,photoId\)\)/);
+  assert.match(reports, /data-site-photo-prev/);
+  assert.match(reports, /data-site-photo-next/);
+  assert.match(reports, /ArrowLeft/);
+  assert.match(reports, /ArrowRight/);
+  assert.match(reports, /authorizeDelete\('ลบรูปโครงการ',[\s\S]*?,dialog\)/);
+  assert.match(reports, /deleteStoredRecord\(imageStorageId\('site-'\+site\.uid,photo\.id\)\)/);
   assert.match(moduleCss, /\.site-photo-view__actions/);
   assert.doesNotMatch(moduleCss, /\.site-media-remove/);
   assert.match(appCss, /@keyframes loader-travel/);
   assert.match(appCss, /\.swal2-loader/);
   assert.doesNotMatch(appCss, /@keyframes spin/);
+});
+
+test('full WorkHub watermark stays fixed behind the app and is shown on first load', async () => {
+  const [html,css]=await Promise.all([read('frontend/index.html'),read('frontend/styles.css')]);
+  assert.match(html,/class="workhub-background-mark"/);
+  assert.match(html,/class="loading-brand/);
+  assert.match(html,/assets\/workhub-watermark\.png/);
+  assert.match(css,/\.workhub-background-mark\s*\{[^}]*position:fixed[^}]*bottom:/);
+  assert.match(css,/\.app-shell>\.min-h-screen\s*\{[^}]*z-index:1/);
 });
 
 test('secondary navigation exposes protected Main App, Stock App, AI Usage, and Reports access', async () => {

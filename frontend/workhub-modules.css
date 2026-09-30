@@ -397,13 +397,21 @@ body.monitoring-portal .report-module-heading,body.monitoring-portal .report-tab
 @media(hover:hover){.site-media-item:hover{flex-grow:3}}
 .wh-dialog.site-photo-dialog{width:min(96vw,1400px);max-width:96vw;padding:0}
 .site-photo-view{position:relative;background:#231d19;padding:56px 12px 12px}
-.site-photo-view__actions{position:absolute;inset:8px 10px auto;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.site-photo-view__actions{position:absolute;inset:8px 10px auto;z-index:3;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.site-photo-view__actions>span{margin-right:auto;color:#f7eee8;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .site-photo-view__actions button{min-height:40px;border-radius:10px;padding:7px 12px;color:#fff;font-weight:700}
 .site-photo-delete{border:1px solid rgba(255,174,174,.55);background:rgba(116,32,32,.45);font-size:13px}
 .site-photo-delete:hover,.site-photo-delete:focus-visible{background:#9f3030}
 .site-photo-close{width:40px;padding:0!important;font-size:26px}
+.site-photo-view__media{position:relative;display:grid;min-height:min(70dvh,720px);place-items:center}
+.site-photo-view__media>.loader{--loader-color:#d4a76a}
 .site-photo-view img{display:block;width:100%;max-height:82dvh;object-fit:contain}
+.site-photo-nav{position:absolute;top:50%;z-index:2;display:grid;width:48px;height:64px;place-items:center;transform:translateY(-50%);border:1px solid rgba(255,255,255,.36);border-radius:14px;background:rgba(35,29,25,.72);color:#fff;font-size:40px;line-height:1;backdrop-filter:blur(8px)}
+.site-photo-nav:hover,.site-photo-nav:focus-visible{background:rgba(143,95,66,.94);outline:2px solid #f1d1b7;outline-offset:2px}
+.site-photo-nav:disabled{display:none}.site-photo-nav--prev{left:20px}.site-photo-nav--next{right:20px}
+.site-photo-dialog>.swal2-container{z-index:2147483647}
 @media(max-width:600px){.site-project-panel{padding:12px}.site-media-carousel{height:180px}.site-media-item{flex-basis:65%}.site-project-panel textarea{font-size:16px}}
+@media(max-width:600px){.site-photo-view{padding:54px 4px 8px}.site-photo-view__media{min-height:65dvh}.site-photo-nav{width:42px;height:56px;border-radius:12px;font-size:34px}.site-photo-nav--prev{left:8px}.site-photo-nav--next{right:8px}}
 @media(prefers-reduced-motion:reduce){.site-media-item{transition:none}}
 .monitoring-chart-wrap{position:relative;width:100%;min-width:0}
 .monitoring-chart-wrap>canvas{width:100%!important;height:100%!important}
